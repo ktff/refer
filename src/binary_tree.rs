@@ -3,7 +3,18 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::{field::ReadField, storage::*};
 
+// ************************* A
+
 pub type ANode<'a, Store: Storage<ANodeStructure>> = ReadStructure<'a, ANodeStructure, Store>;
+
+impl Structure for ANodeStructure {
+    type Data<S: Storage<Self> + ?Sized> = ANodeData<S>;
+    type Fields = ANodeFields;
+
+    fn fields<S: Storage<Self> + ?Sized>(_: &Self::Data<S>) -> Self::Fields {
+        ANodeFields
+    }
+}
 
 pub struct ANodeStructure;
 
@@ -48,18 +59,7 @@ impl<S: Storage<ANodeStructure>> ReadField<ANodeData<S>> for ANodeFieldsVec {
     }
 }
 
-impl Structure for ANodeStructure {
-    type Data<S: Storage<Self> + ?Sized> = ANodeData<S>;
-    type Fields = ANodeFields;
-
-    fn fields<S: Storage<Self> + ?Sized>(_: &Self::Data<S>) -> Self::Fields {
-        ANodeFields
-    }
-}
-
-// ! Storage(Key -> Container) su usko povezani
-
-fn example<'a, Store: Storage<ANodeStructure>>(node: ANode<'a, Store>) {
+fn example_a<'a, Store: Storage<ANodeStructure>>(node: ANode<'a, Store>) {
     let data: u32 = node.read_data(|_| ANodeFieldsData);
 
     let left_key: Option<Store::K> = node.read_data(|_| ANodeFieldsLess);
@@ -69,13 +69,60 @@ fn example<'a, Store: Storage<ANodeStructure>>(node: ANode<'a, Store>) {
     let vec: &Vec<String> = node.read_data(|_| ANodeFieldsVec);
 }
 
-// pub struct BNodeStructure;
+fn example_a_instance<'a>(node: ANode<'a, PlainStorage<ANodeStructure>>) {}
 
-// impl Structure for BNodeStructure {
-//     type Store<'a> = PlainStore<'a, BNodeData>;
-//     type Fields = BNodeFields;
+// ******************** B
 
-//     fn fields<'a>(_: &Self::Store<'a>) -> Self::Fields {
-//         ANodeFields
-//     }
-// }
+pub type BNode<'a, Store: Storage<BNodeStructure>> = ReadStructure<'a, BNodeStructure, Store>;
+
+pub struct Raw<S: Storage<BNodeStructure> + ?Sized>(PhantomData<S::K>, [u8]);
+
+impl Structure for BNodeStructure {
+    type Data<S: Storage<Self> + ?Sized> = Raw<S>;
+    type Fields = BNodeFields;
+
+    fn fields<S: Storage<Self> + ?Sized>(_: &Self::Data<S>) -> Self::Fields {
+        BNodeFields
+    }
+}
+
+pub struct BNodeStructure;
+
+pub struct BNodeFields;
+
+pub struct BNodeFieldsData;
+
+pub struct BNodeFieldsLess;
+
+pub struct BNodeFieldsVec;
+
+pub struct BNodeData<S: Storage<BNodeStructure> + ?Sized> {
+    data: u32,
+    less: Option<S::K>,
+}
+
+impl<S: Storage<BNodeStructure>> ReadField<Raw<S>> for BNodeFieldsData {
+    type To<'a> = u32 where
+    S: 'a;
+    fn read<'a>(&self, from: &'a Raw<S>) -> Self::To<'a> {
+        unimplemented!()
+    }
+}
+
+impl<S: Storage<BNodeStructure>> ReadField<Raw<S>> for BNodeFieldsLess {
+    type To<'a> = Option<S::K> where
+    S: 'a;
+    fn read<'a>(&self, from: &'a Raw<S>) -> Self::To<'a> {
+        unimplemented!()
+    }
+}
+
+fn example_b<'a, Store: Storage<BNodeStructure>>(node: BNode<'a, Store>) {
+    let data: u32 = node.read_data(|_| BNodeFieldsData);
+
+    let left_key: Option<Store::K> = node.read_data(|_| BNodeFieldsLess);
+
+    let left: Option<BNode<'a, Store>> = node.read_store_optional(|_| BNodeFieldsLess);
+}
+
+fn example_b_instance<'a>(node: BNode<'a, RawStorage<BNodeStructure>>) {}

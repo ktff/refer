@@ -1,11 +1,11 @@
 use crate::field::ReadField;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Deref};
 
 pub trait Storage<S: Structure + ?Sized> {
     // ! Copy, <'a>
     type K: Copy;
     //TODO: Deref
-    type C<'a>: 'a + AsRef<S::Data<Self>>
+    type C<'a>: 'a + Deref<Target = S::Data<Self>>
     where
         Self: 'a;
 
@@ -48,7 +48,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
     #[doc(hidden)]
     pub fn new(store: &'a Store, key: Store::K) -> Self {
         let data = store.read(key);
-        let fields = S::fields(data.as_ref());
+        let fields = S::fields(&*data);
 
         ReadStructure {
             store,
@@ -62,7 +62,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
         &'b self,
         field: impl FnOnce(&S::Fields) -> F,
     ) -> F::To<'b> {
-        field(&self.fields).read(self.data.as_ref())
+        field(&self.fields).read(&*self.data)
     }
 
     #[doc(hidden)]
@@ -93,6 +93,8 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
     }
 }
 
+// ****************************** PLAIN
+
 pub struct PlainStorage<S: Structure>
 where
     S::Data<Self>: Sized,
@@ -100,39 +102,45 @@ where
     data: Vec<S::Data<Self>>,
 }
 
-pub enum PlainContainer<'a, T> {
-    Inlined(Box<T>),
-    Ref(&'a T),
-}
+// pub enum PlainContainer<'a, T> {
+//     Inlined(Box<T>),
+//     Ref(&'a T),
+// }
 
-impl<'a, T> PlainContainer<'a, T> {
-    pub fn to_ref<'b>(&'b self) -> PlainContainer<'b, T> {
-        match self {
-            PlainContainer::Inlined(b) => PlainContainer::Ref(b),
-            PlainContainer::Ref(r) => PlainContainer::Ref(r),
-        }
-    }
-}
+// impl<'a, T> PlainContainer<'a, T> {
+//     pub fn to_ref<'b>(&'b self) -> PlainContainer<'b, T> {
+//         match self {
+//             PlainContainer::Inlined(b) => PlainContainer::Ref(b),
+//             PlainContainer::Ref(r) => PlainContainer::Ref(r),
+//         }
+//     }
+// }
 
-impl<'a, T> AsRef<T> for PlainContainer<'a, T> {
-    fn as_ref(&self) -> &T {
-        match self {
-            PlainContainer::Inlined(b) => b.as_ref(),
-            PlainContainer::Ref(r) => r,
-        }
-    }
-}
+// impl<'a, T> AsRef<T> for PlainContainer<'a, T> {
+//     fn as_ref(&self) -> &T {
+//         match self {
+//             PlainContainer::Inlined(b) => b.as_ref(),
+//             PlainContainer::Ref(r) => r,
+//         }
+//     }
+// }
 
 impl<S: Structure> Storage<S> for PlainStorage<S>
 where
     S::Data<Self>: Sized,
 {
     type K = usize;
-    type C<'a> = PlainContainer<'a, S::Data<Self>>; // where S:'a;
+    type C<'a> = &'a S::Data<Self>;
 
     fn read<'a>(&'a self, key: Self::K) -> Self::C<'a> {
-        PlainContainer::Ref(&self.data[key])
+        &self.data[key]
     }
+}
+
+// *************************** RAW
+
+pub struct RawStorage<S: Structure> {
+    data: Vec<Box<S::Data<Self>>>,
 }
 
 // pub struct RawStorage<T>(PhantomData<T>);
@@ -160,13 +168,11 @@ where
 //     }
 // }
 
-// impl<T: 'static, S: Structure> Storage<S> for RawStorage<T>
-// where
-//     for<'a> S::Container<'a>: From<RawContainer<'a, T>>,
-// {
-//     type K<'a> = &'a Raw<T>;
+impl<S: Structure> Storage<S> for RawStorage<S> {
+    type K = usize;
+    type C<'a> = &'a S::Data<Self>;
 
-//     fn read<'a>(&'a self, key: &'a Raw<T>) -> S::Container<'a> {
-//         RawContainer::Ref(key).into()
-//     }
-// }
+    fn read<'a>(&'a self, key: Self::K) -> Self::C<'a> {
+        &self.data[key]
+    }
+}
