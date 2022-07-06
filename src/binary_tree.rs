@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::{field::ReadField, storage::*};
 
-// ************************* A
+// *------------------------------------- A -------------------------------------* //
 
 pub type ANode<'a, Store: Storage<ANodeStructure>> = ReadStructure<'a, ANodeStructure, Store>;
 
@@ -71,7 +71,7 @@ fn example_a<'a, Store: Storage<ANodeStructure>>(node: ANode<'a, Store>) {
 
 fn example_a_instance<'a>(node: ANode<'a, PlainStorage<ANodeStructure>>) {}
 
-// ******************** B
+// *------------------------------------- B -------------------------------------* //
 
 pub type BNode<'a, Store: Storage<BNodeStructure>> = ReadStructure<'a, BNodeStructure, Store>;
 
@@ -93,8 +93,6 @@ pub struct BNodeFields;
 pub struct BNodeFieldsData;
 
 pub struct BNodeFieldsLess;
-
-pub struct BNodeFieldsVec;
 
 pub struct BNodeData<S: Storage<BNodeStructure> + ?Sized> {
     data: u32,
