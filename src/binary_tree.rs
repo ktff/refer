@@ -3,20 +3,29 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::{field::ReadField, storage::*};
 
+pub struct NodeData<K: Copy> {
+    data: u32,
+    vec: Vec<String>,
+    parent: Option<K>,
+    less: Option<K>,
+    greater: Option<K>,
+    next: Option<K>,
+}
+
 // *------------------------------------- A -------------------------------------* //
 
 pub type ANode<'a, Store: Storage<ANodeStructure>> = ReadStructure<'a, ANodeStructure, Store>;
 
+pub struct ANodeStructure;
+
 impl Structure for ANodeStructure {
-    type Data<K: Copy> = ANodeData<K>;
+    type Data<K: Copy> = NodeData<K>;
     type Fields = ANodeFields;
 
     fn fields<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Fields {
         ANodeFields
     }
 }
-
-pub struct ANodeStructure;
 
 pub struct ANodeFields;
 
@@ -26,32 +35,23 @@ pub struct ANodeFieldsLess;
 
 pub struct ANodeFieldsVec;
 
-pub struct ANodeData<K: Copy> {
-    data: u32,
-    vec: Vec<String>,
-    parent: Option<K>,
-    less: Option<K>,
-    greater: Option<K>,
-    next: Option<K>,
-}
-
-impl<K: Copy> ReadField<ANodeData<K>> for ANodeFieldsData {
+impl<K: Copy> ReadField<NodeData<K>> for ANodeFieldsData {
     type To<'a> = u32 where K:'a;
-    fn read<'a>(&self, from: &'a ANodeData<K>) -> Self::To<'a> {
+    fn read<'a>(&self, from: &'a NodeData<K>) -> Self::To<'a> {
         from.data
     }
 }
 
-impl<K: Copy> ReadField<ANodeData<K>> for ANodeFieldsLess {
+impl<K: Copy> ReadField<NodeData<K>> for ANodeFieldsLess {
     type To<'a> = Option<K> where K:'a;
-    fn read<'a>(&self, from: &'a ANodeData<K>) -> Self::To<'a> {
+    fn read<'a>(&self, from: &'a NodeData<K>) -> Self::To<'a> {
         from.less
     }
 }
 
-impl<K: Copy> ReadField<ANodeData<K>> for ANodeFieldsVec {
+impl<K: Copy> ReadField<NodeData<K>> for ANodeFieldsVec {
     type To<'a> = &'a Vec<String> where K:'a;
-    fn read<'a>(&self, from: &'a ANodeData<K>) -> Self::To<'a> {
+    fn read<'a>(&self, from: &'a NodeData<K>) -> Self::To<'a> {
         &from.vec
     }
 }
@@ -72,10 +72,12 @@ fn example_a_instance<'a>(node: ANode<'a, PlainStorage<ANodeStructure>>) {}
 
 pub type BNode<'a, Store: Storage<BNodeStructure>> = ReadStructure<'a, BNodeStructure, Store>;
 
-pub struct Raw<K: Copy>(PhantomData<K>, [u8]);
+pub struct Raw<T>(PhantomData<T>, [u8]);
+
+pub struct BNodeStructure;
 
 impl Structure for BNodeStructure {
-    type Data<K: Copy> = Raw<K>;
+    type Data<K: Copy> = Raw<NodeData<K>>;
     type Fields = BNodeFields;
 
     fn fields<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Fields {
@@ -83,29 +85,24 @@ impl Structure for BNodeStructure {
     }
 }
 
-pub struct BNodeStructure;
-
 pub struct BNodeFields;
 
 pub struct BNodeFieldsData;
 
 pub struct BNodeFieldsLess;
 
-pub struct BNodeData<K: Copy> {
-    data: u32,
-    less: Option<K>,
-}
+pub struct BNodeFieldsVec;
 
-impl<K: Copy> ReadField<Raw<K>> for BNodeFieldsData {
+impl<K: Copy> ReadField<Raw<NodeData<K>>> for BNodeFieldsData {
     type To<'a> = u32 where K:'a;
-    fn read<'a>(&self, from: &'a Raw<K>) -> Self::To<'a> {
+    fn read<'a>(&self, from: &'a Raw<NodeData<K>>) -> Self::To<'a> {
         unimplemented!()
     }
 }
 
-impl<K: Copy> ReadField<Raw<K>> for BNodeFieldsLess {
+impl<K: Copy> ReadField<Raw<NodeData<K>>> for BNodeFieldsLess {
     type To<'a> = Option<K> where K:'a;
-    fn read<'a>(&self, from: &'a Raw<K>) -> Self::To<'a> {
+    fn read<'a>(&self, from: &'a Raw<NodeData<K>>) -> Self::To<'a> {
         unimplemented!()
     }
 }
