@@ -2,7 +2,7 @@ use crate::field::ReadField;
 use std::{marker::PhantomData, ops::Deref};
 
 pub trait Storage<S: Structure + ?Sized> {
-    // ! Copy, <'a>
+    // ! Copy, not <'a>
     type K: Copy;
     type C<'a>: 'a + Deref<Target = S::Data<Self::K>>
     where
@@ -18,11 +18,15 @@ pub trait Storage<S: Structure + ?Sized> {
                 .map(|(_, c)| ReadStructure::new_data(self, c)),
         )
     }
+
+    fn add(&mut self, data: S::T<Self::K>) -> Self::K;
 }
 
 pub trait Structure: 'static {
+    type T<K: Copy>;
+
     type Fields;
-    // ! <'a>
+    // ! not <'a>
     type Data<K: Copy>: ?Sized;
 
     fn fields<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Fields;
@@ -98,6 +102,7 @@ where
 
 impl<S: Structure> Storage<S> for PlainStorage<S>
 where
+    S::T<usize>: Into<S::Data<usize>>,
     S::Data<usize>: Sized,
 {
     type K = usize;
@@ -110,6 +115,12 @@ where
     fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
         Box::new(self.data.iter().enumerate())
     }
+
+    fn add(&mut self, data: S::T<Self::K>) -> Self::K {
+        let n = self.data.len();
+        self.data.push(data.into());
+        n
+    }
 }
 
 // *************************** RAW
@@ -118,7 +129,10 @@ pub struct RawStorage<S: Structure> {
     data: Vec<Box<S::Data<usize>>>,
 }
 
-impl<S: Structure> Storage<S> for RawStorage<S> {
+impl<S: Structure> Storage<S> for RawStorage<S>
+where
+    S::T<usize>: Into<Box<S::Data<usize>>>,
+{
     type K = usize;
     type C<'a> = &'a S::Data<usize>;
 
@@ -128,5 +142,11 @@ impl<S: Structure> Storage<S> for RawStorage<S> {
 
     fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
         Box::new(self.data.iter().map(|c| c.as_ref()).enumerate())
+    }
+
+    fn add(&mut self, data: S::T<Self::K>) -> Self::K {
+        let n = self.data.len();
+        self.data.push(data.into());
+        n
     }
 }

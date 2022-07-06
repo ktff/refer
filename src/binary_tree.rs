@@ -12,6 +12,12 @@ pub struct NodeData<K: Copy> {
     next: Option<K>,
 }
 
+impl<K: Copy> Into<Box<Raw<NodeData<K>>>> for NodeData<K> {
+    fn into(self) -> Box<Raw<NodeData<K>>> {
+        unimplemented!()
+    }
+}
+
 // *------------------------------------- A -------------------------------------* //
 
 pub type ANode<'a, Store: Storage<ANodeStructure>> = ReadStructure<'a, ANodeStructure, Store>;
@@ -19,6 +25,7 @@ pub type ANode<'a, Store: Storage<ANodeStructure>> = ReadStructure<'a, ANodeStru
 pub struct ANodeStructure;
 
 impl Structure for ANodeStructure {
+    type T<K: Copy> = NodeData<K>;
     type Data<K: Copy> = NodeData<K>;
     type Fields = ANodeFields;
 
@@ -77,6 +84,7 @@ pub struct Raw<T>(PhantomData<T>, [u8]);
 pub struct BNodeStructure;
 
 impl Structure for BNodeStructure {
+    type T<K: Copy> = NodeData<K>;
     type Data<K: Copy> = Raw<NodeData<K>>;
     type Fields = BNodeFields;
 
