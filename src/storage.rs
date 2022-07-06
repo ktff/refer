@@ -4,7 +4,7 @@ use std::{marker::PhantomData, ops::Deref};
 pub trait Storage<S: Structure + ?Sized> {
     // ! Copy, <'a>
     type K: Copy;
-    type C<'a>: 'a + Deref<Target = S::Data<Self>>
+    type C<'a>: 'a + Deref<Target = S::Data<Self::K>>
     where
         Self: 'a;
 
@@ -14,9 +14,9 @@ pub trait Storage<S: Structure + ?Sized> {
 pub trait Structure: 'static {
     type Fields;
     // ! <'a>
-    type Data<S: Storage<Self> + ?Sized>: ?Sized;
+    type Data<K: Copy>: ?Sized;
 
-    fn fields<S: Storage<Self> + ?Sized>(store: &Self::Data<S>) -> Self::Fields;
+    fn fields<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Fields;
 }
 
 pub struct ReadStructure<'a, S: Structure, Store: Storage<S>> {
@@ -29,7 +29,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
     #[doc(hidden)]
     pub fn new(store: &'a Store, key: Store::K) -> Self {
         let data = store.read(key);
-        let fields = S::fields(&*data);
+        let fields = S::fields::<Store>(&*data);
 
         ReadStructure {
             store,
@@ -39,7 +39,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
     }
 
     #[doc(hidden)]
-    pub fn read_data<'b, F: ReadField<S::Data<Store>>>(
+    pub fn read_data<'b, F: ReadField<S::Data<Store::K>>>(
         &'b self,
         field: impl FnOnce(&S::Fields) -> F,
     ) -> F::To<'b> {
@@ -47,7 +47,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
     }
 
     #[doc(hidden)]
-    pub fn read_store<'b, T: Structure, F: ReadField<S::Data<Store>>>(
+    pub fn read_store<'b, T: Structure, F: ReadField<S::Data<<Store as Storage<S>>::K>>>(
         &'b self,
         field: impl FnOnce(&S::Fields) -> F,
     ) -> ReadStructure<'a, T, Store>
@@ -59,7 +59,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
     }
 
     #[doc(hidden)]
-    pub fn read_store_optional<'b, T: Structure, F: ReadField<S::Data<Store>>>(
+    pub fn read_store_optional<'b, T: Structure, F: ReadField<S::Data<<Store as Storage<S>>::K>>>(
         &'b self,
         field: impl FnOnce(&S::Fields) -> F,
     ) -> Option<ReadStructure<'a, T, Store>>
@@ -78,19 +78,19 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
 
 pub struct PlainStorage<S: Structure>
 where
-    S::Data<Self>: Sized,
+    S::Data<usize>: Sized,
 {
-    data: Vec<S::Data<Self>>,
+    data: Vec<S::Data<usize>>,
 }
 
 impl<S: Structure> Storage<S> for PlainStorage<S>
 where
-    S::Data<Self>: Sized,
+    S::Data<usize>: Sized,
 {
     type K = usize;
-    type C<'a> = &'a S::Data<Self>;
+    type C<'a> = &'a S::Data<usize>;
 
-    fn read<'a>(&'a self, key: Self::K) -> Self::C<'a> {
+    fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
         &self.data[key]
     }
 }
@@ -98,14 +98,14 @@ where
 // *************************** RAW
 
 pub struct RawStorage<S: Structure> {
-    data: Vec<Box<S::Data<Self>>>,
+    data: Vec<Box<S::Data<usize>>>,
 }
 
 impl<S: Structure> Storage<S> for RawStorage<S> {
     type K = usize;
-    type C<'a> = &'a S::Data<Self>;
+    type C<'a> = &'a S::Data<usize>;
 
-    fn read<'a>(&'a self, key: Self::K) -> Self::C<'a> {
+    fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
         &self.data[key]
     }
 }
