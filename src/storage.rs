@@ -9,6 +9,15 @@ pub trait Storage<S: Structure + ?Sized> {
         Self: 'a;
 
     fn read<'a>(&'a self, key: Self::K) -> Self::C<'a>;
+
+    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
+
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = ReadStructure<'a, S, Self>> + 'a> {
+        Box::new(
+            self.iter_read()
+                .map(|(_, c)| ReadStructure::new_data(self, c)),
+        )
+    }
 }
 
 pub trait Structure: 'static {
@@ -19,16 +28,20 @@ pub trait Structure: 'static {
     fn fields<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Fields;
 }
 
-pub struct ReadStructure<'a, S: Structure, Store: Storage<S>> {
+pub struct ReadStructure<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> {
     store: &'a Store,
     data: Store::C<'a>,
     fields: S::Fields,
 }
 
-impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
+impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S, Store> {
     #[doc(hidden)]
-    pub fn new(store: &'a Store, key: Store::K) -> Self {
-        let data = store.read(key);
+    pub fn new_key(store: &'a Store, key: Store::K) -> Self {
+        Self::new_data(store, store.read(key))
+    }
+
+    #[doc(hidden)]
+    pub fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
         let fields = S::fields::<Store>(&*data);
 
         ReadStructure {
@@ -55,7 +68,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
         Store: Storage<T>,
         F::To<'b>: Into<<Store as Storage<T>>::K>,
     {
-        ReadStructure::new(self.store, self.read_data(field).into())
+        ReadStructure::new_key(self.store, self.read_data(field).into())
     }
 
     #[doc(hidden)]
@@ -67,7 +80,7 @@ impl<'a, S: Structure, Store: Storage<S>> ReadStructure<'a, S, Store> {
         Store: Storage<T>,
         F::To<'b>: Into<Option<<Store as Storage<T>>::K>>,
     {
-        Some(ReadStructure::new(
+        Some(ReadStructure::new_key(
             self.store,
             self.read_data(field).into()?,
         ))
@@ -93,6 +106,10 @@ where
     fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
         &self.data[key]
     }
+
+    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
+        Box::new(self.data.iter().enumerate())
+    }
 }
 
 // *************************** RAW
@@ -107,5 +124,9 @@ impl<S: Structure> Storage<S> for RawStorage<S> {
 
     fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
         &self.data[key]
+    }
+
+    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
+        Box::new(self.data.iter().map(|c| c.as_ref()).enumerate())
     }
 }
