@@ -48,7 +48,7 @@ impl Structure for ANodeStructure {
     type Data<K: Copy> = NodeData<K>;
     type Cache = ANodeFields;
 
-    fn cache<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Cache {
+    fn cache<K: Copy>(_: &Self::Data<K>) -> Self::Cache {
         ANodeFields
     }
 }
@@ -102,7 +102,7 @@ impl Structure for BNodeStructure {
     type Data<K: Copy> = Raw<NodeData<K>>;
     type Cache = BNodeFields;
 
-    fn cache<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Cache {
+    fn cache<K: Copy>(_: &Self::Data<K>) -> Self::Cache {
         BNodeFields
     }
 }
@@ -139,4 +139,4 @@ fn example_b<'a, Store: Storage<BNodeStructure>>(node: BNode<'a, Store>) {
     let less: Option<BNode<'a, Store>> = node.less();
 }
 
-fn example_b_instance<'a>(node: BNode<'a, RawStorage<BNodeStructure>>) {}
+fn example_b_instance<'a>(node: BNode<'a, BoxStorage<BNodeStructure>>) {}

@@ -4,7 +4,7 @@ use std::{marker::PhantomData, ops::Deref};
 pub trait Storage<S: Structure + ?Sized> {
     // ! Copy, not <'a>
     type K: Copy;
-    type C<'a>: 'a + Deref<Target = S::Data<Self::K>>
+    type C<'a>: Container<'a, T = S::Data<Self::K>, K = Self::K>
     where
         Self: 'a;
 
@@ -32,6 +32,13 @@ pub trait Storage<S: Structure + ?Sized> {
     fn remove_owned(&mut self, key: Self::K, owner: Self::K);
 }
 
+pub trait Container<'a>: 'a {
+    type K;
+    type T: ?Sized;
+
+    fn data(&self) -> &Self::T;
+}
+
 pub trait Structure: 'static {
     type T<K: Copy>: KeyStore<K>;
 
@@ -42,7 +49,17 @@ pub trait Structure: 'static {
     /// Form of T when partially read from Data
     type Cache;
 
-    fn cache<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Cache;
+    fn cache<K: Copy>(store: &Self::Data<K>) -> Self::Cache;
+}
+
+impl<S: Structure> Structure for Box<S> {
+    type T<K: Copy> = S::T<K>;
+    type Data<K: Copy> = Box<S::Data<K>>;
+    type Cache = S::Cache;
+
+    fn cache<K: Copy>(store: &Self::Data<K>) -> Self::Cache {
+        S::cache::<K>(store.as_ref())
+    }
 }
 
 pub enum Relation {
@@ -55,6 +72,16 @@ pub trait KeyStore<K: Copy> {
     /// Must not be called for owners of key.
     /// Will be called as many times as iter returns it.
     fn remove_ref(&mut self, key: K) -> bool;
+}
+
+impl<K: Copy, T: KeyStore<K> + ?Sized> KeyStore<K> for Box<T> {
+    fn iter(&self, call: impl FnMut(Relation, K)) {
+        self.as_ref().iter(call);
+    }
+
+    fn remove_ref(&mut self, key: K) -> bool {
+        self.as_mut().remove_ref(key)
+    }
 }
 
 pub struct ReadStructure<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> {
@@ -71,17 +98,24 @@ impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S,
 
     #[doc(hidden)]
     pub fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
-        let cache = S::cache::<Store>(&*data);
+        let cache = S::cache::<Store::K>(data.data());
 
         ReadStructure { store, data, cache }
     }
+
+    // pub fn owner_key(&self) -> Option<Store::K> {
+    //     // TODO: Nije nužno da je owner ovog tipa
+    //     unimplemented!()
+    // }
+
+    // pub fn ref_keys(&self) ->
 
     #[doc(hidden)]
     pub fn read_data<'b, R: 'b>(
         &'b self,
         field: impl FnOnce(&S::Cache, &'b S::Data<<Store as Storage<S>>::K>) -> R,
     ) -> R {
-        field(&self.cache, &*self.data)
+        field(&self.cache, self.data.data())
     }
 
     #[doc(hidden)]
@@ -126,12 +160,12 @@ where
 {
     fn remove_slot(&mut self, remove: usize, owned: Option<usize>) {
         match std::mem::replace(&mut self.data[remove], Slot::Empty) {
-            Slot::Occupied { from, data, owner } if owner == owned => {
+            Slot::Occupied(Occupied { from, data, owner }) if owner == owned => {
                 // Remove from
                 from.into_iter()
                     .filter(|key| owned.map(|own| own != *key).unwrap_or(true))
                     .for_each(|key| match &mut self.data[key] {
-                        Slot::Occupied { data, .. } => {
+                        Slot::Occupied(Occupied { data, .. }) => {
                             data.remove_ref(remove);
                         }
                         Slot::Empty => (),
@@ -139,7 +173,7 @@ where
 
                 // Remove to
                 data.iter(|relation, key| match (relation, &mut self.data[key]) {
-                    (Relation::Ref, Slot::Occupied { from, .. }) => {
+                    (Relation::Ref, Slot::Occupied(Occupied { from, .. })) => {
                         let (i, _) = from
                             .iter()
                             .enumerate()
@@ -149,18 +183,18 @@ where
                     }
                     (
                         Relation::Owns,
-                        Slot::Occupied {
+                        Slot::Occupied(Occupied {
                             owner: Some(owner), ..
-                        },
+                        }),
                     ) if *owner == remove => self.remove_slot(key, Some(remove)),
-                    (Relation::Owns, Slot::Occupied { .. }) => {
+                    (Relation::Owns, Slot::Occupied(Occupied { .. })) => {
                         panic!("Own relation is invalid")
                     }
                     (Relation::Ref, Slot::Empty) => (),
                     (Relation::Owns, Slot::Empty) => panic!("Own relation is invalid"),
                 });
             }
-            Slot::Occupied { .. } => panic!("Key is owned by something else"),
+            Slot::Occupied(_) => panic!("Key is owned by something else"),
             Slot::Empty => (),
         }
     }
@@ -172,24 +206,24 @@ where
     S::Data<usize>: Sized,
 {
     type K = usize;
-    type C<'a> = &'a S::Data<usize>;
+    type C<'a> = &'a Occupied<Self::K, S::Data<usize>>;
 
     fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
         match &self.data[key] {
-            Slot::Occupied { data, .. } => data,
+            Slot::Occupied(node) => node,
             Slot::Empty => panic!("Key is invalid"),
         }
     }
 
-    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
+    fn iter_read<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (usize, &'a Occupied<Self::K, S::Data<usize>>)> + 'a> {
         Box::new(
             self.data
                 .iter()
                 .flat_map(|data| match data {
-                    Slot::Occupied {
-                        data, owner: None, ..
-                    } => Some(data),
-                    Slot::Empty | Slot::Occupied { owner: Some(_), .. } => None,
+                    Slot::Occupied(node @ Occupied { owner: None, .. }) => Some(node),
+                    Slot::Empty | Slot::Occupied(Occupied { owner: Some(_), .. }) => None,
                 })
                 .enumerate(),
         )
@@ -201,21 +235,21 @@ where
 
         // Add from
         data.iter(|relation, key| match (relation, &mut self.data[key]) {
-            (Relation::Ref, Slot::Occupied { from, .. }) => from.push(n),
-            (Relation::Owns, Slot::Occupied { owner: Some(a), .. }) if *a == n => (),
-            (Relation::Owns, Slot::Occupied { owner: Some(_), .. }) => {
+            (Relation::Ref, Slot::Occupied(Occupied { from, .. })) => from.push(n),
+            (Relation::Owns, Slot::Occupied(Occupied { owner: Some(a), .. })) if *a == n => (),
+            (Relation::Owns, Slot::Occupied(Occupied { owner: Some(_), .. })) => {
                 panic!("Already owned")
             }
-            (Relation::Owns, Slot::Occupied { owner, .. }) => *owner = Some(n),
+            (Relation::Owns, Slot::Occupied(Occupied { owner, .. })) => *owner = Some(n),
             (_, Slot::Empty) => panic!("Key is invalid"),
         });
 
         // Add to slot
-        self.data.push(Slot::Occupied {
+        self.data.push(Slot::Occupied(Occupied {
             data: data.into(),
             from: Vec::new(),
             owner: None,
-        });
+        }));
 
         n
     }
@@ -229,45 +263,60 @@ where
     }
 }
 
-// *************************** RAW
+// *************************** Boxed
 
-pub struct RawStorage<S: Structure> {
-    data: Vec<Option<Box<S::Data<usize>>>>,
+pub struct BoxStorage<S: Structure> {
+    store: PlainStorage<Box<S>>,
 }
 
-impl<S: Structure> Storage<S> for RawStorage<S>
+impl<S: Structure> Storage<S> for BoxStorage<S>
 where
     S::T<usize>: Into<Box<S::Data<usize>>>,
 {
-    type K = usize;
-    type C<'a> = &'a S::Data<usize>;
+    type K = <PlainStorage<Box<S>> as Storage<Box<S>>>::K;
+    type C<'a> = BoxContainer<'a, <PlainStorage<Box<S>> as Storage<Box<S>>>::C<'a>, S::Data<usize>>;
 
-    fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
-        self.data[key].as_ref().expect("Invalid key")
+    fn read<'a>(&'a self, key: Self::K) -> Self::C<'a> {
+        self.store.read(key).into()
     }
 
-    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
-        Box::new(
-            self.data
-                .iter()
-                .flat_map(|data| data.as_ref())
-                .map(|c| c.as_ref())
-                .enumerate(),
-        )
+    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, Self::C<'a>)> + 'a> {
+        Box::new(self.store.iter_read().map(|(key, node)| (key, node.into()))) as Box<_>
     }
 
     fn add(&mut self, data: S::T<Self::K>) -> Self::K {
-        let n = self.data.len();
-        self.data.push(Some(data.into()));
-        n
+        self.store.add(data)
     }
 
     fn remove(&mut self, key: Self::K) {
-        unimplemented!()
+        self.store.remove(key);
     }
 
     fn remove_owned(&mut self, remove: Self::K, owner: Self::K) {
-        unimplemented!()
+        self.store.remove_owned(remove, owner);
+    }
+}
+
+pub struct BoxContainer<'a, C, T: ?Sized> {
+    container: C,
+    marker: PhantomData<&'a T>,
+}
+
+impl<'a, C: Container<'a, T = Box<T>>, T: ?Sized> Container<'a> for BoxContainer<'a, C, T> {
+    type K = <C as Container<'a>>::K;
+    type T = T;
+
+    fn data(&self) -> &Self::T {
+        &**self.container.data()
+    }
+}
+
+impl<'a, C, T: ?Sized> From<C> for BoxContainer<'a, C, T> {
+    fn from(container: C) -> Self {
+        BoxContainer {
+            container,
+            marker: PhantomData,
+        }
     }
 }
 
@@ -276,9 +325,20 @@ where
 enum Slot<K, T> {
     Empty,
     // TODO: Expose owner & from keys
-    Occupied {
-        owner: Option<K>,
-        from: Vec<K>,
-        data: T,
-    },
+    Occupied(Occupied<K, T>),
+}
+
+pub struct Occupied<K, T> {
+    owner: Option<K>,
+    from: Vec<K>,
+    data: T,
+}
+
+impl<'a, K, T> Container<'a> for &'a Occupied<K, T> {
+    type K = K;
+    type T = T;
+
+    fn data(&self) -> &Self::T {
+        &self.data
+    }
 }
