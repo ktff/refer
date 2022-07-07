@@ -30,6 +30,8 @@ pub trait Storage<S: Structure + ?Sized> {
     /// Owner must remove from self key.
     /// May panic if key is not owned by this owner.
     fn remove_owned(&mut self, key: Self::K, owner: Self::K);
+
+    // TODO: Mut
 }
 
 pub trait Container<'a>: 'a {
@@ -104,7 +106,7 @@ impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S,
     }
 
     // pub fn owner_key(&self) -> Option<Store::K> {
-    //     // TODO: Nije nužno da je owner ovog tipa
+    // TODO: Nije nužno da je owner ovog tipa
     //     unimplemented!()
     // }
 
@@ -319,6 +321,9 @@ impl<'a, C, T: ?Sized> From<C> for BoxContainer<'a, C, T> {
         }
     }
 }
+
+// TODO
+// *************************** Multi Storage ********************** //
 
 // ***************************** Helper *************************** //
 
