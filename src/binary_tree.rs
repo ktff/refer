@@ -13,7 +13,7 @@ pub struct NodeData<K: Copy> {
 }
 
 impl<K: Copy> KeyStore<K> for NodeData<K> {
-    fn iter(&self, call: impl FnMut(K)) {
+    fn iter(&self, call: impl FnMut(Relation, K)) {
         unimplemented!()
     }
 
@@ -24,7 +24,7 @@ impl<K: Copy> KeyStore<K> for NodeData<K> {
 }
 
 impl<K: Copy> KeyStore<K> for Raw<NodeData<K>> {
-    fn iter(&self, call: impl FnMut(K)) {
+    fn iter(&self, call: impl FnMut(Relation, K)) {
         unimplemented!()
     }
 

@@ -20,9 +20,10 @@ pub trait Storage<S: Structure + ?Sized> {
         )
     }
 
+    /// May panic if adding taking ownership of something already owned.
     fn add(&mut self, data: S::T<Self::K>) -> Self::K;
 
-    /// Panics if not present or if not owned.
+    /// Panics if not owned by this storage.
     fn remove(&mut self, key: Self::K);
 }
 
@@ -36,8 +37,12 @@ pub trait Structure: 'static {
     fn fields<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Fields;
 }
 
+pub enum Relation {
+    Owns,
+    Ref,
+}
 pub trait KeyStore<K: Copy> {
-    fn iter(&self, call: impl FnMut(K));
+    fn iter(&self, call: impl FnMut(Relation, K));
 
     /// May panic if this owns the key.
     /// Will be called as many times as iter returns it.
@@ -113,6 +118,55 @@ where
     data: Vec<Slot<usize, S::Data<usize>>>,
 }
 
+impl<S: Structure> PlainStorage<S>
+where
+    S::T<usize>: Into<S::Data<usize>>,
+    S::Data<usize>: Sized,
+{
+    fn remove_slot(&mut self, remove: usize, owned: Option<usize>) {
+        match std::mem::replace(&mut self.data[remove], Slot::Empty) {
+            Slot::Occupied {
+                from,
+                data,
+                owner: owned,
+            } => {
+                // Remove from
+                from.into_iter().for_each(|key| match &mut self.data[key] {
+                    Slot::Occupied { data, .. } => {
+                        data.remove(remove);
+                    }
+                    Slot::Empty => panic!("Key is invalid"),
+                });
+
+                // Remove to
+                data.iter(|relation, key| match (relation, &mut self.data[key]) {
+                    (Relation::Ref, Slot::Occupied { from, .. }) => {
+                        let (i, _) = from
+                            .iter()
+                            .enumerate()
+                            .find(|(_, &k)| k == remove)
+                            .expect("Key is invalid");
+                        from.remove(i);
+                    }
+                    (
+                        Relation::Owns,
+                        Slot::Occupied {
+                            owner: Some(owner), ..
+                        },
+                    ) if *owner == remove => self.remove_slot(key, Some(remove)),
+                    (Relation::Owns, Slot::Occupied { .. }) => {
+                        panic!("Own relation is invalid")
+                    }
+                    (Relation::Ref, Slot::Empty) => (),
+                    (Relation::Owns, Slot::Empty) => panic!("Own relation is invalid"),
+                });
+            }
+            Slot::Occupied { .. } => panic!("Key is owned by something else"),
+            Slot::Empty => (),
+        }
+    }
+}
+
 impl<S: Structure> Storage<S> for PlainStorage<S>
 where
     S::T<usize>: Into<S::Data<usize>>,
@@ -133,8 +187,10 @@ where
             self.data
                 .iter()
                 .flat_map(|data| match data {
-                    Slot::Occupied { data, .. } => Some(data),
-                    Slot::Empty => None,
+                    Slot::Occupied {
+                        data, owner: None, ..
+                    } => Some(data),
+                    Slot::Empty | Slot::Occupied { owner: Some(_), .. } => None,
                 })
                 .enumerate(),
         )
@@ -145,46 +201,28 @@ where
         let n = self.data.len();
 
         // Add from
-        data.iter(|key| match &mut self.data[key] {
-            Slot::Occupied { from, .. } => from.push(n),
-            Slot::Empty => panic!("Key is invalid"),
+        data.iter(|relation, key| match (relation, &mut self.data[key]) {
+            (Relation::Ref, Slot::Occupied { from, .. }) => from.push(n),
+            (Relation::Owns, Slot::Occupied { owner: Some(a), .. }) if *a == n => (),
+            (Relation::Owns, Slot::Occupied { owner: Some(_), .. }) => {
+                panic!("Already owned")
+            }
+            (Relation::Owns, Slot::Occupied { owner, .. }) => *owner = Some(n),
+            (_, Slot::Empty) => panic!("Key is invalid"),
         });
 
         // Add to slot
         self.data.push(Slot::Occupied {
             data: data.into(),
             from: Vec::new(),
+            owner: None,
         });
 
         n
     }
 
     fn remove(&mut self, remove: Self::K) {
-        match std::mem::replace(&mut self.data[remove], Slot::Empty) {
-            Slot::Occupied { from, data } => {
-                // Remove from
-                from.into_iter().for_each(|key| match &mut self.data[key] {
-                    Slot::Occupied { data, .. } => {
-                        data.remove(remove);
-                    }
-                    Slot::Empty => panic!("Key is invalid"),
-                });
-
-                // Remove to
-                data.iter(|key| match &mut self.data[key] {
-                    Slot::Occupied { from, .. } => {
-                        let (i, _) = from
-                            .iter()
-                            .enumerate()
-                            .find(|(_, &k)| k == remove)
-                            .expect("Key is invalid");
-                        from.remove(i);
-                    }
-                    Slot::Empty => panic!("Key is invalid"),
-                });
-            }
-            Slot::Empty => panic!("Key is invalid"),
-        }
+        self.remove_slot(remove, None);
     }
 }
 
@@ -230,5 +268,10 @@ where
 
 enum Slot<K, T> {
     Empty,
-    Occupied { from: Vec<K>, data: T },
+    // TODO: Expose owner & from keys
+    Occupied {
+        owner: Option<K>,
+        from: Vec<K>,
+        data: T,
+    },
 }
