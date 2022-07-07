@@ -17,8 +17,7 @@ impl<K: Copy> KeyStore<K> for NodeData<K> {
         unimplemented!()
     }
 
-    /// May panic if this owns the key.
-    fn remove(&self, key: K) -> bool {
+    fn remove_ref(&mut self, key: K) -> bool {
         unimplemented!()
     }
 }
@@ -28,8 +27,7 @@ impl<K: Copy> KeyStore<K> for Raw<NodeData<K>> {
         unimplemented!()
     }
 
-    /// May panic if this owns the key.
-    fn remove(&self, key: K) -> bool {
+    fn remove_ref(&mut self, key: K) -> bool {
         unimplemented!()
     }
 }
@@ -48,9 +46,9 @@ pub struct ANodeFields;
 impl Structure for ANodeStructure {
     type T<K: Copy> = NodeData<K>;
     type Data<K: Copy> = NodeData<K>;
-    type Fields = ANodeFields;
+    type Cache = ANodeFields;
 
-    fn fields<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Fields {
+    fn cache<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Cache {
         ANodeFields
     }
 }
@@ -102,9 +100,9 @@ pub struct BNodeStructure;
 impl Structure for BNodeStructure {
     type T<K: Copy> = NodeData<K>;
     type Data<K: Copy> = Raw<NodeData<K>>;
-    type Fields = BNodeFields;
+    type Cache = BNodeFields;
 
-    fn fields<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Fields {
+    fn cache<S: Storage<Self> + ?Sized>(_: &Self::Data<S::K>) -> Self::Cache {
         BNodeFields
     }
 }

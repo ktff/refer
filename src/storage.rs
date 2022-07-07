@@ -11,6 +11,7 @@ pub trait Storage<S: Structure + ?Sized> {
     /// Expects that the data is present.
     fn read<'a>(&'a self, key: Self::K) -> Self::C<'a>;
 
+    /// Iters over storage owned.
     fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
 
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = ReadStructure<'a, S, Self>> + 'a> {
@@ -25,16 +26,23 @@ pub trait Storage<S: Structure + ?Sized> {
 
     /// Panics if not owned by this storage.
     fn remove(&mut self, key: Self::K);
+
+    /// Owner must remove from self key.
+    /// May panic if key is not owned by this owner.
+    fn remove_owned(&mut self, key: Self::K, owner: Self::K);
 }
 
 pub trait Structure: 'static {
     type T<K: Copy>: KeyStore<K>;
 
-    type Fields;
     // ! not <'a>
+    /// Form of T when stored
     type Data<K: Copy>: KeyStore<K> + ?Sized;
 
-    fn fields<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Fields;
+    /// Form of T when partially read from Data
+    type Cache;
+
+    fn cache<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Cache;
 }
 
 pub enum Relation {
@@ -44,15 +52,15 @@ pub enum Relation {
 pub trait KeyStore<K: Copy> {
     fn iter(&self, call: impl FnMut(Relation, K));
 
-    /// May panic if this owns the key.
+    /// Must not be called for owners of key.
     /// Will be called as many times as iter returns it.
-    fn remove(&self, key: K) -> bool;
+    fn remove_ref(&mut self, key: K) -> bool;
 }
 
 pub struct ReadStructure<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> {
     store: &'a Store,
     data: Store::C<'a>,
-    fields: S::Fields,
+    cache: S::Cache,
 }
 
 impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S, Store> {
@@ -63,30 +71,23 @@ impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S,
 
     #[doc(hidden)]
     pub fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
-        let fields = S::fields::<Store>(&*data);
+        let cache = S::cache::<Store>(&*data);
 
-        ReadStructure {
-            store,
-            data,
-            fields,
-        }
+        ReadStructure { store, data, cache }
     }
 
     #[doc(hidden)]
     pub fn read_data<'b, R: 'b>(
         &'b self,
-        field: impl FnOnce(&S::Fields, &'b S::Data<<Store as Storage<S>>::K>) -> R,
+        field: impl FnOnce(&S::Cache, &'b S::Data<<Store as Storage<S>>::K>) -> R,
     ) -> R {
-        field(&self.fields, &*self.data)
+        field(&self.cache, &*self.data)
     }
 
     #[doc(hidden)]
     pub fn read_store<'b, T: Structure>(
         &'b self,
-        field: impl FnOnce(
-            &S::Fields,
-            &'b S::Data<<Store as Storage<S>>::K>,
-        ) -> <Store as Storage<T>>::K,
+        field: impl FnOnce(&S::Cache, &'b S::Data<<Store as Storage<S>>::K>) -> <Store as Storage<T>>::K,
     ) -> ReadStructure<'a, T, Store>
     where
         Store: Storage<T>,
@@ -98,7 +99,7 @@ impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S,
     pub fn read_store_optional<'b, T: Structure>(
         &'b self,
         field: impl FnOnce(
-            &S::Fields,
+            &S::Cache,
             &'b S::Data<<Store as Storage<S>>::K>,
         ) -> Option<<Store as Storage<T>>::K>,
     ) -> Option<ReadStructure<'a, T, Store>>
@@ -125,18 +126,16 @@ where
 {
     fn remove_slot(&mut self, remove: usize, owned: Option<usize>) {
         match std::mem::replace(&mut self.data[remove], Slot::Empty) {
-            Slot::Occupied {
-                from,
-                data,
-                owner: owned,
-            } => {
+            Slot::Occupied { from, data, owner } if owner == owned => {
                 // Remove from
-                from.into_iter().for_each(|key| match &mut self.data[key] {
-                    Slot::Occupied { data, .. } => {
-                        data.remove(remove);
-                    }
-                    Slot::Empty => panic!("Key is invalid"),
-                });
+                from.into_iter()
+                    .filter(|key| owned.map(|own| own != *key).unwrap_or(true))
+                    .for_each(|key| match &mut self.data[key] {
+                        Slot::Occupied { data, .. } => {
+                            data.remove_ref(remove);
+                        }
+                        Slot::Empty => (),
+                    });
 
                 // Remove to
                 data.iter(|relation, key| match (relation, &mut self.data[key]) {
@@ -224,6 +223,10 @@ where
     fn remove(&mut self, remove: Self::K) {
         self.remove_slot(remove, None);
     }
+
+    fn remove_owned(&mut self, remove: Self::K, owner: Self::K) {
+        self.remove_slot(remove, Some(owner));
+    }
 }
 
 // *************************** RAW
@@ -260,6 +263,10 @@ where
     }
 
     fn remove(&mut self, key: Self::K) {
+        unimplemented!()
+    }
+
+    fn remove_owned(&mut self, remove: Self::K, owner: Self::K) {
         unimplemented!()
     }
 }
