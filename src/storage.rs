@@ -68,38 +68,39 @@ impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S,
     }
 
     #[doc(hidden)]
-    pub fn read_data<'b, F: ReadField<S::Data<Store::K>>>(
+    pub fn read_data<'b, R: 'b>(
         &'b self,
-        field: impl FnOnce(&S::Fields) -> F,
-    ) -> F::To<'b> {
-        field(&self.fields).read(&*self.data)
+        field: impl FnOnce(&S::Fields, &'b S::Data<<Store as Storage<S>>::K>) -> R,
+    ) -> R {
+        field(&self.fields, &*self.data)
     }
 
     #[doc(hidden)]
-    pub fn read_store<'b, T: Structure, F: ReadField<S::Data<<Store as Storage<S>>::K>>>(
+    pub fn read_store<'b, T: Structure>(
         &'b self,
-        field: impl FnOnce(&S::Fields) -> F,
+        field: impl FnOnce(
+            &S::Fields,
+            &'b S::Data<<Store as Storage<S>>::K>,
+        ) -> <Store as Storage<T>>::K,
     ) -> ReadStructure<'a, T, Store>
     where
         Store: Storage<T>,
-        F::To<'b>: Into<<Store as Storage<T>>::K>,
     {
-        ReadStructure::new_key(self.store, self.read_data(field).into())
+        ReadStructure::new_key(self.store, self.read_data(field))
     }
 
     #[doc(hidden)]
-    pub fn read_store_optional<'b, T: Structure, F: ReadField<S::Data<<Store as Storage<S>>::K>>>(
+    pub fn read_store_optional<'b, T: Structure>(
         &'b self,
-        field: impl FnOnce(&S::Fields) -> F,
+        field: impl FnOnce(
+            &S::Fields,
+            &'b S::Data<<Store as Storage<S>>::K>,
+        ) -> Option<<Store as Storage<T>>::K>,
     ) -> Option<ReadStructure<'a, T, Store>>
     where
         Store: Storage<T>,
-        F::To<'b>: Into<Option<<Store as Storage<T>>::K>>,
     {
-        Some(ReadStructure::new_key(
-            self.store,
-            self.read_data(field).into()?,
-        ))
+        Some(ReadStructure::new_key(self.store, self.read_data(field)?))
     }
 }
 
