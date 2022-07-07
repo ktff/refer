@@ -12,6 +12,28 @@ pub struct NodeData<K: Copy> {
     next: Option<K>,
 }
 
+impl<K: Copy> KeyStore<K> for NodeData<K> {
+    fn iter(&self, call: impl FnMut(K)) {
+        unimplemented!()
+    }
+
+    /// May panic if this owns the key.
+    fn remove(&self, key: K) -> bool {
+        unimplemented!()
+    }
+}
+
+impl<K: Copy> KeyStore<K> for Raw<NodeData<K>> {
+    fn iter(&self, call: impl FnMut(K)) {
+        unimplemented!()
+    }
+
+    /// May panic if this owns the key.
+    fn remove(&self, key: K) -> bool {
+        unimplemented!()
+    }
+}
+
 impl<K: Copy> Into<Box<Raw<NodeData<K>>>> for NodeData<K> {
     fn into(self) -> Box<Raw<NodeData<K>>> {
         unimplemented!()

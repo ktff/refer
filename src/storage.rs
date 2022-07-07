@@ -8,6 +8,7 @@ pub trait Storage<S: Structure + ?Sized> {
     where
         Self: 'a;
 
+    /// Expects that the data is present.
     fn read<'a>(&'a self, key: Self::K) -> Self::C<'a>;
 
     fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
@@ -20,16 +21,27 @@ pub trait Storage<S: Structure + ?Sized> {
     }
 
     fn add(&mut self, data: S::T<Self::K>) -> Self::K;
+
+    /// Panics if not present or if not owned.
+    fn remove(&mut self, key: Self::K);
 }
 
 pub trait Structure: 'static {
-    type T<K: Copy>;
+    type T<K: Copy>: KeyStore<K>;
 
     type Fields;
     // ! not <'a>
-    type Data<K: Copy>: ?Sized;
+    type Data<K: Copy>: KeyStore<K> + ?Sized;
 
     fn fields<S: Storage<Self> + ?Sized>(store: &Self::Data<S::K>) -> Self::Fields;
+}
+
+pub trait KeyStore<K: Copy> {
+    fn iter(&self, call: impl FnMut(K));
+
+    /// May panic if this owns the key.
+    /// Will be called as many times as iter returns it.
+    fn remove(&self, key: K) -> bool;
 }
 
 pub struct ReadStructure<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> {
@@ -97,7 +109,7 @@ pub struct PlainStorage<S: Structure>
 where
     S::Data<usize>: Sized,
 {
-    data: Vec<S::Data<usize>>,
+    data: Vec<Slot<usize, S::Data<usize>>>,
 }
 
 impl<S: Structure> Storage<S> for PlainStorage<S>
@@ -109,24 +121,76 @@ where
     type C<'a> = &'a S::Data<usize>;
 
     fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
-        &self.data[key]
+        match &self.data[key] {
+            Slot::Occupied { data, .. } => data,
+            Slot::Empty => panic!("Key is invalid"),
+        }
     }
 
     fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
-        Box::new(self.data.iter().enumerate())
+        Box::new(
+            self.data
+                .iter()
+                .flat_map(|data| match data {
+                    Slot::Occupied { data, .. } => Some(data),
+                    Slot::Empty => None,
+                })
+                .enumerate(),
+        )
     }
 
     fn add(&mut self, data: S::T<Self::K>) -> Self::K {
+        // Allocate slot
         let n = self.data.len();
-        self.data.push(data.into());
+
+        // Add from
+        data.iter(|key| match &mut self.data[key] {
+            Slot::Occupied { from, .. } => from.push(n),
+            Slot::Empty => panic!("Key is invalid"),
+        });
+
+        // Add to slot
+        self.data.push(Slot::Occupied {
+            data: data.into(),
+            from: Vec::new(),
+        });
+
         n
+    }
+
+    fn remove(&mut self, remove: Self::K) {
+        match std::mem::replace(&mut self.data[remove], Slot::Empty) {
+            Slot::Occupied { from, data } => {
+                // Remove from
+                from.into_iter().for_each(|key| match &mut self.data[key] {
+                    Slot::Occupied { data, .. } => {
+                        data.remove(remove);
+                    }
+                    Slot::Empty => panic!("Key is invalid"),
+                });
+
+                // Remove to
+                data.iter(|key| match &mut self.data[key] {
+                    Slot::Occupied { from, .. } => {
+                        let (i, _) = from
+                            .iter()
+                            .enumerate()
+                            .find(|(_, &k)| k == remove)
+                            .expect("Key is invalid");
+                        from.remove(i);
+                    }
+                    Slot::Empty => panic!("Key is invalid"),
+                });
+            }
+            Slot::Empty => panic!("Key is invalid"),
+        }
     }
 }
 
 // *************************** RAW
 
 pub struct RawStorage<S: Structure> {
-    data: Vec<Box<S::Data<usize>>>,
+    data: Vec<Option<Box<S::Data<usize>>>>,
 }
 
 impl<S: Structure> Storage<S> for RawStorage<S>
@@ -137,16 +201,33 @@ where
     type C<'a> = &'a S::Data<usize>;
 
     fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
-        &self.data[key]
+        self.data[key].as_ref().expect("Invalid key")
     }
 
     fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, &'a S::Data<usize>)> + 'a> {
-        Box::new(self.data.iter().map(|c| c.as_ref()).enumerate())
+        Box::new(
+            self.data
+                .iter()
+                .flat_map(|data| data.as_ref())
+                .map(|c| c.as_ref())
+                .enumerate(),
+        )
     }
 
     fn add(&mut self, data: S::T<Self::K>) -> Self::K {
         let n = self.data.len();
-        self.data.push(data.into());
+        self.data.push(Some(data.into()));
         n
     }
+
+    fn remove(&mut self, key: Self::K) {
+        unimplemented!()
+    }
+}
+
+// ***************************** Helper *************************** //
+
+enum Slot<K, T> {
+    Empty,
+    Occupied { from: Vec<K>, data: T },
 }
