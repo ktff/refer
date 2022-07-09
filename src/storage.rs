@@ -1,6 +1,38 @@
 use crate::field::ReadField;
 use std::{marker::PhantomData, ops::Deref};
 
+// ! node extensions. Ownership i Option to omogucavaju.
+/*
+* Ovo sve je više pristup programiranju graph problema nego biblioteka.
+
+* Data je spremljen:
+    * Plain kao T
+    * Serijaliziran kao [u8]
+
+* Each storage is also any map - extension
+* Storage grained lock - extension
+
+
+* Hierarchy of storages
+
+* Ako postoji samo jedna ili dvije dobre implementacije, mogu se direktno koristiti bez apstrakcija.
+
+* Konkretni storage:
+    * Plain
+    * Raw - tu postoji vise verzija radi backcompatibility
+
+* Bitno je da se reference mogu pokzivati medu razlicitim storage-ovima.
+
+* Svaka struktura se specijalizira za jedan od konkretnih storage.
+
+* Kompozicija je glavni način ekstenzije.
+
+* Nisu dozvoljeni ciklusi u usmjerenom graphu referenci. Reference koje održavaju storagi se neracunaju, from & owner.
+* Omogucuje mutaciju svega ako se ima ogranici na samo jedan root, ili na mutaciju owner stabla ako se ogranici samo na
+* rotove koji su vlasnistvo storage-a.
+
+*/
+
 pub trait Storage<S: Structure + ?Sized> {
     // ! Copy, not <'a>
     type K: Copy;
@@ -31,7 +63,20 @@ pub trait Storage<S: Structure + ?Sized> {
     /// May panic if key is not owned by this owner.
     fn remove_owned(&mut self, key: Self::K, owner: Self::K);
 
+    //? Note: Bilo bi dobro omoguciti da ide i izvan owned stabla s ref.
+    //? Mozda bi se dalo ako bi se onemogucilo write dok se ima takav ref.
+
+    // Panics if owner is not storage
     // TODO: Mut
+    fn write<'a>(&'a mut self, key: Self::K) -> Self::C<'a> {
+        unimplemented!()
+    }
+
+    /// May panic if key is not owned by this owner.
+    // TODO: Mut
+    fn write_owned<'a>(&'a mut self, key: Self::K, owner: Self::K) -> Self::C<'a> {
+        unimplemented!()
+    }
 }
 
 pub trait Container<'a>: 'a {
@@ -323,6 +368,9 @@ impl<'a, C, T: ?Sized> From<C> for BoxContainer<'a, C, T> {
 }
 
 // TODO
+// *************************** Dynamic storage ******************** //
+
+// TODO
 // *************************** Multi Storage ********************** //
 
 // ***************************** Helper *************************** //
@@ -335,6 +383,7 @@ enum Slot<K, T> {
 
 pub struct Occupied<K, T> {
     owner: Option<K>,
+    // TODO: Eliminate K if T has it
     from: Vec<K>,
     data: T,
 }
