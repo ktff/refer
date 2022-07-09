@@ -77,7 +77,7 @@ pub trait Container<'a>: 'a {
 
     fn data(&self) -> &Self::T;
 
-    fn owner(&self) -> Option<Self::K>;
+    fn owner(&self) -> Option<Owner<Self::K>>;
 
     fn from(&self) -> Box<dyn Iterator<Item = Self::K> + 'a>;
 }
@@ -87,7 +87,7 @@ pub trait Key: Copy + 'static {}
 impl Key for usize {}
 
 pub enum Relation {
-    Owns,
+    Owns { anonymous: bool },
     Ref,
 }
 pub trait Family: 'static {
@@ -121,7 +121,7 @@ impl<'a, F: Family, Store: Storage<F> + ?Sized> ReadStructure<'a, F, Store> {
         Self::new_key(self.store, key)
     }
 
-    pub fn owner(&self) -> Option<Store::K> {
+    pub fn owner(&self) -> Option<Owner<Store::K>> {
         self.data.owner()
     }
 
@@ -146,7 +146,7 @@ pub struct PlainStorage<F: Family> {
 impl<F: Family> PlainStorage<F> {
     fn remove_slot(&mut self, remove: usize, owned: Option<usize>) {
         match std::mem::replace(&mut self.data[remove], Slot::Empty) {
-            Slot::Occupied(Occupied { from, data, owner }) if owner == owned => {
+            Slot::Occupied(Occupied { from, data, owner }) if owner == owned.map(Owner::Known) => {
                 // Remove from
                 from.into_iter()
                     .filter(|key| owned.map(|own| own != *key).unwrap_or(true))
@@ -168,16 +168,25 @@ impl<F: Family> PlainStorage<F> {
                         from.remove(i);
                     }
                     (
-                        Relation::Owns,
+                        Relation::Owns { anonymous: false },
                         Slot::Occupied(Occupied {
                             owner: Some(owner), ..
                         }),
                     ) if *owner == remove => self.remove_slot(key, Some(remove)),
-                    (Relation::Owns, Slot::Occupied(Occupied { .. })) => {
+                    (
+                        Relation::Owns { anonymous: true },
+                        Slot::Occupied(Occupied {
+                            owner: Some(Owner::Anonymous),
+                            ..
+                        }),
+                    ) => self.remove_slot(key, Some(remove)),
+                    (Relation::Owns { .. }, Slot::Occupied(Occupied { .. })) => {
                         panic!("Own relation is invalid")
                     }
                     (Relation::Ref, Slot::Empty) => (),
-                    (Relation::Owns, Slot::Empty) => panic!("Own relation is invalid"),
+                    (Relation::Owns { .. }, Slot::Empty) => {
+                        panic!("Own relation is invalid")
+                    }
                 });
             }
             Slot::Occupied(_) => panic!("Key is owned by something else"),
@@ -218,11 +227,23 @@ impl<F: Family> Storage<F> for PlainStorage<F> {
         // Add from
         data.iter(|relation, key| match (relation, &mut self.data[key]) {
             (Relation::Ref, Slot::Occupied(Occupied { from, .. })) => from.push(n),
-            (Relation::Owns, Slot::Occupied(Occupied { owner: Some(a), .. })) if *a == n => (),
-            (Relation::Owns, Slot::Occupied(Occupied { owner: Some(_), .. })) => {
+            (
+                Relation::Owns { anonymous: false },
+                Slot::Occupied(Occupied {
+                    owner: Some(Owner::Known(a)),
+                    ..
+                }),
+            ) if *a == n => (),
+
+            (Relation::Owns { .. }, Slot::Occupied(Occupied { owner: Some(_), .. })) => {
                 panic!("Already owned")
             }
-            (Relation::Owns, Slot::Occupied(Occupied { owner, .. })) => *owner = Some(n),
+            (Relation::Owns { anonymous: false }, Slot::Occupied(Occupied { owner, .. })) => {
+                *owner = Some(Owner::Known(n))
+            }
+            (Relation::Owns { anonymous: true }, Slot::Occupied(Occupied { owner, .. })) => {
+                *owner = Some(Owner::Anonymous)
+            }
             (_, Slot::Empty) => panic!("Key is invalid"),
         });
 
@@ -257,8 +278,34 @@ enum Slot<K, T> {
     Occupied(Occupied<K, T>),
 }
 
+#[derive(Clone, Copy)]
+pub enum Owner<K> {
+    Anonymous,
+    Known(K),
+}
+
+impl<K: Eq> Eq for Owner<K> {}
+
+impl<K: PartialEq> PartialEq for Owner<K> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Owner::Anonymous, _) | (_, Owner::Anonymous) => true,
+            (Owner::Known(a), Owner::Known(b)) => a == b,
+        }
+    }
+}
+
+impl<K: PartialEq> PartialEq<K> for Owner<K> {
+    fn eq(&self, other: &K) -> bool {
+        match self {
+            Owner::Anonymous => true,
+            Owner::Known(a) => a == other,
+        }
+    }
+}
+
 pub struct Occupied<K, T> {
-    owner: Option<K>,
+    owner: Option<Owner<K>>,
     // TODO: Eliminate K if T has it
     from: Vec<K>,
     data: T,
@@ -272,7 +319,7 @@ impl<'a, K: Key, T> Container<'a> for &'a Occupied<K, T> {
         &self.data
     }
 
-    fn owner(&self) -> Option<Self::K> {
+    fn owner(&self) -> Option<Owner<Self::K>> {
         self.owner
     }
 
