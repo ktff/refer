@@ -33,10 +33,10 @@ use std::{marker::PhantomData, ops::Deref};
 
 */
 
-pub trait Storage<S: Structure + ?Sized> {
+pub trait Storage<F: Family> {
     // ! Copy, not <'a>
-    type K: Copy;
-    type C<'a>: Container<'a, T = S::Data<Self::K>, K = Self::K>
+    type K: Key;
+    type C<'a>: Container<'a, T = F::I<Self::K>, K = Self::K>
     where
         Self: 'a;
 
@@ -46,7 +46,7 @@ pub trait Storage<S: Structure + ?Sized> {
     /// Iters over storage owned.
     fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
 
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = ReadStructure<'a, S, Self>> + 'a> {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = ReadStructure<'a, F, Self>> + 'a> {
         Box::new(
             self.iter_read()
                 .map(|(_, c)| ReadStructure::new_data(self, c)),
@@ -54,7 +54,7 @@ pub trait Storage<S: Structure + ?Sized> {
     }
 
     /// May panic if adding taking ownership of something already owned.
-    fn add(&mut self, data: S::T<Self::K>) -> Self::K;
+    fn add(&mut self, data: F::I<Self::K>) -> Self::K;
 
     /// Panics if not owned by this storage.
     fn remove(&mut self, key: Self::K);
@@ -63,20 +63,20 @@ pub trait Storage<S: Structure + ?Sized> {
     /// May panic if key is not owned by this owner.
     fn remove_owned(&mut self, key: Self::K, owner: Self::K);
 
-    //? Note: Bilo bi dobro omoguciti da ide i izvan owned stabla s ref.
-    //? Mozda bi se dalo ako bi se onemogucilo write dok se ima takav ref.
+    // //? Note: Bilo bi dobro omoguciti da ide i izvan owned stabla s ref.
+    // //? Mozda bi se dalo ako bi se onemogucilo write dok se ima takav ref.
 
-    // Panics if owner is not storage
-    // TODO: Mut
-    fn write<'a>(&'a mut self, key: Self::K) -> Self::C<'a> {
-        unimplemented!()
-    }
+    // // Panics if owner is not storage
+    // // TODO: Mut
+    // fn write<'a>(&'a mut self, key: Self::K) -> Self::C<'a> {
+    //     unimplemented!()
+    // }
 
-    /// May panic if key is not owned by this owner.
-    // TODO: Mut
-    fn write_owned<'a>(&'a mut self, key: Self::K, owner: Self::K) -> Self::C<'a> {
-        unimplemented!()
-    }
+    // /// May panic if key is not owned by this owner.
+    // // TODO: Mut
+    // fn write_owned<'a>(&'a mut self, key: Self::K, owner: Self::K) -> Self::C<'a> {
+    //     unimplemented!()
+    // }
 }
 
 pub trait Container<'a>: 'a {
@@ -86,34 +86,19 @@ pub trait Container<'a>: 'a {
     fn data(&self) -> &Self::T;
 }
 
-pub trait Structure: 'static {
-    type T<K: Copy>: KeyStore<K>;
+pub trait Key: Copy + 'static {}
 
-    // ! not <'a>
-    /// Form of T when stored
-    type Data<K: Copy>: KeyStore<K> + ?Sized;
-
-    /// Form of T when partially read from Data
-    type Cache;
-
-    fn cache<K: Copy>(store: &Self::Data<K>) -> Self::Cache;
-}
-
-impl<S: Structure> Structure for Box<S> {
-    type T<K: Copy> = S::T<K>;
-    type Data<K: Copy> = Box<S::Data<K>>;
-    type Cache = S::Cache;
-
-    fn cache<K: Copy>(store: &Self::Data<K>) -> Self::Cache {
-        S::cache::<K>(store.as_ref())
-    }
-}
+impl Key for usize {}
 
 pub enum Relation {
     Owns,
     Ref,
 }
-pub trait KeyStore<K: Copy> {
+pub trait Family: 'static {
+    type I<K: Key>: Instance<K>;
+}
+
+pub trait Instance<K: Key>: 'static {
     fn iter(&self, call: impl FnMut(Relation, K));
 
     /// Must not be called for owners of key.
@@ -121,33 +106,23 @@ pub trait KeyStore<K: Copy> {
     fn remove_ref(&mut self, key: K) -> bool;
 }
 
-impl<K: Copy, T: KeyStore<K> + ?Sized> KeyStore<K> for Box<T> {
-    fn iter(&self, call: impl FnMut(Relation, K)) {
-        self.as_ref().iter(call);
-    }
-
-    fn remove_ref(&mut self, key: K) -> bool {
-        self.as_mut().remove_ref(key)
-    }
-}
-
-pub struct ReadStructure<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> {
+pub struct ReadStructure<'a, F: Family, Store: Storage<F> + ?Sized> {
     store: &'a Store,
     data: Store::C<'a>,
-    cache: S::Cache,
 }
 
-impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S, Store> {
-    #[doc(hidden)]
-    pub fn new_key(store: &'a Store, key: Store::K) -> Self {
+impl<'a, F: Family, Store: Storage<F> + ?Sized> ReadStructure<'a, F, Store> {
+    fn new_key(store: &'a Store, key: Store::K) -> Self {
         Self::new_data(store, store.read(key))
     }
 
-    #[doc(hidden)]
-    pub fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
-        let cache = S::cache::<Store::K>(data.data());
+    fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
+        ReadStructure { store, data }
+    }
 
-        ReadStructure { store, data, cache }
+    /// Expects that the data is present.
+    pub fn read(&self, key: Store::K) -> Self {
+        Self::new_key(self.store, key)
     }
 
     // pub fn owner_key(&self) -> Option<Store::K> {
@@ -156,55 +131,22 @@ impl<'a, S: Structure + ?Sized, Store: Storage<S> + ?Sized> ReadStructure<'a, S,
     // }
 
     // pub fn ref_keys(&self) ->
+}
 
-    #[doc(hidden)]
-    pub fn read_data<'b, R: 'b>(
-        &'b self,
-        field: impl FnOnce(&S::Cache, &'b S::Data<<Store as Storage<S>>::K>) -> R,
-    ) -> R {
-        field(&self.cache, self.data.data())
-    }
-
-    #[doc(hidden)]
-    pub fn read_store<'b, T: Structure>(
-        &'b self,
-        field: impl FnOnce(&S::Cache, &'b S::Data<<Store as Storage<S>>::K>) -> <Store as Storage<T>>::K,
-    ) -> ReadStructure<'a, T, Store>
-    where
-        Store: Storage<T>,
-    {
-        ReadStructure::new_key(self.store, self.read_data(field))
-    }
-
-    #[doc(hidden)]
-    pub fn read_store_optional<'b, T: Structure>(
-        &'b self,
-        field: impl FnOnce(
-            &S::Cache,
-            &'b S::Data<<Store as Storage<S>>::K>,
-        ) -> Option<<Store as Storage<T>>::K>,
-    ) -> Option<ReadStructure<'a, T, Store>>
-    where
-        Store: Storage<T>,
-    {
-        Some(ReadStructure::new_key(self.store, self.read_data(field)?))
+impl<'a, F: Family, Store: Storage<F>> Deref for ReadStructure<'a, F, Store> {
+    type Target = F::I<Store::K>;
+    fn deref(&self) -> &Self::Target {
+        self.data.data()
     }
 }
 
 // ****************************** PLAIN
 
-pub struct PlainStorage<S: Structure>
-where
-    S::Data<usize>: Sized,
-{
-    data: Vec<Slot<usize, S::Data<usize>>>,
+pub struct PlainStorage<F: Family> {
+    data: Vec<Slot<usize, F::I<usize>>>,
 }
 
-impl<S: Structure> PlainStorage<S>
-where
-    S::T<usize>: Into<S::Data<usize>>,
-    S::Data<usize>: Sized,
-{
+impl<F: Family> PlainStorage<F> {
     fn remove_slot(&mut self, remove: usize, owned: Option<usize>) {
         match std::mem::replace(&mut self.data[remove], Slot::Empty) {
             Slot::Occupied(Occupied { from, data, owner }) if owner == owned => {
@@ -247,13 +189,9 @@ where
     }
 }
 
-impl<S: Structure> Storage<S> for PlainStorage<S>
-where
-    S::T<usize>: Into<S::Data<usize>>,
-    S::Data<usize>: Sized,
-{
+impl<F: Family> Storage<F> for PlainStorage<F> {
     type K = usize;
-    type C<'a> = &'a Occupied<Self::K, S::Data<usize>>;
+    type C<'a> = &'a Occupied<Self::K, F::I<usize>>;
 
     fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
         match &self.data[key] {
@@ -264,7 +202,7 @@ where
 
     fn iter_read<'a>(
         &'a self,
-    ) -> Box<dyn Iterator<Item = (usize, &'a Occupied<Self::K, S::Data<usize>>)> + 'a> {
+    ) -> Box<dyn Iterator<Item = (usize, &'a Occupied<Self::K, F::I<usize>>)> + 'a> {
         Box::new(
             self.data
                 .iter()
@@ -276,7 +214,7 @@ where
         )
     }
 
-    fn add(&mut self, data: S::T<Self::K>) -> Self::K {
+    fn add(&mut self, data: F::I<usize>) -> Self::K {
         // Allocate slot
         let n = self.data.len();
 
@@ -311,64 +249,6 @@ where
 }
 
 // *************************** Boxed
-
-pub struct BoxStorage<S: Structure> {
-    store: PlainStorage<Box<S>>,
-}
-
-impl<S: Structure> Storage<S> for BoxStorage<S>
-where
-    S::T<usize>: Into<Box<S::Data<usize>>>,
-{
-    type K = <PlainStorage<Box<S>> as Storage<Box<S>>>::K;
-    type C<'a> = BoxContainer<'a, <PlainStorage<Box<S>> as Storage<Box<S>>>::C<'a>, S::Data<usize>>;
-
-    fn read<'a>(&'a self, key: Self::K) -> Self::C<'a> {
-        self.store.read(key).into()
-    }
-
-    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (usize, Self::C<'a>)> + 'a> {
-        Box::new(self.store.iter_read().map(|(key, node)| (key, node.into()))) as Box<_>
-    }
-
-    fn add(&mut self, data: S::T<Self::K>) -> Self::K {
-        self.store.add(data)
-    }
-
-    fn remove(&mut self, key: Self::K) {
-        self.store.remove(key);
-    }
-
-    fn remove_owned(&mut self, remove: Self::K, owner: Self::K) {
-        self.store.remove_owned(remove, owner);
-    }
-}
-
-pub struct BoxContainer<'a, C, T: ?Sized> {
-    container: C,
-    marker: PhantomData<&'a T>,
-}
-
-impl<'a, C: Container<'a, T = Box<T>>, T: ?Sized> Container<'a> for BoxContainer<'a, C, T> {
-    type K = <C as Container<'a>>::K;
-    type T = T;
-
-    fn data(&self) -> &Self::T {
-        &**self.container.data()
-    }
-}
-
-impl<'a, C, T: ?Sized> From<C> for BoxContainer<'a, C, T> {
-    fn from(container: C) -> Self {
-        BoxContainer {
-            container,
-            marker: PhantomData,
-        }
-    }
-}
-
-// TODO
-// *************************** Dynamic storage ******************** //
 
 // TODO
 // *************************** Multi Storage ********************** //
