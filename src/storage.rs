@@ -34,7 +34,6 @@ use std::{marker::PhantomData, ops::Deref};
 */
 
 pub trait Storage<F: Family> {
-    // ! Copy, not <'a>
     type K: Key;
     type C<'a>: Container<'a, T = F::I<Self::K>, K = Self::K>
     where
@@ -44,14 +43,7 @@ pub trait Storage<F: Family> {
     fn read<'a>(&'a self, key: Self::K) -> Self::C<'a>;
 
     /// Iters over storage owned.
-    fn iter_read<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
-
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = ReadStructure<'a, F, Self>> + 'a> {
-        Box::new(
-            self.iter_read()
-                .map(|(_, c)| ReadStructure::new_data(self, c)),
-        )
-    }
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
 
     /// May panic if adding taking ownership of something already owned.
     fn add(&mut self, data: F::I<Self::K>) -> Self::K;
@@ -84,6 +76,10 @@ pub trait Container<'a>: 'a {
     type T: ?Sized;
 
     fn data(&self) -> &Self::T;
+
+    fn owner(&self) -> Option<Self::K>;
+
+    fn from(&self) -> Box<dyn Iterator<Item = Self::K> + 'a>;
 }
 
 pub trait Key: Copy + 'static {}
@@ -125,12 +121,13 @@ impl<'a, F: Family, Store: Storage<F> + ?Sized> ReadStructure<'a, F, Store> {
         Self::new_key(self.store, key)
     }
 
-    // pub fn owner_key(&self) -> Option<Store::K> {
-    // TODO: Nije nužno da je owner ovog tipa
-    //     unimplemented!()
-    // }
+    pub fn owner(&self) -> Option<Store::K> {
+        self.data.owner()
+    }
 
-    // pub fn ref_keys(&self) ->
+    pub fn from(&self) -> impl Iterator<Item = Store::K> + 'a {
+        self.data.from()
+    }
 }
 
 impl<'a, F: Family, Store: Storage<F>> Deref for ReadStructure<'a, F, Store> {
@@ -200,7 +197,7 @@ impl<F: Family> Storage<F> for PlainStorage<F> {
         }
     }
 
-    fn iter_read<'a>(
+    fn iter<'a>(
         &'a self,
     ) -> Box<dyn Iterator<Item = (usize, &'a Occupied<Self::K, F::I<usize>>)> + 'a> {
         Box::new(
@@ -257,7 +254,6 @@ impl<F: Family> Storage<F> for PlainStorage<F> {
 
 enum Slot<K, T> {
     Empty,
-    // TODO: Expose owner & from keys
     Occupied(Occupied<K, T>),
 }
 
@@ -268,11 +264,19 @@ pub struct Occupied<K, T> {
     data: T,
 }
 
-impl<'a, K, T> Container<'a> for &'a Occupied<K, T> {
+impl<'a, K: Key, T> Container<'a> for &'a Occupied<K, T> {
     type K = K;
     type T = T;
 
     fn data(&self) -> &Self::T {
         &self.data
+    }
+
+    fn owner(&self) -> Option<Self::K> {
+        self.owner
+    }
+
+    fn from(&self) -> Box<dyn Iterator<Item = Self::K> + 'a> {
+        Box::new(self.from.iter().copied()) as Box<_>
     }
 }
