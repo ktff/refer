@@ -40,12 +40,12 @@ pub trait Storage<F: Family> {
         Self: 'a;
 
     /// Expects that the data is present.
-    fn read<'a>(&'a self, key: Self::K) -> Self::C<'a>;
+    fn get<'a>(&'a self, key: Self::K) -> Self::C<'a>;
 
     /// Iters over storage owned.
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
 
-    /// May panic if adding taking ownership of something already owned.
+    /// May panic if added is taking ownership of something already owned.
     fn add(&mut self, data: F::I<Self::K>) -> Self::K;
 
     /// Panics if not owned by this storage.
@@ -57,6 +57,8 @@ pub trait Storage<F: Family> {
 
     // //? Note: Bilo bi dobro omoguciti da ide i izvan owned stabla s ref.
     // //? Mozda bi se dalo ako bi se onemogucilo write dok se ima takav ref.
+
+    // TODO: Shallow remove, removes self and children without refs.
 
     // // Panics if owner is not storage
     // // TODO: Mut
@@ -81,6 +83,10 @@ pub trait Container<'a>: 'a {
 
     fn from(&self) -> Box<dyn Iterator<Item = Self::K> + 'a>;
 }
+
+// TODO: KeyFamily{K<F:Family>}
+
+// TODO: struct Clan, trait Member<C,F>{const N:usize}
 
 pub trait Key: Copy + 'static {}
 
@@ -109,7 +115,7 @@ pub struct ReadStructure<'a, F: Family, Store: Storage<F> + ?Sized> {
 
 impl<'a, F: Family, Store: Storage<F> + ?Sized> ReadStructure<'a, F, Store> {
     fn new_key(store: &'a Store, key: Store::K) -> Self {
-        Self::new_data(store, store.read(key))
+        Self::new_data(store, store.get(key))
     }
 
     fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
@@ -199,7 +205,7 @@ impl<F: Family> Storage<F> for PlainStorage<F> {
     type K = usize;
     type C<'a> = &'a Occupied<Self::K, F::I<usize>>;
 
-    fn read<'a>(&'a self, key: usize) -> Self::C<'a> {
+    fn get<'a>(&'a self, key: usize) -> Self::C<'a> {
         match &self.data[key] {
             Slot::Occupied(node) => node,
             Slot::Empty => panic!("Key is invalid"),
