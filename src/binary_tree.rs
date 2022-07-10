@@ -3,41 +3,43 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::{field::ReadField, storage::*};
 
-pub struct NodeFamily;
+// *********************** Storage ***************************** //
+/*
+Ideja je da je storage dio strukture stoga ima smisla ju explicitno definirati.
+To također znaci da nema generic parametara za to.
+*/
 
-impl Family for NodeFamily {
-    type I<K: Key> = Node<K>;
-}
+type NodeStorage = PlainStorage<usize, Node>;
+type NodeKey = <NodeStorage as Storage<Node>>::K;
+type NodeRead<'a> = ReadStructure<'a, Node, NodeStorage>;
 
-pub struct Node<K: Key> {
+// *********************** Node ******************************* //
+
+pub struct Node {
     data: u32,
     vec: Vec<String>,
-    parent: Option<K>,
-    less: Option<K>,
-    greater: Option<K>,
-    next: Option<K>,
+    parent: Option<NodeKey>,
+    less: Option<NodeKey>,
+    greater: Option<NodeKey>,
+    next: Option<NodeKey>,
 }
 
-impl<K: Key> Instance<K> for Node<K> {
-    fn iter(&self, call: impl FnMut(Relation, K)) {
+impl Instance<NodeKey> for Node {
+    fn for_each(&self, call: impl FnMut(Relation, NodeKey)) {
         unimplemented!()
     }
 
-    fn remove_ref(&mut self, key: K) -> bool {
+    fn remove_ref(&mut self, key: NodeKey) -> bool {
         unimplemented!()
     }
 }
 
-type NodeRead<'a, Store: Storage<NodeFamily>> = ReadStructure<'a, NodeFamily, Store>;
-
-fn example<'a, Store: Storage<NodeFamily>>(node: NodeRead<'a, Store>) {
+fn example<'a>(node: NodeRead<'a>) {
     let data: u32 = node.data;
 
-    let left_key: Option<Store::K> = node.less;
+    let left_key: Option<NodeKey> = node.less;
 
-    let left: Option<NodeRead<'a, Store>> = node.less.map(|less| node.read(less));
+    let left: Option<NodeRead<'a>> = node.less.map(|less| node.read(less));
 
     let vec: &Vec<String> = &node.vec;
 }
-
-fn example_instance<'a>(_: NodeRead<'a, PlainStorage<NodeFamily>>) {}
