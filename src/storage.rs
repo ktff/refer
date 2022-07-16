@@ -31,7 +31,11 @@ use std::{marker::PhantomData, ops::Deref};
 * Omogucuje mutaciju svega ako se ima ogranici na samo jedan root, ili na mutaciju owner stabla ako se ogranici samo na
 * rotove koji su vlasnistvo storage-a.
 
+* Rooted owner trees are primary mode of mutation
+
 */
+
+// TODO: Mozda da read vraca Option te da je svaki key koji je storage ikad izdao je valjan, cak i ako je node removan s njega.
 
 pub trait Storage<T: 'static> {
     type K: Key;
@@ -62,6 +66,9 @@ pub trait Storage<T: 'static> {
 
     // TODO: Shallow remove, removes self and children without refs.
 
+    // ?NOTE: Write da ima pristup kontekstu da moze odmah mijenjati
+    // ?      reference.
+
     // // Panics if owner is not storage
     // // TODO: Mut
     // fn write<'a>(&'a mut self, key: Self::K) -> Self::C<'a> {
@@ -87,16 +94,11 @@ pub trait MinorStore<K: Key>: Keyed {
 
     fn iter_node<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
 
-    /// Allocates a place for data.
-    /// Must be set before edges can be made to it.
-    fn allocate_node(&mut self, data: &Self::T) -> Self::K;
+    fn add_node(&mut self, data: Self::T) -> Self::K;
 
-    /// Set's the data at the given key.
-    /// On failure new data should be allocated and then set.
-    ///
     ///! May panic:
     /// * if key is not valid.
-    fn set_node(&mut self, key: Self::K, node: Self::T) -> bool;
+    fn set_node(&mut self, key: Self::K, node: Self::T);
 
     /// Key stops being valid after this.
     /// Returns data and edges to it.
@@ -214,7 +216,7 @@ impl<K: Key, T: 'static> MinorStore<K> for PlainStorage<K, T> {
     fn get_node<'a>(&'a self, key: usize) -> Self::C<'a> {
         match &self.data[key] {
             Slot::Occupied(node) => node,
-            Slot::Empty | Slot::Allocated => panic!("Key is invalid"),
+            Slot::Empty => panic!("Key is invalid"),
         }
     }
 
@@ -224,9 +226,7 @@ impl<K: Key, T: 'static> MinorStore<K> for PlainStorage<K, T> {
                 .iter()
                 .flat_map(|data| match data {
                     Slot::Occupied(node @ Occupied { owner: None, .. }) => Some(node),
-                    Slot::Empty
-                    | Slot::Allocated
-                    | Slot::Occupied(Occupied { owner: Some(_), .. }) => None,
+                    Slot::Empty | Slot::Occupied(Occupied { owner: Some(_), .. }) => None,
                 })
                 .enumerate(),
         )
@@ -252,7 +252,7 @@ impl<K: Key, T: 'static> MinorStore<K> for PlainStorage<K, T> {
             (Relation::Owns { anonymous: true }, Slot::Occupied(Occupied { owner, .. })) => {
                 *owner = Some(Owner::Anonymous)
             }
-            (_, Slot::Empty) | (_, Slot::Allocated) => panic!("Key is invalid"),
+            (_, Slot::Empty) => panic!("Key is invalid"),
         }
     }
 
@@ -264,7 +264,7 @@ impl<K: Key, T: 'static> MinorStore<K> for PlainStorage<K, T> {
             Slot::Occupied(Occupied { data, .. }) => {
                 data.remove_ref(remove);
             }
-            Slot::Empty | Slot::Allocated => (),
+            Slot::Empty => (),
         }
     }
 
@@ -294,40 +294,34 @@ impl<K: Key, T: 'static> MinorStore<K> for PlainStorage<K, T> {
             (Relation::Owns { .. }, Slot::Empty) => {
                 panic!("Own relation is invalid")
             }
-            (_, Slot::Allocated) => panic!("Key is invalid"),
         }
     }
 
-    fn allocate_node(&mut self, data: &T) -> Self::K {
+    fn add_node(&mut self, data: T) -> Self::K {
         let n = self.data.len();
 
-        self.data.push(Slot::Allocated);
+        self.data.push(Slot::Occupied(Occupied {
+            data,
+            from: Vec::new(),
+            owner: None,
+        }));
 
         n
     }
 
-    fn set_node(&mut self, key: Self::K, data: T) -> bool {
+    fn set_node(&mut self, key: Self::K, data: T) {
         match &mut self.data[key] {
-            Slot::Allocated => {
-                self.data[key] = Slot::Occupied(Occupied {
-                    data,
-                    from: Vec::new(),
-                    owner: None,
-                });
-                true
-            }
             Slot::Occupied(Occupied { data: old, .. }) => {
                 *old = data;
-                true
             }
-            Slot::Empty => false,
+            Slot::Empty => panic!("Illegal key"),
         }
     }
 
     fn remove_node(&mut self, key: Self::K) -> Option<(Option<Owner<K>>, Vec<K>, Self::T)> {
         match std::mem::replace(&mut self.data[key], Slot::Empty) {
             Slot::Occupied(Occupied { from, data, owner }) => Some((owner, from, data)),
-            Slot::Empty | Slot::Allocated => None,
+            Slot::Empty => None,
         }
     }
 }
@@ -341,7 +335,6 @@ impl<K: Key, T: 'static> MinorStore<K> for PlainStorage<K, T> {
 
 enum Slot<K, T> {
     Empty,
-    Allocated,
     Occupied(Occupied<K, T>),
 }
 
@@ -419,14 +412,17 @@ where
     where
         S::T: Instance<Self::K>,
     {
-        // Allocate slot
-        let key = self.allocate_node(&data);
+        // Collect edges
+        let mut edges = Vec::new();
+        data.for_each(|relation, to| edges.push((relation, to)));
+
+        // Add node
+        let key = self.add_node(data);
 
         // Add from
-        data.for_each(|relation, to| self.add_edge(key, relation, to));
-
-        // Add to slot
-        assert!(self.set_node(key, data));
+        edges
+            .into_iter()
+            .for_each(|(relation, to)| self.add_edge(key, relation, to));
 
         key
     }
