@@ -33,38 +33,28 @@ use std::{marker::PhantomData, ops::Deref};
 
 * Rooted owner trees are primary mode of mutation
 
+* Storages should be independent, like they can be mutated at the same time.
+
+* set(key: K, value: T) funckija je dobar primjer za kompoziciju i da nemora Storage ili neki drugi trait ovdje pokriti
+* svaku mogucu opciju vec da treba omoguciti siri spektar opcija.
+
 */
 
 // TODO: Mozda da read vraca Option te da je svaki key koji je storage ikad izdao je valjan, cak i ako je node removan s njega.
 
 pub trait Storage<T: 'static> {
+    // ! FUNDAMENTAL, key is the reference, for value to be accessible a reference needs to exist
     type K: Key;
+    // ! FUNDAMENTAL, to get value from storage and for it to provide metadata a storage selected struct is needed
     type C<'a>: Container<'a, T = T, K = Self::K>
     where
         Self: 'a;
 
-    /// Expects that the data is present.
-    fn get<'a>(&'a self, key: Self::K) -> Self::C<'a>;
-
-    /// Iters over storage owned.
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
-
-    /// May panic if added is taking ownership of something already owned.
-    fn add(&mut self, data: T) -> Self::K
-    where
-        T: Instance<Self::K>;
-
-    /// None -> Panics if not owned by this storage.
-    /// Some -> May panic if key is not owned by this owner
-    ///      -> Owner must remove from self key.
-    fn remove(&mut self, key: Self::K, owner: Option<Self::K>)
-    where
-        T: Instance<Self::K>;
+    // ! FUNDAMENTAL, value must be accessible
+    fn get<'a>(&'a self, key: Self::K) -> Option<ReadStructure<'a, T, Self>>;
 
     // //? Note: Bilo bi dobro omoguciti da ide i izvan owned stabla s ref.
     // //? Mozda bi se dalo ako bi se onemogucilo write dok se ima takav ref.
-
-    // TODO: Shallow remove, removes self and children without refs.
 
     // ?NOTE: Write da ima pristup kontekstu da moze odmah mijenjati
     // ?      reference.
@@ -80,6 +70,92 @@ pub trait Storage<T: 'static> {
     // fn write_owned<'a>(&'a mut self, key: Self::K, owner: Self::K) -> Self::C<'a> {
     //     unimplemented!()
     // }
+    // ! FUNDAMENTAL, enables mutation and consequently building T from bottom down.
+    fn get_mut<'a>(
+        &'a mut self,
+        key: Self::K,
+        owner: Option<Self::K>,
+    ) -> Option<WriteStructure<'a, T, Self>>;
+
+    // ! FUNDAMENTAL, Those T that require Drop need to have Storage that knows where are they hence it knows to iterate.
+    // ! OPTIONAL, For !Drop T
+    // ? Replaces iter and iter_mut with an iterator over the keys. For mut this is an issue since consuming iterator requires & and consuming K requires &mut.
+    // ?NOTE: Ovo pokazuje ovisnost seta kljuceva o mutaciji. Odnosno set kljuceva se moze promijeniti mutacijom. Stoga je ovaj problem legitiman te ce biti potrebna
+    // ?      neka extra logika da se ovo handla.
+    /// Iters over storage owned.
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Self::K> + 'a>;
+
+    // /// Iters over storage owned.
+    // fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, ReadStructure<'a, T, Self>)> + 'a>;
+
+    // // TODO: Should be callable only once. An outer trait? Self::Partial
+    // fn iter_mut<'a>(
+    //     &'a mut self,
+    // ) -> Box<dyn Iterator<Item = (Self::K, WriteStructure<'a, T, Self::Partial>)> + 'a>;
+
+    // /// Iterates over storage owned.
+    // fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a>;
+
+    // TODO: Add i remove su za neke T opcionalne. Poput prostora kojem se pristupa s K.
+    // TODO: Takva implementacija ili treba imati generator K->T u pozadini, ili treba omoguciti add(key: K,value: T)
+    //
+    // TODO: set(key: K, value: T), tada ovisi o implementaciji tko odreduje K. Ako nesto poput prostora, nema extra funkcija,
+    // TODO:                       a ako je poput alokacije tada implementacija moze imati allocate/add funckiju. Preko toga se moze a i nemora apstrahirati,
+    // TODO:                       to ovisi koliko ima smisla za specificnu implementaciju.
+
+    // ! FUNDAMENTAL, for there to be value to access it must be set first
+    // ? There are two subclases of storages for this:
+    // ? * Allocate - kljuc nenosi podatak, moze realocirati ya potrebe memorije i optimizacije grupiranja
+    // ? * Space - kljuc nosi podatak pa ga se nemože mijenjati, lokalnost kljuceva u njihovoj domeni se koristi za grupiranje
+    // ? Subclases can add more constricted methods to there own traits or own impl. Ex. `fn set(&mut self, key: Self::K, value: T, owner: Option<Self::K>) -> Option<T>`
+    // ? A specific impl can support both subclases.
+    /// Returns previous value, and optionaly a different key for the new value
+    /// May panic if this is taking ownership from someone else than storage or self.
+    #[must_use]
+    fn set(
+        &mut self,
+        key: impl Into<Option<Self::K>>,
+        value: T,
+        owner: Option<Self::K>,
+    ) -> (Option<Self::K>, Option<T>)
+    // TODO: Specialize impls if this is true
+    where
+        T: Instance<Self::K>;
+
+    // ! FUNDAMENTAL, enables building T from bottom up.
+    /// Returns Some if relocated value
+    /// from
+    /// None -> Panics if not owned by this storage.
+    /// Some -> Panic if key is not owned by this owner
+    ///      -> Owner must remove from self key.
+    ///
+    /// Panics if key not present.
+    #[must_use]
+    fn transfer(
+        &mut self,
+        key: Self::K,
+        from: Option<Self::K>,
+        to: Option<Self::K>,
+    ) -> Option<Self::K>
+    // TODO: Specialize impls if this is true
+    where
+        T: Instance<Self::K>;
+
+    // ! FUNDAMENTAL, since  T can not exist once it can not exist multiple times
+    /// None -> Panics if not owned by this storage.
+    /// Some -> May panic if key is not owned by this owner
+    ///      -> Owner must remove from self key.
+    fn remove(&mut self, key: Self::K, owner: Option<Self::K>) -> Option<T>
+    // TODO: Specialize impls if this is true
+    where
+        T: Instance<Self::K>;
+
+    // ! CONVINENCE
+    // /// As remove but removes only children without refs. Those that have are given to the storage.
+    // fn remove_exclusive(&mut self, key: Self::K, owner: Option<Self::K>)
+    // // TODO: Specialize impls if this is true
+    // where
+    //     T: Instance<Self::K>;
 }
 
 /// Meant to be used by a larger storage.
@@ -151,25 +227,28 @@ pub trait Key: Eq + std::fmt::Debug + Copy + 'static {}
 impl Key for usize {}
 
 pub enum Relation {
-    Owns { anonymous: bool },
+    Owns, //{ anonymous: bool },
     Ref,
 }
 pub trait Instance<K: Key>: 'static {
-    fn for_each(&self, call: impl FnMut(Relation, K));
+    /// Calls for each ref
+    fn for_each_ref(&self, call: impl FnMut(K));
 
-    /// Must not be called for owners of key.
-    /// Will be called as many times as iter returns it.
-    fn remove_ref(&mut self, key: K) -> bool;
+    /// Calls for each owned
+    fn for_each_owned(&self, call: impl FnMut(K));
+
+    /// Will be returned as many times as for_each_ref returns it.
+    fn remove_ref(&mut self, key: impl Iterator<Item = K>);
 }
 
-pub struct ReadStructure<'a, T: Instance<Store::K>, Store: Storage<T> + ?Sized> {
+pub struct ReadStructure<'a, T: 'static, Store: Storage<T> + ?Sized> {
     store: &'a Store,
     data: Store::C<'a>,
 }
 
-impl<'a, T: Instance<Store::K>, Store: Storage<T> + ?Sized> ReadStructure<'a, T, Store> {
+impl<'a, T: 'static, Store: Storage<T> + ?Sized> ReadStructure<'a, T, Store> {
     fn new_key(store: &'a Store, key: Store::K) -> Self {
-        Self::new_data(store, store.get(key))
+        store.get(key)
     }
 
     fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
@@ -190,10 +269,97 @@ impl<'a, T: Instance<Store::K>, Store: Storage<T> + ?Sized> ReadStructure<'a, T,
     }
 }
 
-impl<'a, T: Instance<Store::K>, Store: Storage<T> + ?Sized> Deref for ReadStructure<'a, T, Store> {
+impl<'a, T: 'static, Store: Storage<T> + ?Sized> Deref for ReadStructure<'a, T, Store> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         self.data.data()
+    }
+}
+
+pub struct ReadStructure<'a, T: 'static, Store: Storage<T> + ?Sized> {
+    store: &'a Store,
+    data: Store::C<'a>,
+}
+
+impl<'a, T: 'static, Store: Storage<T> + ?Sized> ReadStructure<'a, T, Store> {
+    fn new_key(store: &'a Store, key: Store::K) -> Self {
+        store.get(key)
+    }
+
+    fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
+        ReadStructure { store, data }
+    }
+
+    /// Expects that the data is present.
+    pub fn read(&self, key: Store::K) -> Self {
+        Self::new_key(self.store, key)
+    }
+
+    pub fn owner(&self) -> Option<Owner<Store::K>> {
+        self.data.owner()
+    }
+
+    pub fn from(&self) -> impl Iterator<Item = Store::K> + 'a {
+        self.data.from()
+    }
+}
+
+impl<'a, T: 'static, Store: Storage<T> + ?Sized> Deref for ReadStructure<'a, T, Store> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.data.data()
+    }
+}
+
+pub struct WriteStructure<'a, T: 'static, Store: Storage<T> + ?Sized> {
+    // store: &'a mut Store,
+    // data: Store::C<'a>,
+}
+
+impl<'a, T: 'static, Store: Storage<T> + ?Sized> WriteStructure<'a, T, Store> {
+    // fn new_key(store: &'a Store, key: Store::K) -> Self {
+    //     store.get(key)
+    // }
+
+    // fn new_data(store: &'a Store, data: Store::C<'a>) -> Self {
+    //     ReadStructure { store, data }
+    // }
+
+    pub fn get<'b>(&'b self, key: Store::K) -> ReadStructure<'b, T, Store> {
+        unimplemented!()
+    }
+
+    pub fn get_mut<'b>(&'b mut self, key: Store::K) -> Self {
+        unimplemented!()
+    }
+
+    pub fn register_ref(&mut self, key: Store::K) {
+        unimplemented!()
+    }
+
+    pub fn unregister_ref(&mut self, key: Store::K) {
+        unimplemented!()
+    }
+
+    pub fn owner(&self) -> Option<Owner<Store::K>> {
+        self.data.owner()
+    }
+
+    pub fn from(&self) -> impl Iterator<Item = Store::K> + 'a {
+        self.data.from()
+    }
+}
+
+impl<'a, T: 'static, Store: Storage<T> + ?Sized> Deref for WriteStructure<'a, T, Store> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.data.data()
+    }
+}
+
+impl<'a, T: 'static, Store: Storage<T> + ?Sized> DerefMut for WriteStructure<'a, T, Store> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.data.data_mut()
     }
 }
 
@@ -224,11 +390,11 @@ impl<K: Key, T: 'static> MinorStore<K> for PlainStorage<K, T> {
         Box::new(
             self.data
                 .iter()
-                .flat_map(|data| match data {
-                    Slot::Occupied(node @ Occupied { owner: None, .. }) => Some(node),
+                .enumerate()
+                .flat_map(|(i, data)| match data {
+                    Slot::Occupied(node @ Occupied { owner: None, .. }) => Some((i, node)),
                     Slot::Empty | Slot::Occupied(Occupied { owner: Some(_), .. }) => None,
-                })
-                .enumerate(),
+                }),
         )
     }
 
@@ -400,12 +566,17 @@ where
     type K = S::K;
     type C<'a> = S::C<'a> where S:'a;
 
-    fn get<'a>(&'a self, key: Self::K) -> Self::C<'a> {
-        self.get_node(key)
+    fn get<'a>(&'a self, key: Self::K) -> ReadStructure<'a, S::T, Self> {
+        ReadStructure::new_data(self, self.get_node(key))
     }
 
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (Self::K, Self::C<'a>)> + 'a> {
-        self.iter_node()
+    fn iter<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (Self::K, ReadStructure<'a, S::T, Self>)> + 'a> {
+        Box::new(
+            self.iter_node()
+                .map(|(key, node)| (key, ReadStructure::new_data(self, node))),
+        )
     }
 
     fn add(&mut self, data: S::T) -> Self::K
@@ -414,7 +585,7 @@ where
     {
         // Collect edges
         let mut edges = Vec::new();
-        data.for_each(|relation, to| edges.push((relation, to)));
+        data.for_each_ref(|relation, to| edges.push((relation, to)));
 
         // Add node
         let key = self.add_node(data);
@@ -444,7 +615,7 @@ where
                 .for_each(|key| self.remove_ref(key, remove));
 
             // Remove to
-            data.for_each(|relation, key| {
+            data.for_each_ref(|relation, key| {
                 if self.remove_edge(remove, relation, key) {
                     self.remove(key, Some(remove));
                 }

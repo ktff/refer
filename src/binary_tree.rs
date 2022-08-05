@@ -25,7 +25,7 @@ pub struct Node {
 }
 
 impl Instance<NodeKey> for Node {
-    fn for_each(&self, call: impl FnMut(Relation, NodeKey)) {
+    fn for_each_ref(&self, call: impl FnMut(Relation, NodeKey)) {
         unimplemented!()
     }
 
