@@ -8,7 +8,7 @@ pub use key::*;
 /// - referencable
 /// - can reference other items
 /// - can fetch items that reference them
-pub trait CollectionRef<T: 'static> {
+pub trait CollectionRef<T: ?Sized + 'static> {
     type E<'a>: Entry<'a, T = T>
     where
         Self: 'a;
@@ -17,7 +17,13 @@ pub trait CollectionRef<T: 'static> {
     where
         Self: 'a;
 
-    fn add(&mut self, value: T) -> Key<T>;
+    fn add(&mut self, value: T) -> Key<T>
+    where
+        T: Sized;
+
+    fn add_clone(&mut self, value: &T) -> Key<T>
+    where
+        T: Clone;
 
     // Implementations should specialize this for Composite items.
     fn get<'a>(&'a self, key: Key<T>) -> Option<Self::E<'a>>;
@@ -36,10 +42,10 @@ pub trait Composite: 'static {
 
 // Responsibilities of this trait shouldn't be delegated to T.
 pub trait Entry<'a>: 'a {
-    type T;
-    type Iter<T>: Iterator<Item = Key<T>> + 'a;
+    type T: ?Sized;
+    type Iter<T: ?Sized>: Iterator<Item = Key<T>> + 'a;
 
     fn item(&self) -> &Self::T;
 
-    fn from<T>(&self) -> Self::Iter<T>;
+    fn from<T: ?Sized>(&self) -> Self::Iter<T>;
 }

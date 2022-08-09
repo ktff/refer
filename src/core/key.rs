@@ -22,37 +22,37 @@ impl Debug for Index {
     }
 }
 
-pub struct Key<T>(Index, PhantomData<T>);
+pub struct Key<T: ?Sized>(Index, PhantomData<T>);
 
-impl<T> Key<T> {
+impl<T: ?Sized> Key<T> {
     pub(crate) fn new(index: Index) -> Self {
         Key(index, PhantomData)
     }
 }
 
-impl<T> Eq for Key<T> {}
+impl<T: ?Sized> Eq for Key<T> {}
 
-impl<T> PartialEq for Key<T> {
+impl<T: ?Sized> PartialEq for Key<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T> Hash for Key<T> {
+impl<T: ?Sized> Hash for Key<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
 
-impl<T> Copy for Key<T> {}
+impl<T: ?Sized> Copy for Key<T> {}
 
-impl<T> Clone for Key<T> {
+impl<T: ?Sized> Clone for Key<T> {
     fn clone(&self) -> Self {
         Key(self.0, PhantomData)
     }
 }
 
-impl<T> Debug for Key<T> {
+impl<T: ?Sized> Debug for Key<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Key<{}>({:?})", any::type_name::<T>(), self.0)
     }
@@ -66,7 +66,7 @@ impl AnyKey {
         AnyKey(ty_id, index)
     }
 
-    pub fn downcast<T: 'static>(self) -> Option<Key<T>> {
+    pub fn downcast<T: ?Sized + 'static>(self) -> Option<Key<T>> {
         if self.0 == TypeId::of::<T>() {
             Some(Key::new(self.1))
         } else {
@@ -81,7 +81,7 @@ impl std::fmt::Debug for AnyKey {
     }
 }
 
-impl<T: 'static> From<Key<T>> for AnyKey {
+impl<T: ?Sized + 'static> From<Key<T>> for AnyKey {
     fn from(key: Key<T>) -> Self {
         AnyKey(TypeId::of::<T>(), key.0)
     }
