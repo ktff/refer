@@ -6,7 +6,7 @@ pub trait CollectionMut<T: ?Sized + 'static>: CollectionRef<T> {
     where
         Self: 'a;
 
-    type IterMut<'a>: Iterator<Item = (Key<T>, Self::ME<'a>)> + 'a
+    type IterMut<'a>: Iterator<Item = Self::ME<'a>> + 'a
     where
         Self: 'a;
 

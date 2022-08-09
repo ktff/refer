@@ -12,7 +12,7 @@ pub trait CollectionRef<T: ?Sized + 'static> {
     where
         Self: 'a;
 
-    type IterRef<'a>: Iterator<Item = (Key<T>, Self::RE<'a>)> + 'a
+    type IterRef<'a>: Iterator<Item = Self::RE<'a>> + 'a
     where
         Self: 'a;
 
@@ -39,6 +39,8 @@ pub trait CollectionRef<T: ?Sized + 'static> {
 pub trait RefEntry<'a>: Deref<Target = Self::T> + 'a {
     type T: ?Sized;
     type Iter<T: ?Sized>: Iterator<Item = Key<T>> + 'a;
+
+    fn key(&self) -> Key<Self::T>;
 
     fn from<T: ?Sized>(&self) -> Self::Iter<T>;
 }
