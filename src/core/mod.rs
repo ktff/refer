@@ -13,7 +13,7 @@ pub trait CollectionRef<T: 'static> {
     where
         Self: 'a;
 
-    type Iter<'a>: Iterator<Item = Self::E<'a>> + 'a
+    type Iter<'a>: Iterator<Item = (Key<T>, Self::E<'a>)> + 'a
     where
         Self: 'a;
 
@@ -34,16 +34,12 @@ pub trait Composite: 'static {
     fn references(&self, call: impl FnMut(AnyKey));
 }
 
+// Responsibilities of this trait shouldn't be delegated to T.
 pub trait Entry<'a>: 'a {
     type T;
     type Iter<T>: Iterator<Item = Key<T>> + 'a;
-    type AnyIter: Iterator<Item = AnyKey> + 'a;
-
-    fn key(&self) -> Key<Self::T>;
 
     fn item(&self) -> &Self::T;
 
     fn from<T>(&self) -> Self::Iter<T>;
-
-    fn from_any(&self) -> Self::AnyIter;
 }
