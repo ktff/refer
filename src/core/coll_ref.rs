@@ -1,5 +1,4 @@
 use super::{Error, Key};
-use std::ops::Deref;
 
 /// Enables directed acyclic graph.
 ///
@@ -7,6 +6,8 @@ use std::ops::Deref;
 /// - referencable
 /// - can reference other items
 /// - can fetch items that reference them
+///
+/// Polly collection can implement this trait for each type.
 pub trait CollectionRef<T: ?Sized + 'static> {
     type RE<'a>: RefEntry<'a, T = T>
     where
@@ -36,11 +37,14 @@ pub trait CollectionRef<T: ?Sized + 'static> {
 }
 
 // Responsibilities of this trait shouldn't be delegated to T.
-pub trait RefEntry<'a>: Deref<Target = Self::T> + 'a {
+pub trait RefEntry<'a>: 'a {
     type T: ?Sized;
     type Iter<T: ?Sized>: Iterator<Item = Key<T>> + 'a;
 
     fn key(&self) -> Key<Self::T>;
 
+    fn item(&self) -> &Self::T;
+
+    /// Can change between get's.
     fn from<T: ?Sized>(&self) -> Self::Iter<T>;
 }
