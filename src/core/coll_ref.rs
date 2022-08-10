@@ -29,7 +29,7 @@ pub trait CollectionRef<T: ?Sized + 'static> {
 
     /// Errors:
     /// - KeyIsNotInUse
-    fn get<'a>(&'a self, key: Key<T>) -> Result<Self::RE<'a>, Error>;
+    fn get<'a>(&'a self, key: impl Into<Key<T>>) -> Result<Self::RE<'a>, Error>;
 
     // NOTE: Since Key is numerical hence countable and storage needs to be able ot check if a key is valid
     // hence iteration is always possible although maybe expensive.

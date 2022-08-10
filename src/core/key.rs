@@ -39,6 +39,12 @@ impl<T: ?Sized> PartialEq for Key<T> {
     }
 }
 
+impl<T: ?Sized + 'static> PartialEq<AnyKey> for Key<T> {
+    fn eq(&self, other: &AnyKey) -> bool {
+        &AnyKey::from(*self) == other
+    }
+}
+
 impl<T: ?Sized> Ord for Key<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
@@ -85,6 +91,12 @@ impl AnyKey {
         } else {
             None
         }
+    }
+}
+
+impl<T: ?Sized + 'static> PartialEq<Key<T>> for AnyKey {
+    fn eq(&self, other: &Key<T>) -> bool {
+        self == &Self::from(*other)
     }
 }
 

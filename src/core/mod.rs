@@ -1,9 +1,11 @@
+mod any_ref;
 mod coll_mut;
 mod coll_ref;
 mod key;
 
 use std::ops::{Deref, DerefMut};
 
+pub use any_ref::*;
 pub use coll_mut::{CollectionMut, MutEntry};
 pub use coll_ref::{CollectionRef, RefEntry};
 pub use key::*;
@@ -21,6 +23,7 @@ ne cini korisnim.
 
 */
 
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum Error {
     KeyIsNotInUse,
     ItemIsReferenced,
@@ -29,5 +32,5 @@ pub enum Error {
 /// Item that references to other items.
 pub trait Composite: 'static {
     /// Calls for each reference.
-    fn references(&self, call: impl FnMut(AnyKey));
+    fn visit_references(&self, call: impl FnMut(AnyRef));
 }
