@@ -1,4 +1,4 @@
-use super::{Error, Key};
+use super::{AnyEntry, Error, Key};
 
 /// Enables directed acyclic graph.
 ///
@@ -38,7 +38,7 @@ pub trait CollectionRef<T: ?Sized + 'static> {
 }
 
 // Responsibilities of this trait shouldn't be delegated to T.
-pub trait RefEntry<'a>: 'a {
+pub trait RefEntry<'a>: AnyEntry<'a> {
     type T: ?Sized;
     type Iter<T: ?Sized>: Iterator<Item = Key<T>> + 'a;
 
@@ -47,8 +47,6 @@ pub trait RefEntry<'a>: 'a {
     fn item(&self) -> &Self::T;
 
     /// Can change between get's.
+    /// Bidirectional references.
     fn from<T: ?Sized>(&self) -> Self::Iter<T>;
-
-    /// True if this item is referenced by other items.
-    fn referenced(&self) -> bool;
 }
