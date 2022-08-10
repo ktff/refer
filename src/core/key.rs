@@ -5,6 +5,8 @@ use std::{
     marker::PhantomData,
 };
 
+use super::Collection;
+
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
 // hence it needs to be able to know where something starts and ends which is not robustly possible for ref keys.

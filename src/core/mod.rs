@@ -1,16 +1,14 @@
-mod any_ref;
-mod coll_mut;
-mod coll_polly;
-mod coll_ref;
+mod collection;
 mod key;
+mod polly;
+mod reference;
 
 use std::ops::{Deref, DerefMut};
 
-pub use any_ref::*;
-pub use coll_mut::{CollectionMut, MutEntry};
-pub use coll_polly::{AnyEntry, PollyCollection};
-pub use coll_ref::{CollectionRef, RefEntry};
+pub use collection::{Collection, InitEntry, MutEntry, RefEntry};
 pub use key::*;
+pub use polly::{AnyEntry, PollyCollection};
+pub use reference::*;
 
 /* NOTES
 
@@ -26,7 +24,7 @@ ne cini korisnim.
 TODO:
 
 - Build on top:
-   1. Polymorphism
+   X. Polymorphism
    2. Chunked collections as one opaque collection
    3. Conncurrency
       - Kroz chunked collections se cini kao dobar put
@@ -41,8 +39,18 @@ pub enum Error {
     UnsupportedType,
 }
 
-/// Item that references to other items.
-pub trait Composite: 'static {
-    /// Calls for each reference.
-    fn visit_references(&self, call: impl FnMut(AnyRef));
+// /// Item that references to other items.
+// pub trait Composite: 'static {
+//     /// Calls for each reference.
+//     fn visit_references(&self, call: impl FnMut(AnyRef));
+// }
+
+pub fn catch_error<F>(f: F)
+where
+    F: FnOnce() -> Result<(), Error>,
+{
+    if let Err(error) = f() {
+        // TODO: Log error
+        unimplemented!()
+    }
 }
