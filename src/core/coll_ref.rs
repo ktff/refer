@@ -23,11 +23,12 @@ pub trait CollectionRef<T: ?Sized + 'static> {
         T: Sized;
 
     // Implementations should specialize this for Composite items.
-    fn add_clone(&mut self, item: &T) -> Key<T>
+    fn add_copy(&mut self, item: &T) -> Key<T>
     where
-        T: Clone;
+        T: Copy;
 
-    /// Errors if key is not in use.
+    /// Errors:
+    /// - KeyIsNotInUse
     fn get<'a>(&'a self, key: Key<T>) -> Result<Self::RE<'a>, Error>;
 
     // NOTE: Since Key is numerical hence countable and storage needs to be able ot check if a key is valid
@@ -47,4 +48,7 @@ pub trait RefEntry<'a>: 'a {
 
     /// Can change between get's.
     fn from<T: ?Sized>(&self) -> Self::Iter<T>;
+
+    /// True if this item is referenced by other items.
+    fn referenced(&self) -> bool;
 }

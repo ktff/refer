@@ -6,24 +6,23 @@ pub trait CollectionMut<T: ?Sized + 'static>: CollectionRef<T> {
     where
         Self: 'a;
 
-    // type IterMut<'a>: Iterator<Item = Self::ME<'a>> + 'a
-    // where
-    //     Self: 'a;
-
     // Implementations should specialize this for Composite items.
-    /// Will error if the key is not in use.
     /// Returns previous item.
+    /// Errors:
+    /// - KeyIsNotInUse
     fn set(&mut self, key: Key<T>, item: T) -> Result<T, Error>
     where
         T: Sized;
 
     // Implementations should specialize this for Composite items.
-    /// Will error if the key is not in use.
-    fn set_clone(&mut self, key: Key<T>, item: &T) -> Result<(), Error>
+    /// Errors:
+    /// - KeyIsNotInUse
+    fn set_copy(&mut self, key: Key<T>, item: &T) -> Result<(), Error>
     where
-        T: Clone;
+        T: Copy;
 
-    /// Will error if the key is not in use.
+    /// Errors:
+    /// - KeyIsNotInUse
     fn get_mut<'a>(&'a mut self, key: Key<T>) -> Result<Self::ME<'a>, Error>;
 
     // NOTE: Posto se from mora mijenjati ovo se nemoze sigurno izvesti.
@@ -36,10 +35,14 @@ pub trait CollectionMut<T: ?Sized + 'static>: CollectionRef<T> {
     /// Returns following key after given in ascending order.
     fn next_key(&self, key: Key<T>) -> Option<Key<T>>;
 
-    /// Will error if there is any reference to it or key is not in use.
+    /// Errors:
+    /// - KeyIsNotInUse
+    /// - ItemIsReferenced
     fn remove(&mut self, key: Key<T>) -> Result<bool, Error>;
 
-    /// Will error if there is any reference to it or key is not in use.
+    /// Errors:
+    /// - KeyIsNotInUse
+    /// - ItemIsReferenced
     fn take(&mut self, key: Key<T>) -> Result<Option<T>, Error>
     where
         T: Sized;

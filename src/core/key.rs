@@ -22,6 +22,7 @@ impl Debug for Index {
     }
 }
 
+/// It's the responsibility of collections to issue keys in a way that close by indices have close by items.
 pub struct Key<T: ?Sized>(Index, PhantomData<T>);
 
 impl<T: ?Sized> Key<T> {

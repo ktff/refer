@@ -13,37 +13,21 @@ pub use key::*;
 - Nuzno je razdvojiti read step od write step zbog
 bledanja side effecta izmjene from iz jedne mutacije u druge read/write funkcije.
 
+- Ownership nema smisla kao feature za kolekcija. Ownership postoji za strukture koje
+item normalno ima kao plain object, sve ostalo sto posotji kao item u kolekciji moze
+biti referencirano od strane drugih te posto se nemoze removati ako postoji referenca
+te da se nemoze sigurno izvesti mutacija ownera i onwed u isto vrijeme, ownership se
+ne cini korisnim.
+
 */
 
 pub enum Error {
     KeyIsNotInUse,
     ItemIsReferenced,
-    DifferentOwner,
 }
 
-/// Item that references other items.
+/// Item that references to other items.
 pub trait Composite: 'static {
     /// Calls for each reference.
     fn references(&self, call: impl FnMut(AnyKey));
 }
-
-// pub trait CollectionOwn<T: ?Sized + 'static>: CollectionMut<T> {
-//     type OE<'a>: OwnEntry<'a, T = T>
-//     where
-//         Self: 'a;
-
-//     type IterOwn<'a>: Iterator<Item = Self::OE<'a>> + 'a
-//     where
-//         Self: 'a;
-
-//     /// Will error if the key is not in use or if collection is not owner.
-//     fn get_own<'a>(&'a self, key: Key<T>) -> Result<Self::OE<'a>, Error>;
-
-//     /// Iters collection owned items.
-//     fn iter_own<'a>(&'a self) -> Self::IterOwn<'a>;
-// }
-
-// pub trait OwnEntry<'a>: MutEntry<'a> {
-
-//     fn get_own<'b,T>(&'b mut self,key: Key<T>)-> Result<>
-// }
