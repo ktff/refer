@@ -14,7 +14,7 @@ use std::{
 // NOTE: Index could be larger than u64 so the possibility of changing that to u128 is left as an option.
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct Index(pub u64);
+pub struct Index(pub u64);
 
 impl Debug for Index {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -26,7 +26,7 @@ impl Debug for Index {
 pub struct Key<T: ?Sized>(Index, PhantomData<T>);
 
 impl<T: ?Sized> Key<T> {
-    pub(crate) fn new(index: Index) -> Self {
+    pub fn new(index: Index) -> Self {
         Key(index, PhantomData)
     }
 }
@@ -81,7 +81,7 @@ impl<T: ?Sized> Debug for Key<T> {
 pub struct AnyKey(TypeId, Index);
 
 impl AnyKey {
-    pub(crate) fn new(ty_id: TypeId, index: Index) -> Self {
+    pub fn new(ty_id: TypeId, index: Index) -> Self {
         AnyKey(ty_id, index)
     }
 

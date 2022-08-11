@@ -23,8 +23,4 @@ pub trait AnyCollection {
     ) -> Result<Self::AE<'a, P>, Error>
     where
         P::Top: AnyCollection;
-
-    /// A list of (first,last) keys representing in memory grouped items.
-    /// In order of first -> next keys_any
-    fn chunks_any(&self) -> Vec<(AnyKey, AnyKey)>;
 }

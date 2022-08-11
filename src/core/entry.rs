@@ -1,4 +1,4 @@
-use super::{catch_error, AnyKey, AnyRef, Collection, Error, Key, PathMut, PathRef, Ref};
+use super::{AnyKey, AnyRef, Collection, Error, Key, PathMut, PathRef, Ref};
 
 pub trait Entry<'a, P: PathRef<'a>>: 'a {
     fn path(&self) -> &P;
@@ -82,32 +82,32 @@ pub trait MutEntry<'a, P: PathMut<'a>>: RefEntry<'a, P> + EntryMut<'a, P> {
         Self::T: Sized;
 
     /// T as composite type now has one reference.
-    fn add_reference<T: ?Sized + 'static>(&mut self, reference: impl Into<Ref<T>>)
+    fn add_reference<T: ?Sized + 'static>(
+        &mut self,
+        reference: impl Into<Ref<T>>,
+    ) -> Result<(), Error>
     where
         P::Top: Collection<T>,
     {
-        // Note: it's better to log the errors here then to propagate them higher and potentially
-        // creating more issues.
-        catch_error(|| {
-            let reference = reference.into();
-            let from = reference.from(self.key_any());
-            let top = self.path_mut().top_mut();
-            reference.get_mut(top)?.add_from(from);
-            Ok(())
-        });
+        let reference = reference.into();
+        let from = reference.from(self.key_any());
+        let top = self.path_mut().top_mut();
+        reference.get_mut(top)?.add_from(from);
+        Ok(())
     }
 
     /// T as composite type now doesn't have one reference.
-    fn remove_reference<T: ?Sized + 'static>(&mut self, reference: impl Into<Ref<T>>)
+    fn remove_reference<T: ?Sized + 'static>(
+        &mut self,
+        reference: impl Into<Ref<T>>,
+    ) -> Result<(), Error>
     where
         P::Top: Collection<T>,
     {
-        catch_error(|| {
-            let reference = reference.into();
-            let from = reference.from(self.key_any());
-            let top = self.path_mut().top_mut();
-            reference.get_mut(top)?.remove_from(from);
-            Ok(())
-        });
+        let reference = reference.into();
+        let from = reference.from(self.key_any());
+        let top = self.path_mut().top_mut();
+        reference.get_mut(top)?.remove_from(from);
+        Ok(())
     }
 }

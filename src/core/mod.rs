@@ -34,8 +34,9 @@ TODO:
         - Moguce je pomoci s macro koji bi napravio chunked collection ze jedan tip
    x. Composite collections
         - Na konacnom kolekcijom je da napravi ovo
-   4. Conncurrency
+   x. Conncurrency
       - Kroz chunked collections se cini kao dobar put
+      - Na korisniku je da doda lock na koleckije podatke ovisno o tome što joj treba.
 
 */
 
@@ -51,6 +52,10 @@ pub enum Error {
     ItemNotInMemory(AnyKey),
     /// Operation was not possible because item type is not supported
     UnsupportedType(TypeId),
+    /// Some collection or data is under some kind of lock.
+    ///
+    /// Some kind of probabilistic backoff is advised. ex. 50% to back off 50% to not.
+    Locked,
     /// Operation was not possible because there are no more keys
     /// Generally collections is full and won't accept any more items
     OutOfKeys,
@@ -63,6 +68,7 @@ impl Error {
             Error::ItemIsReferenced(_) => true,
             Error::ItemNotInMemory(_) => true,
             Error::UnsupportedType(_) => false,
+            Error::Locked => true,
             Error::OutOfKeys => false,
         }
     }
@@ -72,15 +78,15 @@ impl Error {
     }
 }
 
-pub fn catch_error<F>(f: F)
-where
-    F: FnOnce() -> Result<(), Error>,
-{
-    if let Err(error) = f() {
-        // TODO: Log error
-        unimplemented!()
-    }
-}
+// pub fn catch_error<F>(f: F)
+// where
+//     F: FnOnce() -> Result<(), Error>,
+// {
+//     if let Err(error) = f() {
+//         // TODO: Log error
+//         unimplemented!()
+//     }
+// }
 
 // pub struct CompositeCollection<C>(C);
 

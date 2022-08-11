@@ -49,10 +49,6 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     ) -> Result<Self::ME<'a, P>, Error>
     where
         P::Top: Collection<T>;
-
-    /// A list of (first,last) keys representing in memory grouped items.
-    /// In order of first -> next keys
-    fn chunks(&self) -> Vec<(Key<T>, Key<T>)>;
 }
 
 // ********************** Convenience methods **********************

@@ -1,4 +1,4 @@
-use super::AnyCollection;
+use super::{AnyCollection, AnyKey, Collection, Key};
 
 /// A path from top to bottom.
 /// Fetching bottom can cost.
@@ -9,6 +9,13 @@ pub trait PathRef<'a>: 'a {
     fn top(&self) -> &Self::Top;
 
     fn bottom(&self) -> &Self::Bottom;
+
+    /// Converts top key to bottom key if it belongs to bottom.
+    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
+    where
+        Self::Bottom: Collection<T>;
+
+    fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey>;
 }
 
 impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a C {
@@ -22,6 +29,18 @@ impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a C {
     fn bottom(&self) -> &C {
         self
     }
+
+    /// Converts top key to bottom key if it belongs to bottom.
+    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
+    where
+        Self::Bottom: Collection<T>,
+    {
+        Some(key)
+    }
+
+    fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey> {
+        Some(key)
+    }
 }
 
 impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a mut C {
@@ -34,6 +53,18 @@ impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a mut C {
 
     fn bottom(&self) -> &C {
         self
+    }
+
+    /// Converts top key to bottom key if it belongs to bottom.
+    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
+    where
+        Self::Bottom: Collection<T>,
+    {
+        Some(key)
+    }
+
+    fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey> {
+        Some(key)
     }
 }
 
