@@ -1,7 +1,7 @@
-use super::{catch_error, AnyEntry, AnyRef, Error, Key, PollyCollection, Ref};
+use super::{catch_error, AnyCollection, AnyEntry, AnyRef, Error, Key, Ref};
 
 /// Polly collection can implement this trait for each type.
-pub trait Collection<T: ?Sized + 'static>: PollyCollection {
+pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     type IE<'a>: InitEntry<'a, T = T, Coll = Self>
     where
         Self: 'a;
@@ -31,11 +31,6 @@ pub trait Collection<T: ?Sized + 'static>: PollyCollection {
     /// Errors:
     /// - KeyIsNotInUse
     fn get_mut<'a>(&'a mut self, key: impl Into<Key<T>>) -> Result<Self::ME<'a>, Error>;
-
-    // NOTE: Posto se from mora mijenjati ovo se nemoze sigurno izvesti.
-    // iz istog razloga se preporuca da kolekcija implementira ovo za sve tipove
-    // na jednom structu.
-    // fn iter_mut<'a>(&'a mut self) -> Self::IterMut<'a>;
 }
 
 /// Only once finished are changes committed.
@@ -51,10 +46,16 @@ pub trait InitEntry<'a> {
 
     fn collection_mut(&mut self) -> &mut Self::Coll;
 
+    /// Errors:
+    /// - KeyIsNotInUse for any reference
+    /// - OutOfKeys
     fn finish(self, item: Self::T) -> Result<Key<Self::T>, Error>
     where
         Self::T: Sized;
 
+    /// Errors:
+    /// - KeyIsNotInUse for any reference
+    /// - OutOfKeys
     fn finish_copy(self, item: &Self::T) -> Result<Key<Self::T>, Error>
     where
         Self::T: Copy;
@@ -62,18 +63,22 @@ pub trait InitEntry<'a> {
 
 // Responsibilities of this trait shouldn't be delegated to T.
 pub trait RefEntry<'a>: AnyEntry<'a> {
-    type T: ?Sized;
-    type Iter<T: ?Sized>: Iterator<Item = Key<T>> + 'a;
+    type T: ?Sized + 'static;
+    type Iter<T: ?Sized + 'static>: Iterator<Item = Key<T>> + 'a;
 
     fn key(&self) -> Key<Self::T>;
 
     fn item(&self) -> &Self::T;
 
     /// Bidirectional references.
-    fn from<T: ?Sized>(&self) -> Self::Iter<T>;
+    fn from<T: ?Sized + 'static>(&self) -> Self::Iter<T>
+    where
+        Self::Coll: Collection<T>;
 }
 
 pub trait MutEntry<'a>: RefEntry<'a> {
+    fn collection_mut(&mut self) -> &mut Self::Coll;
+
     fn item_mut(&mut self) -> &mut Self::T;
 
     fn add_from(&mut self, from: AnyRef);
@@ -93,8 +98,6 @@ pub trait MutEntry<'a>: RefEntry<'a> {
     fn take(self) -> Result<Self::T, Error>
     where
         Self::T: Sized;
-
-    fn collection_mut(&mut self) -> &mut Self::Coll;
 
     /// T as composite type now has one reference.
     fn add_reference<T: ?Sized + 'static>(&mut self, reference: impl Into<Ref<T>>)
@@ -127,8 +130,32 @@ pub trait MutEntry<'a>: RefEntry<'a> {
     }
 }
 
-impl<T: ?Sized> Key<T> {
+impl<T: ?Sized + 'static> Key<T> {
     pub fn get<C: Collection<T>>(self, coll: &C) -> Result<C::RE<'_>, Error> {
         coll.get(self)
+    }
+
+    pub fn get_mut<C: Collection<T>>(self, coll: &mut C) -> Result<C::ME<'_>, Error> {
+        coll.get_mut(self)
+    }
+
+    pub fn next_key<C: Collection<T>>(self, coll: &C) -> Option<Key<T>> {
+        coll.next_key(self)
+    }
+}
+
+pub trait CollectedType<C: Collection<Self>>: 'static {
+    fn first_key(coll: &mut C) -> Option<Key<Self>>;
+
+    fn add<'a>(coll: &'a mut C) -> C::IE<'a>;
+}
+
+impl<T: ?Sized + 'static, C: Collection<T>> CollectedType<C> for T {
+    fn first_key(coll: &mut C) -> Option<Key<T>> {
+        coll.first_key()
+    }
+
+    fn add<'a>(coll: &'a mut C) -> C::IE<'a> {
+        coll.add()
     }
 }

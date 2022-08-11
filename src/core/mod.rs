@@ -1,13 +1,16 @@
+mod any;
 mod collection;
 mod key;
-mod polly;
 mod reference;
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    any::TypeId,
+    ops::{Deref, DerefMut},
+};
 
+pub use any::{AnyCollection, AnyEntry};
 pub use collection::{Collection, InitEntry, MutEntry, RefEntry};
 pub use key::*;
-pub use polly::{AnyEntry, PollyCollection};
 pub use reference::*;
 
 /* NOTES
@@ -25,7 +28,7 @@ TODO:
 
 - Build on top:
    X. Polymorphism
-   2. Chunked collections as one opaque collection
+   X. Chunked collections as one opaque collection
    3. Conncurrency
       - Kroz chunked collections se cini kao dobar put
    - Composite collections
@@ -34,16 +37,36 @@ TODO:
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 pub enum Error {
-    KeyIsNotInUse,
-    ItemIsReferenced,
-    UnsupportedType,
+    /// Operation was not possible because key is not in use for any item
+    KeyIsNotInUse(AnyKey),
+    /// Operation was not possible because item is referenced
+    ItemIsReferenced(AnyKey),
+    /// Operation was not possible because item is not in local memory.
+    /// Generally can be thrown as when KeyIsNotInUse by collections that
+    /// have lazy load.
+    ItemNotInMemory(AnyKey),
+    /// Operation was not possible because item type is not supported
+    UnsupportedType(TypeId),
+    /// Operation was not possible because there are no more keys
+    /// Generally collections is full and won't accept any more items
+    OutOfKeys,
 }
 
-// /// Item that references to other items.
-// pub trait Composite: 'static {
-//     /// Calls for each reference.
-//     fn visit_references(&self, call: impl FnMut(AnyRef));
-// }
+impl Error {
+    pub fn recoverable(self) -> bool {
+        match self {
+            Error::KeyIsNotInUse(_) => false,
+            Error::ItemIsReferenced(_) => true,
+            Error::ItemNotInMemory(_) => true,
+            Error::UnsupportedType(_) => false,
+            Error::OutOfKeys => false,
+        }
+    }
+
+    pub fn unrecoverable(self) -> bool {
+        !self.recoverable()
+    }
+}
 
 pub fn catch_error<F>(f: F)
 where

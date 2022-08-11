@@ -1,15 +1,15 @@
 use super::{AnyKey, Error, Key};
 /// Collection over one/multiple types.
 /// Should implement relevant/specialized Collection<T> traits.
-pub trait PollyCollection {
+pub trait AnyCollection {
     type AE<'a>: AnyEntry<'a, Coll = Self>
     where
         Self: 'a;
 
-    fn first_key(&self) -> Option<AnyKey>;
+    fn first_key_any(&self) -> Option<AnyKey>;
 
     /// Returns following key after given in ascending order.
-    fn next_key(&self, key: AnyKey) -> Option<AnyKey>;
+    fn next_key_any(&self, key: AnyKey) -> Option<AnyKey>;
 
     /// Errors:
     /// - KeyIsNotInUse
@@ -19,11 +19,10 @@ pub trait PollyCollection {
 
 pub trait AnyEntry<'a>: 'a {
     type IterAny: Iterator<Item = AnyKey> + 'a;
-    type Coll;
+    type Coll: ?Sized;
 
     fn key_any(&self) -> AnyKey;
 
-    /// Can change between get's.
     /// Bidirectional references.
     fn from_any(&self) -> Self::IterAny;
 
