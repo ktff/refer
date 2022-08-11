@@ -1,8 +1,8 @@
-use super::{AnyKey, Error, Key};
+use super::{AnyEntry, AnyKey, Error, LayerRef};
 /// Collection over one/multiple types.
 /// Should implement relevant/specialized Collection<T> traits.
 pub trait AnyCollection {
-    type AE<'a>: AnyEntry<'a, Coll = Self>
+    type AE<'a, L: AnyCollection + LayerRef<Down = Self> + 'a>: AnyEntry<'a, Coll = L>
     where
         Self: 'a;
 
@@ -15,23 +15,12 @@ pub trait AnyCollection {
     /// Errors:
     /// - KeyIsNotInUse
     /// - UnsupportedType
-    fn get_any<'a>(&'a self, key: AnyKey) -> Result<Self::AE<'a>, Error>;
+    fn get_any<'a, L: AnyCollection + LayerRef<Down = Self> + 'a>(
+        top: &'a L,
+        key: AnyKey,
+    ) -> Result<Self::AE<'a, L>, Error>;
 
     /// A list of (first,last) keys representing in memory grouped items.
+    /// In order of first -> next keys_any
     fn chunks_any(&self) -> Vec<(AnyKey, AnyKey)>;
-}
-
-pub trait AnyEntry<'a>: 'a {
-    type IterAny: Iterator<Item = AnyKey> + 'a;
-    type Coll: ?Sized;
-
-    fn key_any(&self) -> AnyKey;
-
-    /// Bidirectional references.
-    fn from_any(&self) -> Self::IterAny;
-
-    /// True if this item is referenced by other items.
-    fn referenced(&self) -> bool;
-
-    fn collection(&self) -> &Self::Coll;
 }

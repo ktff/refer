@@ -1,16 +1,17 @@
 mod any;
 mod collection;
+mod entry;
 mod key;
+mod layer;
 mod reference;
 
-use std::{
-    any::TypeId,
-    ops::{Deref, DerefMut},
-};
+use std::any::TypeId;
 
-pub use any::{AnyCollection, AnyEntry};
-pub use collection::{Collection, InitEntry, MutEntry, RefEntry};
+pub use any::AnyCollection;
+pub use collection::Collection;
+pub use entry::*;
 pub use key::*;
+pub use layer::*;
 pub use reference::*;
 
 /* NOTES
@@ -29,9 +30,11 @@ TODO:
 - Build on top:
    X. Polymorphism
    X. Chunked collections as one opaque collection
-   3. Conncurrency
+   x. Composite collections
+        - Na konacnom kolekcijom je da napravi ovo
+        - Moguce je pomoci s macro koji bi napravio composite collection ze jedan tip
+   4. Conncurrency
       - Kroz chunked collections se cini kao dobar put
-   - Composite collections
 
 */
 
@@ -77,3 +80,109 @@ where
         unimplemented!()
     }
 }
+
+// pub struct CompositeCollection<C>(C);
+
+// impl<C: AnyCollection> AnyCollection for CompositeCollection<C> {
+//     type AE<'a, L: LayerRef<Down = Self> + 'a>=CompositeAnyEntry<'a,C,L>
+//     where
+//         Self: 'a;
+
+//     fn first_key_any(&self) -> Option<AnyKey> {
+//         self.0.first_key_any()
+//     }
+
+//     fn next_key_any(&self, key: AnyKey) -> Option<AnyKey> {
+//         self.0.next_key_any(key)
+//     }
+
+//     fn get_any<'a, Tc: LayerRef<Down = Self> + 'a>(
+//         top: &'a Tc,
+//         key: AnyKey,
+//     ) -> Result<Self::AE<'a, Tc>, Error> {
+//         unimplemented!()
+//     }
+
+//     fn chunks_any(&self) -> Vec<(AnyKey, AnyKey)> {
+//         self.0.chunks_any()
+//     }
+// }
+
+// // impl<T: ?Sized + 'static, C: Collection<T>> Collection<T> for CompositeCollection<C> {
+// //     type IE<'a> = C::IE<'a> where Self:'a;
+
+// //     type RE<'a> = C::RE<'a> where Self:'a;
+
+// //     type ME<'a> = C::ME<'a> where Self:'a;
+
+// //     fn indices_bits(&self) -> usize {
+// //         self.collection.indices_bits()
+// //     }
+
+// //     fn first_key(&self) -> Option<Key<T>> {
+// //         self.collection.first_key()
+// //     }
+
+// //     fn next_key(&self, key: Key<T>) -> Option<Key<T>> {
+// //         self.collection.next_key(key)
+// //     }
+
+// //     fn add<'a>(&'a mut self) -> Self::IE<'a> {
+// //         self.collection.add()
+// //     }
+
+// //     fn get<'a>(&'a self, key: impl Into<Key<T>>) -> Result<Self::RE<'a>, Error> {
+// //         self.collection.get(key)
+// //     }
+
+// //     fn get_mut<'a>(&'a mut self, key: impl Into<Key<T>>) -> Result<Self::ME<'a>, Error> {
+// //         self.collection.get_mut(key)
+// //     }
+
+// //     fn chunks(&self) -> Vec<(Key<T>, Key<T>)> {
+// //         self.collection.chunks()
+// //     }
+// // }
+
+// pub struct CompositeAnyEntry<
+//     'a,
+//     C: AnyCollection + 'a,
+//     L: LayerRef<Down = CompositeCollection<C>> + 'a,
+// > {
+//     entry: C::AE<'a, CompositeLayer<'a, L>>,
+// }
+
+// impl<'a, C: AnyCollection + 'a, L: LayerRef<Down = CompositeCollection<C>> + 'a> AnyEntry<'a>
+//     for CompositeAnyEntry<'a, C, L>
+// {
+//     // TODO: Placeholder
+//     type IterAny = <C::AE<'a, CompositeLayer<'a, L>> as AnyEntry<'a>>::IterAny;
+//     type Coll = L;
+
+//     fn key_any(&self) -> AnyKey {
+//         self.entry.key_any()
+//     }
+
+//     fn from_any(&self) -> Self::IterAny {
+//         self.entry.from_any()
+//     }
+
+//     fn referenced(&self) -> bool {
+//         self.entry.referenced()
+//     }
+
+//     fn collection(&self) -> &Self::Coll {
+//         self.entry.collection().layer
+//     }
+// }
+
+// pub struct CompositeLayer<'a, L> {
+//     layer: &'a L,
+// }
+
+// impl<'a, C, Tc: LayerRef<Down = CompositeCollection<C>>> LayerRef for CompositeLayer<'a, Tc> {
+//     type Down = C;
+//     fn down(&self) -> &Self::Down {
+//         &self.layer.down().0
+//     }
+// }
