@@ -31,6 +31,9 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     /// Errors:
     /// - KeyIsNotInUse
     fn get_mut<'a>(&'a mut self, key: impl Into<Key<T>>) -> Result<Self::ME<'a>, Error>;
+
+    /// A list of (first,last) keys representing in memory grouped items.
+    fn chunks(&self) -> Vec<(Key<T>, Key<T>)>;
 }
 
 /// Only once finished are changes committed.

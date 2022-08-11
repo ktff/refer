@@ -8,13 +8,17 @@ pub trait AnyCollection {
 
     fn first_key_any(&self) -> Option<AnyKey>;
 
-    /// Returns following key after given in ascending order.
+    /// Returns following key after given with indices in ascending order.
+    /// Order according to type is undefined and depends on implementation.
     fn next_key_any(&self, key: AnyKey) -> Option<AnyKey>;
 
     /// Errors:
     /// - KeyIsNotInUse
     /// - UnsupportedType
     fn get_any<'a>(&'a self, key: AnyKey) -> Result<Self::AE<'a>, Error>;
+
+    /// A list of (first,last) keys representing in memory grouped items.
+    fn chunks_any(&self) -> Vec<(AnyKey, AnyKey)>;
 }
 
 pub trait AnyEntry<'a>: 'a {
