@@ -2,7 +2,7 @@ mod any;
 mod collection;
 mod entry;
 mod key;
-mod layer;
+mod path;
 mod reference;
 
 use std::any::TypeId;
@@ -11,7 +11,7 @@ pub use any::AnyCollection;
 pub use collection::Collection;
 pub use entry::*;
 pub use key::*;
-pub use layer::*;
+pub use path::*;
 pub use reference::*;
 
 /* NOTES
@@ -29,10 +29,11 @@ TODO:
 
 - Build on top:
    X. Polymorphism
-   X. Chunked collections as one opaque collection
+   X. Chunked collections as one opaque collection derived from composite collection
+        - Na konacnom kolekcijom je da napravi ovo
+        - Moguce je pomoci s macro koji bi napravio chunked collection ze jedan tip
    x. Composite collections
         - Na konacnom kolekcijom je da napravi ovo
-        - Moguce je pomoci s macro koji bi napravio composite collection ze jedan tip
    4. Conncurrency
       - Kroz chunked collections se cini kao dobar put
 

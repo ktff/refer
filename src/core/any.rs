@@ -1,10 +1,12 @@
-use super::{AnyEntry, AnyKey, Error, LayerRef};
+use super::{AnyEntry, AnyKey, Error, PathRef};
+
 /// Collection over one/multiple types.
 /// Should implement relevant/specialized Collection<T> traits.
 pub trait AnyCollection {
-    type AE<'a, L: AnyCollection + LayerRef<Down = Self> + 'a>: AnyEntry<'a, Coll = L>
+    type AE<'a, P: PathRef<'a, Bottom = Self>>: AnyEntry<'a, P>
     where
-        Self: 'a;
+        Self: 'a,
+        P::Top: AnyCollection;
 
     fn first_key_any(&self) -> Option<AnyKey>;
 
@@ -15,10 +17,12 @@ pub trait AnyCollection {
     /// Errors:
     /// - KeyIsNotInUse
     /// - UnsupportedType
-    fn get_any<'a, L: AnyCollection + LayerRef<Down = Self> + 'a>(
-        top: &'a L,
+    fn get_any<'a, P: PathRef<'a, Bottom = Self>>(
+        path: P,
         key: AnyKey,
-    ) -> Result<Self::AE<'a, L>, Error>;
+    ) -> Result<Self::AE<'a, P>, Error>
+    where
+        P::Top: AnyCollection;
 
     /// A list of (first,last) keys representing in memory grouped items.
     /// In order of first -> next keys_any
