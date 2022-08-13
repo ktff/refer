@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{AnyKey, Collection, Error, Key, MutEntry, PathMut, PathRef};
+use super::{AnyKey, Key};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnyRef(pub Locality, pub Directionality, pub AnyKey);
@@ -65,7 +65,10 @@ impl<L: Localized, D: Directioned, T: ?Sized> From<Ref<T, L, D>> for TypedRef<T>
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Ref<T: ?Sized, L: Localized = Global, D: Directioned = Uni>(Key<T>, PhantomData<(L, D)>);
+pub struct Ref<T: ?Sized, L: Localized = Global, D: Directioned = Uni>(
+    pub(crate) Key<T>,
+    pub(crate) PhantomData<(L, D)>,
+);
 
 impl<L: Localized, D: Directioned, T: ?Sized> Ref<T, L, D> {
     pub fn locality(&self) -> Locality {
@@ -79,69 +82,6 @@ impl<L: Localized, D: Directioned, T: ?Sized> Ref<T, L, D> {
     /// Must be used in accordance of Locality.
     pub fn key(&self) -> Key<T> {
         self.0
-    }
-}
-
-impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
-    /// Creates new reference to the given item behind global key.
-    pub fn new<'a, P: PathMut<'a>, E: MutEntry<'a, P>>(
-        from: &mut E,
-        global_key: Key<T>,
-    ) -> Result<Self, Error>
-    where
-        P::Top: Collection<T> + Collection<E::T>,
-    {
-        let this = Ref::<T, Global, D>(global_key, PhantomData);
-        this.add(from)?;
-
-        Ok(this)
-    }
-
-    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
-        self,
-        _: &P,
-        global_from: Key<F>,
-    ) -> Ref<F, Global, D>
-    where
-        P::Top: Collection<F>,
-    {
-        Ref::<F, Global, D>(global_from, PhantomData)
-    }
-}
-
-impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
-    /// Creates new reference to the given item behind global key.
-    /// None if key is not in local/bottom collection.
-    pub fn new<'a, P: PathMut<'a>, E: MutEntry<'a, P>>(
-        from: &mut E,
-        global_key: Key<T>,
-    ) -> Result<Option<Self>, Error>
-    where
-        P::Bottom: Collection<T> + Collection<E::T>,
-    {
-        if let Some(local_key) = from.path().bottom_key(global_key) {
-            let this = Ref::<T, Local, D>(local_key, PhantomData);
-            this.add(from)?;
-
-            Ok(Some(this))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// None if key is not in local/bottom collection.
-    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
-        self,
-        path: &P,
-        global_from: Key<F>,
-    ) -> Option<Ref<F, Local, D>>
-    where
-        P::Bottom: Collection<F>,
-    {
-        Some(Ref::<F, Local, D>(
-            path.bottom_key(global_from)?,
-            PhantomData,
-        ))
     }
 }
 
