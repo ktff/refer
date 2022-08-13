@@ -2,6 +2,8 @@ use std::marker::PhantomData;
 
 use super::{AnyCollection, AnyKey, Collection, Key};
 
+// ****************************** Ref ********************************* //
+
 /// A path from top to bottom.
 /// Fetching bottom can cost.
 pub trait PathRef<'a>: 'a {
@@ -116,6 +118,8 @@ impl<'a: 'b, 'b, P: PathRef<'a> + ?Sized> PathRef<'b> for BorrowPathRef<'a, 'b, 
         self.0.bottom_key(key)
     }
 }
+
+// ***************************** Mut ***************************** //
 
 pub trait PathMut<'a>: PathRef<'a> {
     fn top_mut(&mut self) -> &mut Self::Top;

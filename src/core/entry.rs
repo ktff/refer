@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use super::{
-    AnyKey, AnyRef, BorrowPathMut, BorrowPathRef, Collection, Directioned, Error, Global, Key,
-    Local, PathMut, PathRef, Ref, TypedRef,
+    AnyKey, AnyRef, BorrowPathMut, BorrowPathRef, Collection, Directionality, Directioned, Error,
+    Global, Key, Local, Locality, PathMut, PathRef, Ref,
 };
 
 pub trait Entry<'a, P: PathRef<'a>>: 'a {
@@ -27,12 +27,23 @@ pub trait AnyEntry<'a> {
 pub trait InitEntry<'a, P: PathMut<'a>>: EntryMut<'a, P> {
     type T: ?Sized + 'static;
 
-    fn add_reference<T: ?Sized + 'static>(&mut self, reference: impl Into<TypedRef<T>>)
+    /// Adds reference of this item.
+    /// Returns localized key.
+    /// Errors:
+    /// - NotLocalKey if this and some before local references aren't local.
+    #[must_use]
+    fn add_reference<T: ?Sized + 'static>(
+        &mut self,
+        locality: Locality,
+        directionality: Directionality,
+        global_key: Key<T>,
+    ) -> Result<Key<T>, Error>
     where
         P::Top: Collection<T>;
 
-    fn add_from(&mut self, from: AnyRef);
+    // fn add_from(&mut self, from: AnyRef);
 
+    /// Added references are active once this is successful.
     /// Errors:
     /// - KeyIsNotInUse for any reference
     /// - OutOfKeys
@@ -40,6 +51,7 @@ pub trait InitEntry<'a, P: PathMut<'a>>: EntryMut<'a, P> {
     where
         Self::T: Sized;
 
+    /// Added references are active once this is successful.
     /// Errors:
     /// - KeyIsNotInUse for any reference
     /// - OutOfKeys
@@ -117,6 +129,19 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
         Ok(this)
     }
 
+    pub fn of<'a, P: PathMut<'a>, E: InitEntry<'a, P>>(
+        from: &mut E,
+        global_key: Key<T>,
+    ) -> Result<Self, Error>
+    where
+        P::Top: Collection<T> + Collection<E::T>,
+    {
+        let key = from.add_reference(Locality::Global, D::D, global_key)?;
+        let this = Ref::<T, Global, D>(key, PhantomData);
+
+        Ok(this)
+    }
+
     pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(
         self,
         from: &'b M,
@@ -177,26 +202,42 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
     {
         let key = init(Collection::<T>::add(from.path_mut().borrow_mut()))?;
 
-        Self::new(from, key).map(|this| this.expect("Collection added item outside of path."))
+        Self::new(from, key)
     }
 
     /// Creates new reference to the given item behind global key.
     /// None if key is not in local/bottom collection.
+    ///
+    /// Errors:
+    /// - Keys are not local
     pub fn new<'a, P: PathMut<'a>, E: MutEntry<'a, P>>(
         from: &mut E,
         global_key: Key<T>,
-    ) -> Result<Option<Self>, Error>
+    ) -> Result<Self, Error>
     where
         P::Bottom: Collection<T> + Collection<E::T>,
     {
-        if let Some(local_key) = from.path().bottom_key(global_key) {
-            let this = Ref::<T, Local, D>(local_key, PhantomData);
-            this.add(from)?;
+        let local_key = from
+            .path()
+            .bottom_key(global_key)
+            .ok_or_else(|| Error::NotLocalKey(global_key.into()))?;
+        let this = Ref::<T, Local, D>(local_key, PhantomData);
+        this.add(from)?;
 
-            Ok(Some(this))
-        } else {
-            Ok(None)
-        }
+        Ok(this)
+    }
+
+    pub fn of<'a, P: PathMut<'a>, E: InitEntry<'a, P>>(
+        from: &mut E,
+        global_key: Key<T>,
+    ) -> Result<Self, Error>
+    where
+        P::Top: Collection<T> + Collection<E::T>,
+    {
+        let key = from.add_reference(Locality::Local, D::D, global_key)?;
+        let this = Ref::<T, Local, D>(key, PhantomData);
+
+        Ok(this)
     }
 
     pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(

@@ -39,6 +39,8 @@ ne cini korisnim.
       - Izvedeno pomocu Global/Local tipova
    x. Prostorni collection
       - Na korisnicima je da dodaju extra funkcije
+   *. Reference lifetime
+   *. Key<Locality>
 */
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
@@ -53,6 +55,8 @@ pub enum Error {
     ItemNotInMemory(AnyKey),
     /// Operation was not possible because item type is not supported
     UnsupportedType(TypeId),
+    /// Key is not local.
+    NotLocalKey(AnyKey),
     /// Some collection or data is under some kind of lock.
     ///
     /// Some kind of probabilistic backoff is advised. ex. 50% to back off 50% to not.
@@ -71,6 +75,7 @@ impl Error {
             Error::UnsupportedType(_) => false,
             Error::Locked => true,
             Error::OutOfKeys => false,
+            Error::NotLocalKey(_) => false,
         }
     }
 
