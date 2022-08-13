@@ -13,13 +13,11 @@ pub trait EntryMut<'a, P: PathMut<'a>>: Entry<'a, P> {
     fn path_mut(&mut self) -> &mut P;
 }
 
-pub trait AnyEntry<'a, P: PathRef<'a>>: Entry<'a, P> {
-    type IterAny: Iterator<Item = AnyKey> + 'a;
-
+pub trait AnyEntry<'a> {
     fn key_any(&self) -> AnyKey;
 
     /// Bidirectional references.
-    fn from_any(&self) -> Self::IterAny;
+    fn from_any(&self) -> Vec<AnyKey>;
 
     /// True if this item is referenced by other items.
     fn referenced(&self) -> bool;
@@ -51,7 +49,7 @@ pub trait InitEntry<'a, P: PathMut<'a>>: EntryMut<'a, P> {
 }
 
 // Responsibilities of this trait shouldn't be delegated to T.
-pub trait RefEntry<'a, P: PathRef<'a>>: AnyEntry<'a, P> {
+pub trait RefEntry<'a, P: PathRef<'a>>: AnyEntry<'a> + Entry<'a, P> {
     type T: ?Sized + 'static;
     type Iter<T: ?Sized + 'static>: Iterator<Item = Key<T>> + 'a;
 
