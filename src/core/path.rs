@@ -1,4 +1,4 @@
-use super::{AnyCollection, AnyKey, Collection, Key};
+use super::{AnyCollection, AnyKey, Collection, Directioned, Global, Key, Local, Ref};
 
 /// A path from top to bottom.
 /// Fetching bottom can cost.
@@ -84,5 +84,34 @@ where
 
     fn bottom_mut(&mut self) -> &mut C {
         self
+    }
+}
+
+// ********************** Convenient methods *************************** //
+
+impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
+    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
+        self,
+        _: &P,
+        global_from: Key<F>,
+    ) -> Ref<F, Global, D>
+    where
+        P::Top: Collection<F>,
+    {
+        Ref::new(global_from)
+    }
+}
+
+impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
+    /// None if key is not in local/bottom collection.
+    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
+        self,
+        path: &P,
+        global_from: Key<F>,
+    ) -> Option<Ref<F, Local, D>>
+    where
+        P::Bottom: Collection<F>,
+    {
+        Some(Ref::new(path.bottom_key(global_from)?))
     }
 }

@@ -1,4 +1,128 @@
+use std::marker::PhantomData;
+
 use super::{AnyKey, Key};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnyRef(pub Locality, pub Directionality, pub AnyKey);
+
+impl AnyRef {
+    pub fn locality(&self) -> Locality {
+        self.0
+    }
+
+    pub fn directionality(&self) -> Directionality {
+        self.1
+    }
+
+    pub fn key(&self) -> AnyKey {
+        self.2
+    }
+}
+
+impl<L: Localized, D: Directioned, T: ?Sized + 'static> From<Ref<T, L, D>> for AnyRef {
+    fn from(ref_: Ref<T, L, D>) -> Self {
+        AnyRef(L::L, D::D, ref_.0.into())
+    }
+}
+
+impl<T: ?Sized + 'static> From<TypedRef<T>> for AnyRef {
+    fn from(ref_: TypedRef<T>) -> Self {
+        AnyRef(ref_.0, ref_.1, ref_.2.into())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct TypedRef<T: ?Sized>(pub Locality, pub Directionality, pub Key<T>);
+
+impl<T: ?Sized> TypedRef<T> {
+    pub fn locality(&self) -> Locality {
+        self.0
+    }
+
+    pub fn directionality(&self) -> Directionality {
+        self.1
+    }
+
+    pub fn key(&self) -> Key<T> {
+        self.2
+    }
+}
+
+impl<T: ?Sized> Copy for TypedRef<T> {}
+
+impl<T: ?Sized> Clone for TypedRef<T> {
+    fn clone(&self) -> Self {
+        TypedRef(self.0, self.1, self.2)
+    }
+}
+
+impl<L: Localized, D: Directioned, T: ?Sized> From<Ref<T, L, D>> for TypedRef<T> {
+    fn from(ref_: Ref<T, L, D>) -> Self {
+        TypedRef(L::L, D::D, ref_.0)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ref<T: ?Sized, L: Localized = Global, D: Directioned = Uni>(
+    pub Key<T>,
+    PhantomData<(L, D)>,
+);
+
+impl<L: Localized, D: Directioned, T: ?Sized> Ref<T, L, D> {
+    pub fn new(key: Key<T>) -> Self {
+        Ref(key, PhantomData)
+    }
+
+    pub fn locality(&self) -> Locality {
+        L::L
+    }
+
+    pub fn directionality(&self) -> Directionality {
+        D::D
+    }
+
+    pub fn key(&self) -> Key<T> {
+        self.0
+    }
+}
+
+impl<L: Localized, D: Directioned, T: ?Sized> Copy for Ref<T, L, D> {}
+
+impl<L: Localized, D: Directioned, T: ?Sized> Clone for Ref<T, L, D> {
+    fn clone(&self) -> Self {
+        Ref(self.0, PhantomData)
+    }
+}
+
+// ********************* Locality *********************
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Locality {
+    /// Top
+    Global,
+    /// Bottom
+    Local,
+}
+
+pub trait Localized {
+    const L: Locality;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Global;
+
+impl Localized for Global {
+    const L: Locality = Locality::Global;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Local;
+
+impl Localized for Local {
+    const L: Locality = Locality::Local;
+}
+
+// ********************* Directionality *********************
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Directionality {
@@ -6,86 +130,20 @@ pub enum Directionality {
     Bi,
 }
 
+pub trait Directioned {
+    const D: Directionality;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AnyRef(pub Directionality, pub AnyKey);
+pub struct Uni;
 
-impl<T: ?Sized + 'static> From<UniRef<T>> for AnyRef {
-    fn from(ref_: UniRef<T>) -> Self {
-        AnyRef(Directionality::Uni, ref_.0.into())
-    }
+impl Directioned for Uni {
+    const D: Directionality = Directionality::Uni;
 }
 
-impl<T: ?Sized + 'static> From<BiRef<T>> for AnyRef {
-    fn from(ref_: BiRef<T>) -> Self {
-        AnyRef(Directionality::Bi, ref_.0.into())
-    }
-}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bi;
 
-impl<T: ?Sized + 'static> From<Ref<T>> for AnyRef {
-    fn from(ref_: Ref<T>) -> Self {
-        AnyRef(ref_.0, ref_.1.into())
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Ref<T: ?Sized>(pub Directionality, pub Key<T>);
-
-impl<T: ?Sized> Ref<T> {
-    pub fn from(self, key: AnyKey) -> AnyRef {
-        AnyRef(self.0, key)
-    }
-}
-
-impl<T: ?Sized> Copy for Ref<T> {}
-
-impl<T: ?Sized> Clone for Ref<T> {
-    fn clone(&self) -> Self {
-        Ref(self.0, self.1)
-    }
-}
-
-impl<T: ?Sized + 'static> From<UniRef<T>> for Ref<T> {
-    fn from(ref_: UniRef<T>) -> Self {
-        Ref(Directionality::Uni, ref_.0.into())
-    }
-}
-
-impl<T: ?Sized + 'static> From<BiRef<T>> for Ref<T> {
-    fn from(ref_: BiRef<T>) -> Self {
-        Ref(Directionality::Bi, ref_.0.into())
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct UniRef<T: ?Sized>(pub Key<T>);
-
-impl<T: ?Sized> Copy for UniRef<T> {}
-
-impl<T: ?Sized> Clone for UniRef<T> {
-    fn clone(&self) -> Self {
-        UniRef(self.0)
-    }
-}
-
-impl<T: ?Sized> Into<Key<T>> for UniRef<T> {
-    fn into(self) -> Key<T> {
-        self.0
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct BiRef<T: ?Sized>(pub Key<T>);
-
-impl<T: ?Sized> Copy for BiRef<T> {}
-
-impl<T: ?Sized> Clone for BiRef<T> {
-    fn clone(&self) -> Self {
-        BiRef(self.0)
-    }
-}
-
-impl<T: ?Sized> Into<Key<T>> for BiRef<T> {
-    fn into(self) -> Key<T> {
-        self.0
-    }
+impl Directioned for Bi {
+    const D: Directionality = Directionality::Bi;
 }

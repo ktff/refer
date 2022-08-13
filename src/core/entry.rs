@@ -1,4 +1,7 @@
-use super::{AnyKey, AnyRef, Collection, Error, Key, PathMut, PathRef, Ref};
+use super::{
+    AnyKey, AnyRef, Collection, Directioned, Error, Global, Key, Local, PathMut, PathRef, Ref,
+    TypedRef,
+};
 
 pub trait Entry<'a, P: PathRef<'a>>: 'a {
     fn path(&self) -> &P;
@@ -24,7 +27,7 @@ pub trait AnyEntry<'a, P: PathRef<'a>>: Entry<'a, P> {
 pub trait InitEntry<'a, P: PathMut<'a>>: EntryMut<'a, P> {
     type T: ?Sized + 'static;
 
-    fn add_reference<T: ?Sized + 'static>(&mut self, reference: impl Into<Ref<T>>)
+    fn add_reference<T: ?Sized + 'static>(&mut self, reference: impl Into<TypedRef<T>>)
     where
         P::Top: Collection<T>;
 
@@ -63,9 +66,11 @@ pub trait RefEntry<'a, P: PathRef<'a>>: AnyEntry<'a, P> {
 pub trait MutEntry<'a, P: PathMut<'a>>: RefEntry<'a, P> + EntryMut<'a, P> {
     fn item_mut(&mut self) -> &mut Self::T;
 
-    fn add_from(&mut self, from: AnyRef);
+    /// Expects original reference with key of item referencing this one.
+    fn add_from(&mut self, from: impl Into<AnyRef>);
 
-    fn remove_from(&mut self, from: AnyRef);
+    /// Expects original reference with key of item referencing this one.
+    fn remove_from(&mut self, from: impl Into<AnyRef>);
 
     fn set_copy(&mut self, item: &Self::T)
     where
@@ -80,34 +85,100 @@ pub trait MutEntry<'a, P: PathMut<'a>>: RefEntry<'a, P> + EntryMut<'a, P> {
     fn take(self) -> Result<Self::T, Error>
     where
         Self::T: Sized;
+}
 
-    /// T as composite type now has one reference.
-    fn add_reference<T: ?Sized + 'static>(
-        &mut self,
-        reference: impl Into<Ref<T>>,
-    ) -> Result<(), Error>
+// ************************ Convenient methods *************************** //
+
+impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
+    pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(
+        self,
+        from: &'b M,
+    ) -> Result<<P::Top as Collection<T>>::RE<'b, &'b P::Top>, Error>
     where
         P::Top: Collection<T>,
     {
-        let reference = reference.into();
-        let from = reference.from(self.key_any());
-        let top = self.path_mut().top_mut();
-        reference.get_mut(top)?.add_from(from);
-        Ok(())
+        Collection::<T>::get(from.path().top(), self.key())
     }
 
-    /// T as composite type now doesn't have one reference.
-    fn remove_reference<T: ?Sized + 'static>(
-        &mut self,
-        reference: impl Into<Ref<T>>,
-    ) -> Result<(), Error>
+    pub fn get_mut<'a: 'b, 'b, P: PathMut<'a>, M: MutEntry<'a, P>>(
+        self,
+        from: &'b mut M,
+    ) -> Result<<P::Top as Collection<T>>::ME<'b, &'b mut P::Top>, Error>
     where
         P::Top: Collection<T>,
     {
-        let reference = reference.into();
-        let from = reference.from(self.key_any());
-        let top = self.path_mut().top_mut();
-        reference.get_mut(top)?.remove_from(from);
-        Ok(())
+        Collection::<T>::get_mut(from.path_mut().top_mut(), self.key())
+    }
+
+    /// Returns Ref referencing from.
+    pub fn from<'a, P: PathRef<'a>, M: RefEntry<'a, P>>(self, from: &M) -> Ref<M::T, Global, D>
+    where
+        P::Top: Collection<T> + Collection<M::T>,
+    {
+        self.reverse(from.path(), from.key())
+    }
+
+    /// Adds this reference to collection.
+    pub fn add<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
+    where
+        P::Top: Collection<T> + Collection<M::T>,
+    {
+        let from_ref = self.from(from);
+        self.get_mut(from).map(|mut to| to.add_from(from_ref))
+    }
+
+    /// Removes this reference from collection.
+    pub fn remove<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
+    where
+        P::Top: Collection<T> + Collection<M::T>,
+    {
+        let from_ref = self.from(from);
+        self.get_mut(from).map(|mut to| to.remove_from(from_ref))
+    }
+}
+
+impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
+    pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(
+        self,
+        from: &'b M,
+    ) -> Result<<P::Bottom as Collection<T>>::RE<'b, &'b P::Bottom>, Error>
+    where
+        P::Bottom: Collection<T>,
+    {
+        Collection::<T>::get(from.path().bottom(), self.key())
+    }
+
+    pub fn get_mut<'a: 'b, 'b, P: PathMut<'a>, M: MutEntry<'a, P>>(
+        self,
+        from: &'b mut M,
+    ) -> Result<<P::Bottom as Collection<T>>::ME<'b, &'b mut P::Bottom>, Error>
+    where
+        P::Bottom: Collection<T>,
+    {
+        Collection::<T>::get_mut(from.path_mut().bottom_mut(), self.key())
+    }
+
+    pub fn from<'a, P: PathRef<'a>, M: RefEntry<'a, P>>(self, from: &M) -> Ref<M::T, Local, D>
+    where
+        P::Bottom: Collection<T> + Collection<M::T>,
+    {
+        self.reverse(from.path(), from.key())
+            .expect("Entry returned key not from it's path.")
+    }
+
+    pub fn add<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
+    where
+        P::Bottom: Collection<T> + Collection<M::T>,
+    {
+        let from_ref = self.from(from);
+        self.get_mut(from).map(|mut to| to.add_from(from_ref))
+    }
+
+    pub fn remove<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
+    where
+        P::Bottom: Collection<T> + Collection<M::T>,
+    {
+        let from_ref = self.from(from);
+        self.get_mut(from).map(|mut to| to.remove_from(from_ref))
     }
 }

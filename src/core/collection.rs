@@ -1,4 +1,4 @@
-use super::{AnyCollection, Error, InitEntry, Key, MutEntry, PathMut, PathRef, Ref, RefEntry};
+use super::{AnyCollection, Error, InitEntry, Key, MutEntry, PathMut, PathRef, RefEntry};
 
 /// Polly collection can implement this trait for each type.
 pub trait Collection<T: ?Sized + 'static>: AnyCollection {
@@ -67,19 +67,6 @@ impl<T: ?Sized + 'static> Key<T> {
 
     pub fn next_key<C: Collection<T> + ?Sized>(self, coll: &C) -> Option<Key<T>> {
         Collection::<T>::next_key(coll, self)
-    }
-}
-
-impl<T: ?Sized + 'static> Ref<T> {
-    pub fn get<C: Collection<T> + ?Sized>(self, coll: &C) -> Result<C::RE<'_, &C>, Error> {
-        Collection::<T>::get(coll, self.1)
-    }
-
-    pub fn get_mut<C: Collection<T> + ?Sized>(
-        self,
-        coll: &mut C,
-    ) -> Result<C::ME<'_, &mut C>, Error> {
-        Collection::<T>::get_mut(coll, self.1)
     }
 }
 

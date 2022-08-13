@@ -37,9 +37,10 @@ TODO:
    x. Conncurrency
       - Kroz chunked collections se cini kao dobar put
       - Na korisniku je da doda lock na koleckije podatke ovisno o tome što joj treba.
-
-   *. Key<Level> kako bi se razlikovalo kljuceve na razlicitim razinama.
-   *. Prostorni collection
+   x. Key<Level> kako bi se razlikovalo kljuceve na razlicitim razinama.
+      - Izvedeno pomocu Global/Local tipova
+   x. Prostorni collection
+      - Na korisnicima je da dodaju extra funkcije
 */
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
