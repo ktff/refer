@@ -100,10 +100,7 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
     {
         let key = init(Collection::<T>::add(from.path_mut().top_mut()))?;
 
-        let this = Self::new(from.path(), key);
-        this.add(from)?;
-
-        Ok(this)
+        Self::new(from, key)
     }
 
     pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(
@@ -166,10 +163,7 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
     {
         let key = init(Collection::<T>::add(from.path_mut().borrow_mut()))?;
 
-        let this = Self::new(from.path(), key).expect("Collection added item outside of path.");
-        this.add(from)?;
-
-        Ok(this)
+        Self::new(from, key).map(|this| this.expect("Collection added item outside of path."))
     }
 
     pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(
