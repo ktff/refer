@@ -1,4 +1,6 @@
-use super::{AnyCollection, AnyKey, Collection, Directioned, Global, Key, Local, Ref};
+use std::marker::PhantomData;
+
+use super::{AnyCollection, AnyKey, Collection, Key};
 
 /// A path from top to bottom.
 /// Fetching bottom can cost.
@@ -10,12 +12,30 @@ pub trait PathRef<'a>: 'a {
 
     fn bottom(&self) -> &Self::Bottom;
 
-    /// Converts top key to bottom key if it belongs to bottom.
-    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
-    where
-        Self::Bottom: Collection<T>;
+    fn top_key_any(&self, bottom_key: AnyKey) -> AnyKey;
 
-    fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey>;
+    fn bottom_key_any(&self, top_key: AnyKey) -> Option<AnyKey>;
+
+    /// Converts bottom key to top key.
+    fn top_key<T: ?Sized + 'static>(&self, bottom_key: Key<T>) -> Key<T>
+    where
+        Self::Top: Collection<T>,
+    {
+        Key::new(self.top_key_any(bottom_key.into()).index())
+    }
+
+    /// Converts top key to bottom key if it belongs to bottom.
+    fn bottom_key<T: ?Sized + 'static>(&self, top_key: Key<T>) -> Option<Key<T>>
+    where
+        Self::Bottom: Collection<T>,
+    {
+        self.bottom_key_any(top_key.into())
+            .map(|key| Key::new(key.index()))
+    }
+
+    fn borrow<'b>(&'b self) -> BorrowPathRef<'a, 'b, Self> {
+        BorrowPathRef(self, PhantomData)
+    }
 }
 
 impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a C {
@@ -30,12 +50,8 @@ impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a C {
         self
     }
 
-    /// Converts top key to bottom key if it belongs to bottom.
-    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
-    where
-        Self::Bottom: Collection<T>,
-    {
-        Some(key)
+    fn top_key_any(&self, key: AnyKey) -> AnyKey {
+        key
     }
 
     fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey> {
@@ -55,12 +71,8 @@ impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a mut C {
         self
     }
 
-    /// Converts top key to bottom key if it belongs to bottom.
-    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
-    where
-        Self::Bottom: Collection<T>,
-    {
-        Some(key)
+    fn top_key_any(&self, key: AnyKey) -> AnyKey {
+        key
     }
 
     fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey> {
@@ -68,10 +80,51 @@ impl<'a, C: AnyCollection + ?Sized + 'a> PathRef<'a> for &'a mut C {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct BorrowPathRef<'a: 'b, 'b, P: PathRef<'a> + ?Sized>(&'b P, PhantomData<&'a P::Top>);
+
+impl<'a: 'b, 'b, P: PathRef<'a> + ?Sized> PathRef<'b> for BorrowPathRef<'a, 'b, P> {
+    type Top = P::Top;
+    type Bottom = P::Bottom;
+
+    fn top(&self) -> &P::Top {
+        self.0.top()
+    }
+    fn bottom(&self) -> &P::Bottom {
+        self.0.bottom()
+    }
+
+    fn top_key_any(&self, key: AnyKey) -> AnyKey {
+        self.0.top_key_any(key)
+    }
+
+    fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey> {
+        self.0.bottom_key_any(key)
+    }
+
+    fn top_key<T: ?Sized + 'static>(&self, bottom_key: Key<T>) -> Key<T>
+    where
+        Self::Top: Collection<T>,
+    {
+        self.0.top_key(bottom_key)
+    }
+
+    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
+    where
+        Self::Bottom: Collection<T>,
+    {
+        self.0.bottom_key(key)
+    }
+}
+
 pub trait PathMut<'a>: PathRef<'a> {
     fn top_mut(&mut self) -> &mut Self::Top;
 
     fn bottom_mut(&mut self) -> &mut Self::Bottom;
+
+    fn borrow_mut<'b>(&'b mut self) -> BorrowPathMut<'a, 'b, Self> {
+        BorrowPathMut(self, PhantomData)
+    }
 }
 
 impl<'a, C: AnyCollection + ?Sized + 'a> PathMut<'a> for &'a mut C
@@ -87,31 +140,48 @@ where
     }
 }
 
-// ********************** Convenient methods *************************** //
+#[derive(Debug)]
+pub struct BorrowPathMut<'a: 'b, 'b, P: PathMut<'a> + ?Sized>(&'b mut P, PhantomData<&'a P::Top>);
 
-impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
-    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
-        self,
-        _: &P,
-        global_from: Key<F>,
-    ) -> Ref<F, Global, D>
+impl<'a: 'b, 'b, P: PathMut<'a> + ?Sized> PathRef<'b> for BorrowPathMut<'a, 'b, P> {
+    type Top = P::Top;
+    type Bottom = P::Bottom;
+
+    fn top(&self) -> &P::Top {
+        self.0.top()
+    }
+    fn bottom(&self) -> &P::Bottom {
+        self.0.bottom()
+    }
+
+    fn top_key_any(&self, key: AnyKey) -> AnyKey {
+        self.0.top_key_any(key)
+    }
+
+    fn bottom_key_any(&self, key: AnyKey) -> Option<AnyKey> {
+        self.0.bottom_key_any(key)
+    }
+
+    fn top_key<T: ?Sized + 'static>(&self, bottom_key: Key<T>) -> Key<T>
     where
-        P::Top: Collection<F>,
+        Self::Top: Collection<T>,
     {
-        Ref::new(global_from)
+        self.0.top_key(bottom_key)
+    }
+
+    fn bottom_key<T: ?Sized + 'static>(&self, key: Key<T>) -> Option<Key<T>>
+    where
+        Self::Bottom: Collection<T>,
+    {
+        self.0.bottom_key(key)
     }
 }
 
-impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
-    /// None if key is not in local/bottom collection.
-    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
-        self,
-        path: &P,
-        global_from: Key<F>,
-    ) -> Option<Ref<F, Local, D>>
-    where
-        P::Bottom: Collection<F>,
-    {
-        Some(Ref::new(path.bottom_key(global_from)?))
+impl<'a: 'b, 'b, P: PathMut<'a> + ?Sized> PathMut<'b> for BorrowPathMut<'a, 'b, P> {
+    fn top_mut(&mut self) -> &mut P::Top {
+        self.0.top_mut()
+    }
+    fn bottom_mut(&mut self) -> &mut P::Bottom {
+        self.0.bottom_mut()
     }
 }

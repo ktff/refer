@@ -1,6 +1,6 @@
 use super::{
-    AnyKey, AnyRef, Collection, Directioned, Error, Global, Key, Local, PathMut, PathRef, Ref,
-    TypedRef,
+    AnyKey, AnyRef, BorrowPathMut, BorrowPathRef, Collection, Directioned, Error, Global, Key,
+    Local, PathMut, PathRef, Ref, TypedRef,
 };
 
 pub trait Entry<'a, P: PathRef<'a>>: 'a {
@@ -90,6 +90,22 @@ pub trait MutEntry<'a, P: PathMut<'a>>: RefEntry<'a, P> + EntryMut<'a, P> {
 // ************************ Convenient methods *************************** //
 
 impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
+    // Initializes T with provided init closure and adds self as reference.
+    pub fn init<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(
+        from: &mut M,
+        init: impl FnOnce(<P::Top as Collection<T>>::IE<'_, &mut P::Top>) -> Result<Key<T>, Error>,
+    ) -> Result<Self, Error>
+    where
+        P::Top: Collection<T> + Collection<M::T>,
+    {
+        let key = init(Collection::<T>::add(from.path_mut().top_mut()))?;
+
+        let this = Self::new(from.path(), key);
+        this.add(from)?;
+
+        Ok(this)
+    }
+
     pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(
         self,
         from: &'b M,
@@ -138,24 +154,42 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
 }
 
 impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
+    // Initializes T with provided init closure and adds self as reference.
+    pub fn init<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(
+        from: &mut M,
+        init: impl FnOnce(
+            <P::Bottom as Collection<T>>::IE<'_, BorrowPathMut<'a, '_, P>>,
+        ) -> Result<Key<T>, Error>,
+    ) -> Result<Self, Error>
+    where
+        P::Bottom: Collection<T> + Collection<M::T>,
+    {
+        let key = init(Collection::<T>::add(from.path_mut().borrow_mut()))?;
+
+        let this = Self::new(from.path(), key).expect("Collection added item outside of path.");
+        this.add(from)?;
+
+        Ok(this)
+    }
+
     pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefEntry<'a, P>>(
         self,
         from: &'b M,
-    ) -> Result<<P::Bottom as Collection<T>>::RE<'b, &'b P::Bottom>, Error>
+    ) -> Result<<P::Bottom as Collection<T>>::RE<'b, BorrowPathRef<'a, 'b, P>>, Error>
     where
         P::Bottom: Collection<T>,
     {
-        Collection::<T>::get(from.path().bottom(), self.key())
+        <P::Bottom as Collection<T>>::get(from.path().borrow(), self.key())
     }
 
     pub fn get_mut<'a: 'b, 'b, P: PathMut<'a>, M: MutEntry<'a, P>>(
         self,
         from: &'b mut M,
-    ) -> Result<<P::Bottom as Collection<T>>::ME<'b, &'b mut P::Bottom>, Error>
+    ) -> Result<<P::Bottom as Collection<T>>::ME<'b, BorrowPathMut<'a, 'b, P>>, Error>
     where
         P::Bottom: Collection<T>,
     {
-        Collection::<T>::get_mut(from.path_mut().bottom_mut(), self.key())
+        <P::Bottom as Collection<T>>::get_mut(from.path_mut().borrow_mut(), self.key())
     }
 
     pub fn from<'a, P: PathRef<'a>, M: RefEntry<'a, P>>(self, from: &M) -> Ref<M::T, Local, D>

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{AnyKey, Key};
+use super::{AnyKey, Collection, Key, PathRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnyRef(pub Locality, pub Directionality, pub AnyKey);
@@ -69,10 +69,6 @@ pub struct Ref<T: ?Sized, L: Localized = Global, D: Directioned = Uni>(
 );
 
 impl<L: Localized, D: Directioned, T: ?Sized> Ref<T, L, D> {
-    pub fn new(key: Key<T>) -> Self {
-        Ref(key, PhantomData)
-    }
-
     pub fn locality(&self) -> Locality {
         L::L
     }
@@ -83,6 +79,48 @@ impl<L: Localized, D: Directioned, T: ?Sized> Ref<T, L, D> {
 
     pub fn key(&self) -> Key<T> {
         self.0
+    }
+}
+
+impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
+    pub fn new<'a, P: PathRef<'a>>(_: &P, global_key: Key<T>) -> Self
+    where
+        P::Top: Collection<T>,
+    {
+        Ref(global_key, PhantomData)
+    }
+
+    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
+        self,
+        path: &P,
+        global_from: Key<F>,
+    ) -> Ref<F, Global, D>
+    where
+        P::Top: Collection<F>,
+    {
+        Ref::<F, Global, D>::new(path, global_from)
+    }
+}
+
+impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
+    /// None if key is not in local/bottom collection.
+    pub fn new<'a, P: PathRef<'a>>(path: &P, global_key: Key<T>) -> Option<Self>
+    where
+        P::Bottom: Collection<T>,
+    {
+        Some(Ref(path.bottom_key(global_key)?, PhantomData))
+    }
+
+    /// None if key is not in local/bottom collection.
+    pub fn reverse<'a, F: ?Sized + 'static, P: PathRef<'a>>(
+        self,
+        path: &P,
+        global_from: Key<F>,
+    ) -> Option<Ref<F, Local, D>>
+    where
+        P::Bottom: Collection<F>,
+    {
+        Ref::<F, Local, D>::new(path, global_from)
     }
 }
 

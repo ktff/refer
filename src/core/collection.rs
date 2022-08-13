@@ -4,18 +4,15 @@ use super::{AnyCollection, Error, InitEntry, Key, MutEntry, PathMut, PathRef, Re
 pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     type IE<'a, P: PathMut<'a, Bottom = Self>>: InitEntry<'a, P, T = T>
     where
-        Self: 'a,
-        P::Top: Collection<T>;
+        Self: 'a;
 
     type RE<'a, P: PathRef<'a, Bottom = Self>>: RefEntry<'a, P, T = T>
     where
-        Self: 'a,
-        P::Top: Collection<T>;
+        Self: 'a;
 
     type ME<'a, P: PathMut<'a, Bottom = Self>>: MutEntry<'a, P, T = T>
     where
-        Self: 'a,
-        P::Top: Collection<T>;
+        Self: 'a;
 
     /// How many lower bits of indices can be used for keys.
     fn indices_bits(&self) -> usize;
@@ -25,18 +22,14 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     /// Returns following key after given in ascending order.
     fn next_key(&self, key: Key<T>) -> Option<Key<T>>;
 
-    fn add<'a, P: PathMut<'a, Bottom = Self>>(path: P) -> Self::IE<'a, P>
-    where
-        P::Top: Collection<T>;
+    fn add<'a, P: PathMut<'a, Bottom = Self>>(path: P) -> Self::IE<'a, P>;
 
     /// Errors:
     /// - KeyIsNotInUse
     fn get<'a, P: PathRef<'a, Bottom = Self>>(
         path: P,
         key: impl Into<Key<T>>,
-    ) -> Result<Self::RE<'a, P>, Error>
-    where
-        P::Top: Collection<T>;
+    ) -> Result<Self::RE<'a, P>, Error>;
 
     // NOTE: Since Key is numerical hence countable and storage needs to be able ot check if a key is valid
     // hence iteration is always possible although maybe expensive.
@@ -46,9 +39,7 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     fn get_mut<'a, P: PathMut<'a, Bottom = Self>>(
         path: P,
         key: impl Into<Key<T>>,
-    ) -> Result<Self::ME<'a, P>, Error>
-    where
-        P::Top: Collection<T>;
+    ) -> Result<Self::ME<'a, P>, Error>;
 }
 
 // ********************** Convenience methods **********************

@@ -25,8 +25,6 @@ biti referencirano od strane drugih te posto se nemoze removati ako postoji refe
 te da se nemoze sigurno izvesti mutacija ownera i onwed u isto vrijeme, ownership se
 ne cini korisnim.
 
-TODO:
-
 - Build on top:
    X. Polymorphism
    X. Chunked collections as one opaque collection derived from composite collection

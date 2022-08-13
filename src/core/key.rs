@@ -29,6 +29,10 @@ impl<T: ?Sized> Key<T> {
     pub fn new(index: Index) -> Self {
         Key(index, PhantomData)
     }
+
+    pub fn index(&self) -> Index {
+        self.0
+    }
 }
 
 impl<T: ?Sized> Eq for Key<T> {}
@@ -91,6 +95,10 @@ impl AnyKey {
         } else {
             None
         }
+    }
+
+    pub fn index(&self) -> Index {
+        self.1
     }
 }
 
