@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use super::{
-    AnyKey, AnyRef, BorrowPathMut, BorrowPathRef, Collection, Directionality, Directioned, Error,
-    Global, Key, Local, Locality, PathMut, PathRef, Ref,
+    AnyKey, AnyRef, BorrowPathMut, BorrowPathRef, Collection, Directioned, Error, Global, Key,
+    Local, PathMut, PathRef, Ref,
 };
 
 pub trait Entry<'a, P: PathRef<'a>>: 'a {
@@ -27,21 +27,16 @@ pub trait AnyEntry<'a> {
 pub trait InitEntry<'a, P: PathMut<'a>>: EntryMut<'a, P> {
     type T: ?Sized + 'static;
 
-    /// Adds reference of this item.
+    /// Will try to localize item to locality of given key.
     /// Returns localized key.
     /// Errors:
-    /// - NotLocalKey if this and some before local references aren't local.
-    #[must_use]
-    fn add_reference<T: ?Sized + 'static>(
-        &mut self,
-        locality: Locality,
-        directionality: Directionality,
-        global_key: Key<T>,
-    ) -> Result<Key<T>, Error>
-    where
-        P::Top: Collection<T>;
+    /// - NotLocalKey if entry was already localized to a different locality.
+    fn localize<T: ?Sized + 'static>(&mut self, near: Key<T>) -> Result<Key<T>, Error>;
 
-    // fn add_from(&mut self, from: AnyRef);
+    /// Adds reference of this item.
+    /// Errors:
+    /// - NotLocalKey if entry was not localized and reference is local.
+    fn add_to(&mut self, to: impl Into<AnyRef>) -> Result<(), Error>;
 
     /// Added references are active once this is successful.
     /// Errors:
@@ -84,26 +79,23 @@ pub trait MutEntry<'a, P: PathMut<'a>>: RefEntry<'a, P> + EntryMut<'a, P> {
     /// Expects original reference with key of item referencing this one.
     fn remove_from(&mut self, from: impl Into<AnyRef>);
 
+    // The point of this is T :?Sized which can have different sizes.
     fn set_copy(&mut self, item: &Self::T)
     where
         Self::T: Copy;
 
+    /// Drop function must remove references in drop function.
+    /// If `drop` is called, item will be removed and R returned.
     /// Errors:
     /// - ItemIsReferenced
-    fn remove(self) -> Result<(), Error>;
-
-    /// Errors:
-    /// - ItemIsReferenced
-    fn take(self) -> Result<Self::T, Error>
-    where
-        Self::T: Sized;
+    fn remove<R>(self, drop: impl FnOnce(&mut Self) -> R) -> Result<R, Error>;
 }
 
 // ************************ Convenient methods *************************** //
 
 impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
     /// Initializes T with provided init closure and adds self as reference.
-    pub fn init<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(
+    pub fn add<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(
         from: &mut M,
         init: impl FnOnce(<P::Top as Collection<T>>::IE<'_, &mut P::Top>) -> Result<Key<T>, Error>,
     ) -> Result<Self, Error>
@@ -112,32 +104,33 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
     {
         let key = init(Collection::<T>::add(from.path_mut().top_mut()))?;
 
-        Self::new(from, key)
+        Self::bind(from, key)
     }
 
-    /// Creates new reference to the given item behind global key.
-    pub fn new<'a, P: PathMut<'a>, E: MutEntry<'a, P>>(
+    /// Creates new reference to the given item.
+    pub fn bind<'a, P: PathMut<'a>, E: MutEntry<'a, P>>(
         from: &mut E,
-        global_key: Key<T>,
+        key: Key<T>,
     ) -> Result<Self, Error>
     where
         P::Top: Collection<T> + Collection<E::T>,
     {
-        let this = Ref::<T, Global, D>(global_key, PhantomData);
-        this.add(from)?;
+        let this = Ref::<T, Global, D>(key, PhantomData);
+        let from_ref = this.from(from);
+        this.get_mut(from)?.add_from(from_ref);
 
         Ok(this)
     }
 
-    pub fn of<'a, P: PathMut<'a>, E: InitEntry<'a, P>>(
+    pub fn init<'a, P: PathMut<'a>, E: InitEntry<'a, P>>(
         from: &mut E,
-        global_key: Key<T>,
+        key: Key<T>,
     ) -> Result<Self, Error>
     where
         P::Top: Collection<T> + Collection<E::T>,
     {
-        let key = from.add_reference(Locality::Global, D::D, global_key)?;
         let this = Ref::<T, Global, D>(key, PhantomData);
+        from.add_to(this)?;
 
         Ok(this)
     }
@@ -162,23 +155,6 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
         Collection::<T>::get_mut(from.path_mut().top_mut(), self.key())
     }
 
-    /// Returns Ref referencing from.
-    fn from<'a, P: PathRef<'a>, M: RefEntry<'a, P>>(self, from: &M) -> Ref<M::T, Global, D>
-    where
-        P::Top: Collection<T> + Collection<M::T>,
-    {
-        Ref::<M::T, Global, D>(from.key(), PhantomData)
-    }
-
-    /// Adds this reference to collection.
-    fn add<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
-    where
-        P::Top: Collection<T> + Collection<M::T>,
-    {
-        let from_ref = self.from(from);
-        self.get_mut(from).map(|mut to| to.add_from(from_ref))
-    }
-
     /// Removes this reference from collection.
     pub fn remove<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
     where
@@ -187,11 +163,19 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
         let from_ref = self.from(from);
         self.get_mut(from).map(|mut to| to.remove_from(from_ref))
     }
+
+    /// Returns Ref referencing from.
+    fn from<'a, P: PathRef<'a>, M: RefEntry<'a, P>>(self, from: &M) -> Ref<M::T, Global, D>
+    where
+        P::Top: Collection<T> + Collection<M::T>,
+    {
+        Ref::<M::T, Global, D>(from.key(), PhantomData)
+    }
 }
 
 impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
     /// Initializes T with provided init closure and adds self as reference.
-    pub fn init<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(
+    pub fn add<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(
         from: &mut M,
         init: impl FnOnce(
             <P::Bottom as Collection<T>>::IE<'_, BorrowPathMut<'a, '_, P>>,
@@ -200,42 +184,47 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
     where
         P::Bottom: Collection<T> + Collection<M::T>,
     {
-        let key = init(Collection::<T>::add(from.path_mut().borrow_mut()))?;
+        let from_key = from.key();
+        let mut entry = Collection::<T>::add(from.path_mut().borrow_mut());
+        let _ = entry.localize(from_key)?;
+        let key = init(entry)?;
 
-        Self::new(from, key)
+        Self::bind(from, key)
     }
 
-    /// Creates new reference to the given item behind global key.
+    /// Creates new reference to the given item.
     /// None if key is not in local/bottom collection.
     ///
     /// Errors:
     /// - Keys are not local
-    pub fn new<'a, P: PathMut<'a>, E: MutEntry<'a, P>>(
+    pub fn bind<'a, P: PathMut<'a>, E: MutEntry<'a, P>>(
         from: &mut E,
-        global_key: Key<T>,
+        key: Key<T>,
     ) -> Result<Self, Error>
     where
         P::Bottom: Collection<T> + Collection<E::T>,
     {
         let local_key = from
             .path()
-            .bottom_key(global_key)
-            .ok_or_else(|| Error::NotLocalKey(global_key.into()))?;
+            .bottom_key(key)
+            .ok_or_else(|| Error::NotLocalKey(key.into()))?;
         let this = Ref::<T, Local, D>(local_key, PhantomData);
-        this.add(from)?;
+        let from_ref = this.from(from);
+        this.get_mut(from)?.add_from(from_ref);
 
         Ok(this)
     }
 
-    pub fn of<'a, P: PathMut<'a>, E: InitEntry<'a, P>>(
+    pub fn init<'a, P: PathMut<'a>, E: InitEntry<'a, P>>(
         from: &mut E,
-        global_key: Key<T>,
+        key: Key<T>,
     ) -> Result<Self, Error>
     where
-        P::Top: Collection<T> + Collection<E::T>,
+        P::Bottom: Collection<T> + Collection<E::T>,
     {
-        let key = from.add_reference(Locality::Local, D::D, global_key)?;
-        let this = Ref::<T, Local, D>(key, PhantomData);
+        let local_key = from.localize(key)?;
+        let this = Ref::<T, Local, D>(local_key, PhantomData);
+        from.add_to(this)?;
 
         Ok(this)
     }
@@ -247,7 +236,7 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
     where
         P::Bottom: Collection<T>,
     {
-        <P::Bottom as Collection<T>>::get(from.path().borrow(), self.key())
+        <P::Bottom as Collection<T>>::get(from.path().borrow(), self.0)
     }
 
     pub fn get_mut<'a: 'b, 'b, P: PathMut<'a>, M: MutEntry<'a, P>>(
@@ -257,7 +246,15 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
     where
         P::Bottom: Collection<T>,
     {
-        <P::Bottom as Collection<T>>::get_mut(from.path_mut().borrow_mut(), self.key())
+        <P::Bottom as Collection<T>>::get_mut(from.path_mut().borrow_mut(), self.0)
+    }
+
+    pub fn remove<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
+    where
+        P::Bottom: Collection<T> + Collection<M::T>,
+    {
+        let from_ref = self.from(from);
+        self.get_mut(from).map(|mut to| to.remove_from(from_ref))
     }
 
     fn from<'a, P: PathRef<'a>, M: RefEntry<'a, P>>(self, from: &M) -> Ref<M::T, Local, D>
@@ -270,21 +267,5 @@ impl<D: Directioned, T: ?Sized + 'static> Ref<T, Local, D> {
                 .expect("Entry returned key not from it's path."),
             PhantomData,
         )
-    }
-
-    fn add<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
-    where
-        P::Bottom: Collection<T> + Collection<M::T>,
-    {
-        let from_ref = self.from(from);
-        self.get_mut(from).map(|mut to| to.add_from(from_ref))
-    }
-
-    pub fn remove<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(self, from: &mut M) -> Result<(), Error>
-    where
-        P::Bottom: Collection<T> + Collection<M::T>,
-    {
-        let from_ref = self.from(from);
-        self.get_mut(from).map(|mut to| to.remove_from(from_ref))
     }
 }

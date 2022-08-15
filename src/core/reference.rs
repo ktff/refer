@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{AnyKey, Key};
+use super::{AnyKey, Global, Key, Local, Locality, Localized, LocalizedData};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AnyRef(pub Locality, pub Directionality, pub AnyKey);
@@ -15,8 +15,11 @@ impl AnyRef {
     }
 
     /// Must be used in accordance of Locality.
-    pub fn key(&self) -> AnyKey {
-        self.2
+    pub fn key(&self) -> LocalizedData<AnyKey> {
+        match self.0 {
+            Locality::Global => LocalizedData::Global(self.2),
+            Locality::Local => LocalizedData::Local(self.2),
+        }
     }
 }
 
@@ -45,8 +48,11 @@ impl<T: ?Sized> TypedRef<T> {
     }
 
     /// Must be used in accordance of Locality.
-    pub fn key(&self) -> Key<T> {
-        self.2
+    pub fn key(&self) -> LocalizedData<Key<T>> {
+        match self.0 {
+            Locality::Global => LocalizedData::Global(self.2),
+            Locality::Local => LocalizedData::Local(self.2),
+        }
     }
 }
 
@@ -64,6 +70,15 @@ impl<L: Localized, D: Directioned, T: ?Sized> From<Ref<T, L, D>> for TypedRef<T>
     }
 }
 
+/// A reference to an item T that can be anywhere-Global or nearby-Local of which
+/// T is at least aware of-Unidirectional and can also know origin item if Bidirectional.
+///
+/// Constructed through:
+/// * `Ref::add` when an existing item is creating destination item.
+/// * `Ref::bind` when an existing item is referencing existing destination item.
+/// * `Ref::init` when a creating item is referencing existing destination item.
+///
+/// Used, and finally removed via call to `Ref::remove` either during mutation or during item removal.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ref<T: ?Sized, L: Localized = Global, D: Directioned = Uni>(
     pub(crate) Key<T>,
@@ -78,10 +93,17 @@ impl<L: Localized, D: Directioned, T: ?Sized> Ref<T, L, D> {
     pub fn directionality(&self) -> Directionality {
         D::D
     }
+}
 
-    /// Must be used in accordance of Locality.
+impl<D: Directioned, T: ?Sized> Ref<T, Global, D> {
     pub fn key(&self) -> Key<T> {
         self.0
+    }
+}
+
+impl<D: Directioned, T: ?Sized> Ref<T, Local, D> {
+    pub fn key(&self) -> LocalizedData<Key<T>> {
+        LocalizedData::Local(self.0)
     }
 }
 
@@ -91,34 +113,6 @@ impl<L: Localized, D: Directioned, T: ?Sized> Clone for Ref<T, L, D> {
     fn clone(&self) -> Self {
         Ref(self.0, PhantomData)
     }
-}
-
-// ********************* Locality *********************
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Locality {
-    /// Top
-    Global,
-    /// Bottom
-    Local,
-}
-
-pub trait Localized {
-    const L: Locality;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Global;
-
-impl Localized for Global {
-    const L: Locality = Locality::Global;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Local;
-
-impl Localized for Local {
-    const L: Locality = Locality::Local;
 }
 
 // ********************* Directionality *********************

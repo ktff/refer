@@ -39,8 +39,8 @@ ne cini korisnim.
       - Izvedeno pomocu Global/Local tipova
    x. Prostorni collection
       - Na korisnicima je da dodaju extra funkcije
-   *. Reference lifetime
-   *. Key<Locality>
+   x. Reference lifetime
+   x. Key<Locality>, no, it's the job of reference to track this.
 */
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
@@ -82,4 +82,38 @@ impl Error {
     pub fn unrecoverable(self) -> bool {
         !self.recoverable()
     }
+}
+
+// ********************* Locality *********************
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Locality {
+    /// Top
+    Global,
+    /// Bottom
+    Local,
+}
+
+pub trait Localized {
+    const L: Locality;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Global;
+
+impl Localized for Global {
+    const L: Locality = Locality::Global;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Local;
+
+impl Localized for Local {
+    const L: Locality = Locality::Local;
+}
+
+/// Speed bump to encourage proper usage
+pub enum LocalizedData<T> {
+    Global(T),
+    Local(T),
 }
