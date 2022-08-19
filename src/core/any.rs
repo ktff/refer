@@ -1,16 +1,26 @@
-use super::{AnyEntry, AnyKey, Error};
+use std::any::Any;
 
-/// Collection over one/multiple types.
-/// Should implement relevant/specialized Collection<T> traits.
-pub trait AnyCollection {
-    fn first_key_any(&self) -> Option<AnyKey>;
+use super::{AnyEntity, AnyKey, AnyShell, Error};
+
+pub trait AnyCollection: AnyKeyCollection {
+    fn entity_any(&self, key: AnyKey) -> Result<Box<dyn AnyEntity<'_>>, Error>;
+}
+
+pub trait AnyItemCollection: AnyKeyCollection {
+    fn item_any(&self, key: AnyKey) -> Result<&dyn Any, Error>;
+}
+
+pub trait AnyShellCollection: AnyKeyCollection {
+    // /// How many lower bits of indices can be used for keys.
+    // fn indices_bits(&self) -> usize;
+
+    fn shell_any(&self, key: AnyKey) -> Result<Box<dyn AnyShell<'_>>, Error>;
+}
+
+pub trait AnyKeyCollection {
+    fn first_any(&self) -> Option<AnyKey>;
 
     /// Returns following key after given with indices in ascending order.
     /// Order according to type is undefined.
-    fn next_key_any(&self, key: AnyKey) -> Option<AnyKey>;
-
-    /// Errors:
-    /// - KeyIsNotInUse
-    /// - UnsupportedType
-    fn get_any<'a>(&'a self, key: AnyKey) -> Result<Box<dyn AnyEntry<'a>>, Error>;
+    fn next_any(&self, key: AnyKey) -> Option<AnyKey>;
 }
