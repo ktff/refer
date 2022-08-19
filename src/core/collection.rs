@@ -1,27 +1,38 @@
 use super::{
-    AnyCollection, AnyItemCollection, AnyKeyCollection, AnyShellCollection, Error, Item, Key,
-    MutEntity, MutShell, RefEntity, RefShell,
+    AnyEntity, AnyKey, AnyShell, Error, Item, Key, MutEntity, MutShell, RefEntity, RefShell,
 };
+use std::any::Any;
 
-/// Polly collections can split &mut self to multiple &mut views each with set of types that don't overlap.
-/// Polly collection can implement this trait for each type.
+// NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
+//       implementations from implementing all *Collection traits on the same type.
+
+// Polly collections can split &mut self to multiple &mut views each with set of types that don't overlap.
+// Polly collection can implement this trait for each type.
+
+/// A collection of entities.
+///
+/// Entity is an item in a shell.
+/// Entities are connected to each other through shells.
+///
+/// Collection can be split into collections of items and shells.
 pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + AnyCollection {
     type Shells: ShellCollection<T>;
+
     type Items: ItemCollection<T>;
 
-    type MEntity<'a>: MutEntity<'a, T = T>
+    type Ref<'a>: RefEntity<'a, T = T>
     where
         Self: 'a;
 
-    type REntity<'a>: RefEntity<'a, T = T>
+    type Mut<'a>: MutEntity<'a, T = T>
     where
         Self: 'a;
 
-    type ReIter<'a>: Iterator<Item = Self::REntity<'a>>
+    type Iter<'a>: Iterator<Item = Self::Ref<'a>>
     where
         Self: 'a;
 
-    type MiIter<'a>: Iterator<Item = Self::MEntity<'a>>
+    type MutIter<'a>: Iterator<Item = Self::Mut<'a>>
     where
         Self: 'a;
 
@@ -39,13 +50,15 @@ pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + AnyCollection {
     where
         T: Sized;
 
-    fn entity(&self, key: Key<T>) -> Result<Self::REntity<'_>, Error>;
+    fn get(&self, key: Key<T>) -> Result<Self::Ref<'_>, Error>;
 
-    fn entity_mut(&mut self, key: Key<T>) -> Result<Self::MEntity<'_>, Error>;
+    fn get_mut(&mut self, key: Key<T>) -> Result<Self::Mut<'_>, Error>;
 
-    fn iter_entity(&self) -> Self::ReIter<'_>;
+    /// Consistent ascending order.
+    fn iter(&self) -> Self::Iter<'_>;
 
-    fn iter_entity_mut(&mut self) -> Self::MiIter<'_>;
+    /// Consistent ascending order.
+    fn iter_mut(&mut self) -> Self::MutIter<'_>;
 
     fn shells(&self) -> &Self::Shells;
 
@@ -66,52 +79,52 @@ pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + AnyCollection {
 /// Polly collections can split &mut self to multiple &mut views each with set of types that don't overlap.
 /// Polly collection can implement this trait for each type.
 pub trait ItemCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyItemCollection {
-    type RiIter<'a>: Iterator<Item = (Key<T>, &'a T)>
+    type Iter<'a>: Iterator<Item = (Key<T>, &'a T)>
     where
         Self: 'a;
 
-    type MiIter<'a>: Iterator<Item = (Key<T>, &'a mut T)>
+    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut T)>
     where
         Self: 'a;
 
-    fn item(&self, key: Key<T>) -> Result<&T, Error>;
+    fn get(&self, key: Key<T>) -> Result<&T, Error>;
 
-    fn item_mut(&mut self, key: Key<T>) -> Result<&mut T, Error>;
-
-    /// Consistent ascending order.
-    fn iter_item(&self) -> Self::RiIter<'_>;
+    fn get_mut(&mut self, key: Key<T>) -> Result<&mut T, Error>;
 
     /// Consistent ascending order.
-    fn iter_item_mut(&mut self) -> Self::MiIter<'_>;
+    fn iter(&self) -> Self::Iter<'_>;
+
+    /// Consistent ascending order.
+    fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
 /// Polly collections can split &mut self to multiple &mut views each with set of types that don't overlap.
 pub trait ShellCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyShellCollection {
-    type RShell<'a>: RefShell<'a, T = T>
+    type Ref<'a>: RefShell<'a, T = T>
     where
         Self: 'a;
 
-    type MShell<'a>: MutShell<'a, T = T>
+    type Mut<'a>: MutShell<'a, T = T>
     where
         Self: 'a;
 
-    type MsIter<'a>: Iterator<Item = Self::MShell<'a>>
+    type Iter<'a>: Iterator<Item = Self::Ref<'a>>
     where
         Self: 'a;
 
-    type RsIter<'a>: Iterator<Item = Self::RShell<'a>>
+    type MutIter<'a>: Iterator<Item = Self::Mut<'a>>
     where
         Self: 'a;
 
-    fn shell(&self, key: Key<T>) -> Result<Self::RShell<'_>, Error>;
+    fn get(&self, key: Key<T>) -> Result<Self::Ref<'_>, Error>;
 
-    fn shell_mut(&mut self, key: Key<T>) -> Result<Self::MShell<'_>, Error>;
+    fn get_mut(&mut self, key: Key<T>) -> Result<Self::Mut<'_>, Error>;
 
     /// Consistent ascending order.
-    fn iter_shell(&self) -> Self::RsIter<'_>;
+    fn iter(&self) -> Self::Iter<'_>;
 
     /// Consistent ascending order.
-    fn iter_shell_mut(&mut self) -> Self::MsIter<'_>;
+    fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
 pub trait KeyCollection<T: ?Sized + 'static>: AnyKeyCollection {
@@ -119,6 +132,29 @@ pub trait KeyCollection<T: ?Sized + 'static>: AnyKeyCollection {
 
     /// Returns following key after given in ascending order.
     fn next(&self, key: Key<T>) -> Option<Key<T>>;
+}
+
+pub trait AnyCollection: AnyKeyCollection {
+    fn entity_any(&self, key: AnyKey) -> Result<Box<dyn AnyEntity<'_>>, Error>;
+}
+
+pub trait AnyItemCollection: AnyKeyCollection {
+    fn item_any(&self, key: AnyKey) -> Result<&dyn Any, Error>;
+}
+
+pub trait AnyShellCollection: AnyKeyCollection {
+    fn shell_any(&self, key: AnyKey) -> Result<Box<dyn AnyShell<'_>>, Error>;
+}
+
+pub trait AnyKeyCollection {
+    // /// How many lower bits of indices can be used for keys.
+    // fn indices_bits(&self) -> usize;
+
+    fn first_any(&self) -> Option<AnyKey>;
+
+    /// Returns following key after given with indices in ascending order.
+    /// Order according to type is undefined.
+    fn next_any(&self, key: AnyKey) -> Option<AnyKey>;
 }
 
 // ********************** Convenience methods **********************

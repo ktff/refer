@@ -1,4 +1,3 @@
-mod any;
 mod collection;
 mod entity;
 mod item;
@@ -8,7 +7,6 @@ mod shell;
 
 use std::any::TypeId;
 
-pub use any::*;
 pub use collection::*;
 pub use entity::*;
 pub use item::*;

@@ -1,6 +1,8 @@
 use super::{AnyShell, RefShell};
 use std::any::Any;
 
+/// Entity is an item in a shell.
+/// Entities are connected to each other through shells.
 pub trait AnyEntity<'a>: AnyShell<'a> {
     fn item_any(&self) -> Option<&dyn Any>;
 }
