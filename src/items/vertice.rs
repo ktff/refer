@@ -4,7 +4,7 @@ use crate::core::*;
 
 pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
 
-/// T --> T
+/// F --> T
 pub struct Vertice<T: ?Sized + 'static>(Vec<Ref<T, Global, Bi>>);
 
 impl<T: ?Sized + 'static> Vertice<T> {
@@ -13,10 +13,10 @@ impl<T: ?Sized + 'static> Vertice<T> {
     }
 
     /// Connects this --with-> to in collection.
-    pub fn connect(
+    pub fn connect<F: ?Sized + 'static>(
         &mut self,
         collection: &mut impl ShellCollection<T>,
-        this: Key<T>,
+        this: Key<F>,
         to: Key<T>,
     ) -> Result<(), Error> {
         self.0.push(Ref::connect(this, to, collection)?);
@@ -25,10 +25,10 @@ impl<T: ?Sized + 'static> Vertice<T> {
 
     /// Disconnects this --with-> to in collection.
     /// Panics if index is out of bounds.
-    pub fn disconnect(
+    pub fn disconnect<F: ?Sized + 'static>(
         &mut self,
         collection: &mut impl ShellCollection<T>,
-        this: Key<T>,
+        this: Key<F>,
         to: usize,
     ) -> Result<(), Error> {
         self[to].disconnect(this, collection)?;
