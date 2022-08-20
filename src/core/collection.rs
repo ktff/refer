@@ -6,20 +6,18 @@ use std::any::Any;
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
 //       implementations from implementing all *Collection traits on the same type.
 
-// Polly collections can split &mut self to multiple &mut views each with set of types that don't overlap.
-// Polly collection can implement this trait for each type.
-
 /// A collection of entities.
 ///
 /// Entity is an item in a shell.
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + AnyCollection {
-    type Shells: ShellCollection<T>;
-
-    type Items: ItemCollection<T>;
-
+pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + PollyCollection
+// NOTE: Should be but is not convenient.
+// where
+//     Self::Shells: ShellCollection<T>,
+//     Self::Items: ItemCollection<T>,
+{
     type Ref<'a>: RefEntity<'a, T = T>
     where
         Self: 'a;
@@ -59,6 +57,12 @@ pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + AnyCollection {
 
     /// Consistent ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
+}
+
+/// An entity collection of one or more types.
+pub trait PollyCollection: AnyCollection {
+    type Items: AnyItemCollection;
+    type Shells: AnyShellCollection;
 
     fn shells(&self) -> &Self::Shells;
 
@@ -72,12 +76,11 @@ pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + AnyCollection {
         self.split().0
     }
 
-    /// Splits view to items and shells
+    /// Splits to views of items and shells
     fn split(&mut self) -> (&mut Self::Items, &mut Self::Shells);
 }
 
-/// Polly collections can split &mut self to multiple &mut views each with set of types that don't overlap.
-/// Polly collection can implement this trait for each type.
+/// Polly ItemCollection can split &mut self to multiple &mut views each with set of types that don't overlap.
 pub trait ItemCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyItemCollection {
     type Iter<'a>: Iterator<Item = (Key<T>, &'a T)>
     where
@@ -98,7 +101,7 @@ pub trait ItemCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyItemCollect
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
-/// Polly collections can split &mut self to multiple &mut views each with set of types that don't overlap.
+/// Polly ShellCollection can't split this.
 pub trait ShellCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyShellCollection {
     type Ref<'a>: RefShell<'a, T = T>
     where
@@ -135,21 +138,18 @@ pub trait KeyCollection<T: ?Sized + 'static>: AnyKeyCollection {
 }
 
 pub trait AnyCollection: AnyKeyCollection {
-    fn entity_any(&self, key: AnyKey) -> Result<Box<dyn AnyEntity<'_>>, Error>;
+    fn any(&self, key: AnyKey) -> Result<Box<dyn AnyEntity<'_>>, Error>;
 }
 
 pub trait AnyItemCollection: AnyKeyCollection {
-    fn item_any(&self, key: AnyKey) -> Result<&dyn Any, Error>;
+    fn any(&self, key: AnyKey) -> Result<&dyn Any, Error>;
 }
 
 pub trait AnyShellCollection: AnyKeyCollection {
-    fn shell_any(&self, key: AnyKey) -> Result<Box<dyn AnyShell<'_>>, Error>;
+    fn any(&self, key: AnyKey) -> Result<Box<dyn AnyShell<'_>>, Error>;
 }
 
 pub trait AnyKeyCollection {
-    // /// How many lower bits of indices can be used for keys.
-    // fn indices_bits(&self) -> usize;
-
     fn first_any(&self) -> Option<AnyKey>;
 
     /// Returns following key after given with indices in ascending order.
