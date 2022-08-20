@@ -12,12 +12,7 @@ use std::any::Any;
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + PollyCollection
-// NOTE: Should be but is not convenient.
-// where
-//     Self::Shells: ShellCollection<T>,
-//     Self::Items: ItemCollection<T>,
-{
+pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + PollyCollection {
     type Ref<'a>: RefEntity<'a, T = T>
     where
         Self: 'a;
@@ -61,7 +56,10 @@ pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + PollyCollection
 
 /// An entity collection of one or more types.
 pub trait PollyCollection: AnyCollection {
+    /// Should implement ItemCollection<T> for all Collection<T>
     type Items: AnyItemCollection;
+
+    /// Should implement ShellCollection<T> for all Collection<T>
     type Shells: AnyShellCollection;
 
     fn shells(&self) -> &Self::Shells;
@@ -102,7 +100,7 @@ pub trait ItemCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyItemCollect
 }
 
 /// Polly ShellCollection can't split this.
-pub trait ShellCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyShellCollection {
+pub trait ShellCollection<T: ?Sized + 'static>: KeyCollection<T> + PollyShellCollection {
     type Ref<'a>: RefShell<'a, T = T>
     where
         Self: 'a;
@@ -128,6 +126,23 @@ pub trait ShellCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyShellColle
 
     /// Consistent ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
+}
+
+pub trait PollyShellCollection: AnyShellCollection {
+    /// Should implement MutShellCollection<T> for all ShellCollection<T>
+    type MutColl<'a>: 'a
+    where
+        Self: 'a;
+
+    fn mut_coll(&mut self) -> Self::MutColl<'_>;
+}
+
+/// Enables holding on to multiple MutShells at the same time.
+/// To enable that it usually won't enable viewing of the data.
+pub trait MutShellCollection<'a, T: ?Sized + 'static>: AnyKeyCollection + 'a {
+    type Mut: MutShell<'a, T = T>;
+
+    fn get_mut(&self, key: Key<T>) -> Result<Self::Mut, Error>;
 }
 
 pub trait KeyCollection<T: ?Sized + 'static>: AnyKeyCollection {

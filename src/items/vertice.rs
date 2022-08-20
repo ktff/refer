@@ -2,44 +2,46 @@ use std::ops::Deref;
 
 use crate::core::*;
 
+pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
+
 /// T --> T
 pub struct Vertice<T: ?Sized + 'static>(Vec<Ref<T, Global, Bi>>);
 
 impl<T: ?Sized + 'static> Vertice<T> {
-    pub fn new() -> Self {
-        Vertice(Vec::new())
+    pub fn new(refs: Vec<Ref<T, Global, Bi>>) -> Self {
+        Vertice(refs)
     }
 
-    /// Connects from/self --with-> to in collection.
+    /// Connects this --with-> to in collection.
     pub fn connect(
         &mut self,
-        from: Key<T>,
-        to: Key<T>,
         collection: &mut impl ShellCollection<T>,
+        this: Key<T>,
+        to: Key<T>,
     ) -> Result<(), Error> {
-        self.0.push(Ref::connect(from, to, collection)?);
+        self.0.push(Ref::connect(this, to, collection)?);
         Ok(())
     }
 
-    /// Disconnects from/self --with-> to in collection.
+    /// Disconnects this --with-> to in collection.
     /// Panics if index is out of bounds.
     pub fn disconnect(
         &mut self,
-        from: Key<T>,
-        index: usize,
         collection: &mut impl ShellCollection<T>,
+        this: Key<T>,
+        to: usize,
     ) -> Result<(), Error> {
-        self[index].disconnect(from, collection)?;
-        self.0.remove(index);
+        self[to].disconnect(this, collection)?;
+        self.0.remove(to);
         Ok(())
     }
 
     /// Iterates through T items pointing to this one.
     pub fn iter_from<'a>(
         &self,
-        shell: &impl RefShell<'a, T = T>,
+        this: &impl RefShell<'a, T = T>,
     ) -> impl Iterator<Item = Key<T>> + 'a {
-        shell.from()
+        this.from()
     }
 }
 
@@ -47,6 +49,20 @@ impl<T: ?Sized + 'static> Deref for Vertice<T> {
     type Target = [Ref<T, Global, Bi>];
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T: ?Sized + 'static> Item for Vertice<T> {
+    type I<'a> = RefIter<'a, T>;
+
+    fn references(&self) -> Self::I<'_> {
+        self.0.iter().copied().map(Into::into)
+    }
+}
+
+impl<T: ?Sized + 'static> AnyItem for Vertice<T> {
+    fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a> {
+        Box::new(self.references())
     }
 }
 
