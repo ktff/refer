@@ -82,10 +82,14 @@ impl<L: Localized, D: Directioned, T: ?Sized> From<Ref<T, L, D>> for TypedRef<T>
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ref<T: ?Sized, L: Localized = Global, D: Directioned = Uni>(
     pub(crate) Key<T>,
-    pub(crate) PhantomData<(L, D)>,
+    PhantomData<(L, D)>,
 );
 
 impl<L: Localized, D: Directioned, T: ?Sized> Ref<T, L, D> {
+    pub(crate) fn new(key: Key<T>) -> Self {
+        Ref(key, PhantomData)
+    }
+
     pub fn locality(&self) -> Locality {
         L::L
     }
