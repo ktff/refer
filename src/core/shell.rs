@@ -15,13 +15,11 @@ pub trait AnyShell<'a>: 'a {
     fn from_count(&self) -> usize;
 }
 
-pub trait Shell<'a> {
-    type T: ?Sized + 'static;
-
-    fn key(&self) -> Key<Self::T>;
+pub trait Shell<'a, I: ?Sized + 'static> {
+    fn key(&self) -> Key<I>;
 }
 
-pub trait RefShell<'a>: Shell<'a> + AnyShell<'a> {
+pub trait RefShell<'a, I: ?Sized + 'static>: Shell<'a, I> + AnyShell<'a> {
     type Iter<T: ?Sized + 'static>: Iterator<Item = Key<T>> + 'a;
 
     /// Bidirectional references.
@@ -29,10 +27,10 @@ pub trait RefShell<'a>: Shell<'a> + AnyShell<'a> {
 }
 
 /// Changes can be delayed until drop.
-pub trait MutShell<'a>: Shell<'a> {
+pub trait MutShell<'a, I: ?Sized + 'static>: Shell<'a, I> {
     /// Expects original reference with key of item referencing this one.
     fn add_from(&mut self, from: AnyRef);
 
     /// Expects original reference with key of item referencing this one.
-    fn remove_from(&mut self, from: AnyRef);
+    fn remove_from(&mut self, from: AnyRef) -> bool;
 }

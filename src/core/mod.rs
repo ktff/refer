@@ -5,8 +5,6 @@ mod key;
 mod reference;
 mod shell;
 
-use std::any::TypeId;
-
 pub use collection::*;
 pub use entity::*;
 pub use item::*;
@@ -43,57 +41,56 @@ ne cini korisnim.
       - Na korisnicima je da dodaju extra funkcije
    x. Reference lifetime
    x. Key<Locality>, no, it's the job of reference to track this.
-   *. Item i Ostalo su odvojene stvari
+   x. Item i Ostalo su odvojene stvari
       - Ovo je prakticno rjesenje za problem duplog MutEntry jedan posudenog od drugog nad istim itemom gdje unutrasnji
         MutEntry remova item te se vrati na vanjski MutEntry koji ocekuje valjani podatak ali ga nema.
       - Da se ovo fixa a da se omoguci followanje referenci,
    *. Izdvoji parrallelnost
-   *. Ukloniti Path
+   *. Ukloni Locality
+   x. Ukloniti Path
 */
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
-pub enum Error {
-    /// Operation was not possible because key is not in use for any item
-    KeyIsNotInUse(AnyKey),
-    /// Operation was not possible because item is referenced
-    ItemIsReferenced(AnyKey),
-    /// Operation was not possible because item is not in local memory.
-    /// Generally can be thrown as when KeyIsNotInUse by collections that
-    /// have lazy load.
-    ItemNotInMemory(AnyKey),
-    /// Operation was not possible because item type is not supported
-    UnsupportedType(TypeId),
-    /// Key is not local.
-    NotLocalKey(AnyKey),
-    /// Item is being borrowed.
-    Borrowed,
-    /// Some collection or data is under some kind of lock.
-    ///
-    /// Some kind of probabilistic backoff is advised. ex. 50% to back off 50% to not.
-    Locked,
-    /// Operation was not possible because there are no more keys
-    /// Generally collections is full and won't accept any more items
-    OutOfKeys,
-}
+// #[derive(Debug, Clone, PartialEq, Eq, Copy)]
+// pub enum Error {
+//     /// Operation was not possible because key is not in use for any item
+//     ///
+//     /// A fatal logical error. Should panic.
+//     KeyIsNotInUse(AnyKey),
+//     // NOTE: Not loaded is just KeyIsNotInUse, while locked is probably only related to multiple MutShell which
+//     //       should impl handle.
+//     // /// It's unavailble for some reasons, like it isn't ~~loaded~~ or is locked or something else.
+//     // /// But it's temporary.
+//     // Unavailable(AnyKey),
 
-impl Error {
-    pub fn recoverable(self) -> bool {
-        match self {
-            Error::KeyIsNotInUse(_) => false,
-            Error::ItemIsReferenced(_) => true,
-            Error::ItemNotInMemory(_) => true,
-            Error::UnsupportedType(_) => false,
-            Error::Locked => true,
-            Error::OutOfKeys => false,
-            Error::NotLocalKey(_) => false,
-            Error::Borrowed => true,
-        }
-    }
+//     // NOTE: Should be staticly checked by impl.
+//     // /// Operation was not possible because item type is not supported
+//     // ///
+//     // /// A fatal logical error. Should panic.
+//     // // UnsupportedType(TypeId),
 
-    pub fn unrecoverable(self) -> bool {
-        !self.recoverable()
-    }
-}
+//     // NOTE: Impl should panic or return KeyIsNotInUse.
+//     // /// Key is not local.
+//     // ///
+//     // /// A fatal logical error. Should panic.
+//     // NotLocalKey(AnyKey),
+// }
+
+// impl Error {
+//     pub fn recoverable(self) -> bool {
+//         match self {
+//             Error::KeyIsNotInUse(_) => false,
+//             Error::ItemIsReferenced(_) => true,
+//             Error::ItemNotInMemory(_) => true,
+//             Error::Locked => true,
+//             Error::OutOfKeys => false,
+//             Error::NotLocalKey(_) => false,
+//         }
+//     }
+
+//     pub fn unrecoverable(self) -> bool {
+//         !self.recoverable()
+//     }
+// }
 
 // ********************* Locality *********************
 
@@ -130,6 +127,32 @@ pub enum LocalizedData<T> {
 }
 
 // ************************ Convenient methods *************************** //
+
+impl<T: ?Sized + 'static> Ref<T, Global> {
+    /// Some if to shells exist, otherwise None.
+    pub fn connect<F: ?Sized + 'static>(
+        from: Key<F>,
+        to: Key<T>,
+        collection: &mut impl ShellCollection,
+    ) -> Option<Self> {
+        let mut to_shell = collection.get_mut(to)?;
+        to_shell.add_from(Ref::<F, Global>::new(from).into());
+        Some(Self::new(to))
+    }
+
+    /// True if there was reference to remove.
+    pub fn disconnect<F: ?Sized + 'static>(
+        self,
+        from: Key<F>,
+        collection: &mut impl ShellCollection,
+    ) -> bool {
+        if let Some(mut to_shell) = collection.get_mut(self.key()) {
+            to_shell.remove_from(Ref::<F, Global>::new(from).into())
+        } else {
+            false
+        }
+    }
+}
 
 // impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
 //     /// Initializes T with provided init closure and adds self as reference.

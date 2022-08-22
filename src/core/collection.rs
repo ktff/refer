@@ -1,7 +1,4 @@
-use super::{
-    AnyEntity, AnyKey, AnyShell, Error, Item, Key, MutEntity, MutShell, RefEntity, RefShell,
-};
-use std::any::Any;
+use super::{Item, Key, MutEntity, MutShell, RefEntity, RefShell};
 
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
 //       implementations from implementing all *Collection traits on the same type.
@@ -12,55 +9,50 @@ use std::any::Any;
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: Item + ?Sized>: KeyCollection<T> + PollyCollection {
-    type Ref<'a>: RefEntity<'a, T = T>
+pub trait Collection: KeyCollection {
+    type Items: ItemCollection;
+
+    type Shells: ShellCollection;
+
+    type Ref<'a, I: ?Sized + 'static>: RefEntity<'a, I>
     where
         Self: 'a;
 
-    type Mut<'a>: MutEntity<'a, T = T>
+    type Mut<'a, I: ?Sized + 'static>: MutEntity<'a, I>
     where
         Self: 'a;
 
-    type Iter<'a>: Iterator<Item = Self::Ref<'a>>
+    type Iter<'a, I: ?Sized + 'static>: Iterator<Item = Self::Ref<'a, I>>
     where
         Self: 'a;
 
-    type MutIter<'a>: Iterator<Item = Self::Mut<'a>>
+    type MutIter<'a, I: ?Sized + 'static>: Iterator<Item = Self::Mut<'a, I>>
     where
         Self: 'a;
 
-    fn add(&mut self, item: T) -> Result<Key<T>, Error>
-    where
-        T: Sized;
+    /// Err if collection is out of keys.
+    fn add<I: Item>(&mut self, item: I) -> Result<Key<I>, I>;
 
-    fn add_copy(&mut self, item: &T) -> Result<Key<T>, Error>;
+    /// None if collection is out of keys.
+    fn add_copy<I: Item + Copy + ?Sized>(&mut self, item: &I) -> Option<Key<I>>;
 
-    /// Fails if item is referenced by other items.
-    fn remove(&mut self, key: Key<T>) -> Result<(), Error>;
+    /// True Item existed so it was removed.
+    fn remove<I: Item + ?Sized>(&mut self, key: Key<I>) -> bool;
 
-    /// Fails if item is referenced by other items.
-    fn take(&mut self, key: Key<T>) -> Result<T, Error>
-    where
-        T: Sized;
+    /// Some if item exists.
+    fn take<I: Item>(&mut self, key: Key<I>) -> Option<I>;
 
-    fn get(&self, key: Key<T>) -> Result<Self::Ref<'_>, Error>;
+    /// Some if item exists.
+    fn get<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Self::Ref<'_, I>>;
 
-    fn get_mut(&mut self, key: Key<T>) -> Result<Self::Mut<'_>, Error>;
+    /// Some if item exists.
+    fn get_mut<I: ?Sized + 'static>(&mut self, key: Key<I>) -> Option<Self::Mut<'_, I>>;
 
     /// Consistent ascending order.
-    fn iter(&self) -> Self::Iter<'_>;
+    fn iter<I: ?Sized + 'static>(&self) -> Self::Iter<'_, I>;
 
     /// Consistent ascending order.
-    fn iter_mut(&mut self) -> Self::MutIter<'_>;
-}
-
-/// An entity collection of one or more types.
-pub trait PollyCollection: AnyCollection {
-    /// Should implement ItemCollection<T> for all Collection<T>
-    type Items: AnyItemCollection;
-
-    /// Should implement ShellCollection<T> for all Collection<T>
-    type Shells: AnyShellCollection;
+    fn iter_mut<I: ?Sized + 'static>(&mut self) -> Self::MutIter<'_, I>;
 
     fn shells(&self) -> &Self::Shells;
 
@@ -79,97 +71,79 @@ pub trait PollyCollection: AnyCollection {
 }
 
 /// Polly ItemCollection can split &mut self to multiple &mut views each with set of types that don't overlap.
-pub trait ItemCollection<T: ?Sized + 'static>: KeyCollection<T> + AnyItemCollection {
-    type Iter<'a>: Iterator<Item = (Key<T>, &'a T)>
+pub trait ItemCollection: KeyCollection {
+    type Iter<'a, I: ?Sized + 'static>: Iterator<Item = (Key<I>, &'a I)>
     where
         Self: 'a;
 
-    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut T)>
+    type MutIter<'a, I: ?Sized + 'static>: Iterator<Item = (Key<I>, &'a mut I)>
     where
         Self: 'a;
 
-    fn get(&self, key: Key<T>) -> Result<&T, Error>;
+    /// Some if item exists.
+    fn get<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<&I>;
 
-    fn get_mut(&mut self, key: Key<T>) -> Result<&mut T, Error>;
+    /// Some if item exists.
+    fn get_mut<I: ?Sized + 'static>(&mut self, key: Key<I>) -> Option<&mut I>;
 
     /// Consistent ascending order.
-    fn iter(&self) -> Self::Iter<'_>;
+    fn iter<I: ?Sized + 'static>(&self) -> Self::Iter<'_, I>;
 
     /// Consistent ascending order.
-    fn iter_mut(&mut self) -> Self::MutIter<'_>;
+    fn iter_mut<I: ?Sized + 'static>(&mut self) -> Self::MutIter<'_, I>;
 }
 
 /// Polly ShellCollection can't split this.
-pub trait ShellCollection<T: ?Sized + 'static>: KeyCollection<T> + PollyShellCollection {
-    type Ref<'a>: RefShell<'a, T = T>
+pub trait ShellCollection: KeyCollection {
+    type MutColl<'a>: MutShellCollection<'a>
     where
         Self: 'a;
 
-    type Mut<'a>: MutShell<'a, T = T>
+    type Ref<'a, I: ?Sized + 'static>: RefShell<'a, I>
     where
         Self: 'a;
 
-    type Iter<'a>: Iterator<Item = Self::Ref<'a>>
+    type Mut<'a, I: ?Sized + 'static>: MutShell<'a, I>
     where
         Self: 'a;
 
-    type MutIter<'a>: Iterator<Item = Self::Mut<'a>>
+    type Iter<'a, I: ?Sized + 'static>: Iterator<Item = Self::Ref<'a, I>>
     where
         Self: 'a;
 
-    fn get(&self, key: Key<T>) -> Result<Self::Ref<'_>, Error>;
+    type MutIter<'a, I: ?Sized + 'static>: Iterator<Item = Self::Mut<'a, I>>
+    where
+        Self: 'a;
 
-    fn get_mut(&mut self, key: Key<T>) -> Result<Self::Mut<'_>, Error>;
+    /// Some if item exists.
+    fn get<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Self::Ref<'_, I>>;
+
+    /// Some if item exists.
+    fn get_mut<I: ?Sized + 'static>(&mut self, key: Key<I>) -> Option<Self::Mut<'_, I>>;
 
     /// Consistent ascending order.
-    fn iter(&self) -> Self::Iter<'_>;
+    fn iter<I: ?Sized + 'static>(&self) -> Self::Iter<'_, I>;
 
     /// Consistent ascending order.
-    fn iter_mut(&mut self) -> Self::MutIter<'_>;
-}
-
-pub trait PollyShellCollection: AnyShellCollection {
-    /// Should implement MutShellCollection<T> for all ShellCollection<T>
-    type MutColl<'a>: 'a
-    where
-        Self: 'a;
+    fn iter_mut<I: ?Sized + 'static>(&mut self) -> Self::MutIter<'_, I>;
 
     fn mut_coll(&mut self) -> Self::MutColl<'_>;
 }
 
 /// Enables holding on to multiple MutShells at the same time.
 /// To enable that it usually won't enable viewing of the data.
-pub trait MutShellCollection<'a, T: ?Sized + 'static>: AnyKeyCollection + 'a {
-    type Mut: MutShell<'a, T = T>;
+pub trait MutShellCollection<'a>: 'a {
+    type Mut<I: ?Sized + 'static>: MutShell<'a, I>;
 
-    fn get_mut(&self, key: Key<T>) -> Result<Self::Mut, Error>;
+    /// Some if item exists.
+    fn get_mut<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Self::Mut<I>>;
 }
 
-pub trait KeyCollection<T: ?Sized + 'static>: AnyKeyCollection {
-    fn first(&self) -> Option<Key<T>>;
+pub trait KeyCollection {
+    fn first<I: ?Sized + 'static>(&self) -> Option<Key<I>>;
 
     /// Returns following key after given in ascending order.
-    fn next(&self, key: Key<T>) -> Option<Key<T>>;
-}
-
-pub trait AnyCollection: AnyKeyCollection {
-    fn any(&self, key: AnyKey) -> Result<Box<dyn AnyEntity<'_>>, Error>;
-}
-
-pub trait AnyItemCollection: AnyKeyCollection {
-    fn any(&self, key: AnyKey) -> Result<&dyn Any, Error>;
-}
-
-pub trait AnyShellCollection: AnyKeyCollection {
-    fn any(&self, key: AnyKey) -> Result<Box<dyn AnyShell<'_>>, Error>;
-}
-
-pub trait AnyKeyCollection {
-    fn first_any(&self) -> Option<AnyKey>;
-
-    /// Returns following key after given with indices in ascending order.
-    /// Order according to type is undefined.
-    fn next_any(&self, key: AnyKey) -> Option<AnyKey>;
+    fn next<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Key<I>>;
 }
 
 // ********************** Convenience methods **********************

@@ -1,4 +1,4 @@
-use super::AnyRef;
+use super::{AnyKey, AnyRef};
 use std::any::Any;
 
 pub trait Item: AnyItem {
@@ -9,7 +9,10 @@ pub trait Item: AnyItem {
 }
 
 /// An item of entity.
-pub trait AnyItem: Any {
+pub trait AnyItem: Any + 'static {
     /// All internal references
     fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a>;
+
+    /// True if removed, false if not and this item should be removed as a result.
+    fn remove_reference(&mut self, key: AnyKey, item: &impl Any) -> bool;
 }

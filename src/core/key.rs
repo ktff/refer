@@ -33,6 +33,13 @@ impl<T: ?Sized> Key<T> {
     pub fn index(&self) -> Index {
         self.0
     }
+
+    pub fn upcast(self) -> AnyKey
+    where
+        T: 'static,
+    {
+        self.into()
+    }
 }
 
 impl<T: ?Sized> Eq for Key<T> {}
