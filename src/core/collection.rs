@@ -31,7 +31,7 @@ pub trait Collection: KeyCollection {
     type MutIter<'a, I: ?Sized + 'static>: Iterator<Item = Self::Mut<'a, I>>
     where
         Self: 'a;
-    // TODO: Ovo moze biti sa MutShell
+
     /// Err if collection is out of keys.
     /// May panic if some of the references don't exist or if prefix doesn't exist.
     fn add<I: Item>(&mut self, prefix: Option<Prefix>, item: I) -> Result<Key<I>, I>;

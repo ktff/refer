@@ -13,35 +13,31 @@ impl<T: ?Sized + 'static> Edge<T> {
     }
 
     /// Some if both shells exist.
-    pub fn add<'a, F: ?Sized + 'static>(
+    pub fn add<'a>(
         coll: &impl MutShellCollection<'a>,
-        this: Key<F>,
+        this: AnyKey,
         a: Key<T>,
         b: Key<T>,
     ) -> Option<Self> {
         let mut a_shell = coll.get_mut(a)?;
         let mut b_shell = coll.get_mut(b)?;
 
-        a_shell.add_from(Ref::<F>::new(this).into());
-        b_shell.add_from(Ref::<F>::new(this).into());
+        a_shell.add_from(this);
+        b_shell.add_from(this);
 
         Some(Self([Ref::new(a), Ref::new(b)]))
     }
 
     /// True if everything that should exist existed.
-    pub fn remove<F: ?Sized + 'static>(
-        self,
-        coll: &mut impl ShellCollection,
-        this: Key<F>,
-    ) -> bool {
+    pub fn remove(self, coll: &mut impl ShellCollection, this: AnyKey) -> bool {
         let mut success_a = false;
         if let Some(mut a_shell) = coll.get_mut(self.0[0].key()) {
-            success_a = a_shell.remove_from(Ref::<F>::new(this).into());
+            success_a = a_shell.remove_from(this);
         }
 
         let mut success_b = false;
         if let Some(mut b_shell) = coll.get_mut(self.0[1].key()) {
-            success_b = b_shell.remove_from(Ref::<F>::new(this).into());
+            success_b = b_shell.remove_from(this);
         }
 
         success_a && success_b

@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, Key, Prefix};
+use super::{AnyKey, Key, Prefix};
 use std::any::TypeId;
 
 /// A shell of an entity.
@@ -31,8 +31,8 @@ pub trait RefShell<'a, I: ?Sized + 'static>: Shell<'a, I> + AnyShell<'a> {
 /// Changes can be delayed until drop.
 pub trait MutShell<'a, I: ?Sized + 'static>: Shell<'a, I> {
     /// Expects original reference with key of item referencing this one.
-    fn add_from(&mut self, from: AnyRef);
+    fn add_from(&mut self, from: AnyKey);
 
     /// Expects original reference with key of item referencing this one.
-    fn remove_from(&mut self, from: AnyRef) -> bool;
+    fn remove_from(&mut self, from: AnyKey) -> bool;
 }

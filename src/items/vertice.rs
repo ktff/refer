@@ -14,10 +14,10 @@ impl<T: ?Sized + 'static> Vertice<T> {
 
     /// Connects this --with-> to in collection.
     /// Fails if any of the shells don't exist.
-    pub fn connect<F: ?Sized + 'static>(
+    pub fn connect(
         &mut self,
         collection: &mut impl ShellCollection,
-        this: Key<F>,
+        this: AnyKey,
         to: Key<T>,
     ) -> Option<()> {
         self.0.push(Ref::connect(this, to, collection)?);
@@ -27,10 +27,10 @@ impl<T: ?Sized + 'static> Vertice<T> {
     /// Disconnects this --with-> to in collection.
     /// Panics if index is out of bounds.
     /// True if removed. False if there was nothing to remove.
-    pub fn disconnect<F: ?Sized + 'static>(
+    pub fn disconnect(
         &mut self,
         collection: &mut impl ShellCollection,
-        this: Key<F>,
+        this: AnyKey,
         to: usize,
     ) -> bool {
         let success = self[to].disconnect(this, collection);
