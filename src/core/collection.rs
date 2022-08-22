@@ -1,4 +1,4 @@
-use std::path::Prefix;
+use std::{mem::MaybeUninit, path::Prefix};
 
 use super::{Item, Key, MutEntity, MutShell, RefEntity, RefShell};
 
@@ -43,11 +43,28 @@ pub trait Collection: KeyCollection {
         item: &I,
     ) -> Option<Key<I>>;
 
+    /// None if collection is out of keys.
+    ///
+    /// Unsafe since caller must ensure to properly initialize data in all cases.
+    /// Returned byte array is of size and alignment of the item.
+    unsafe fn allocate<I: ?Sized + 'static>(
+        &mut self,
+        item: &I,
+    ) -> Option<(Key<I>, &mut [MaybeUninit<u8>])>;
+
     /// True Item existed so it was removed.
     fn remove<I: Item + ?Sized>(&mut self, key: Key<I>) -> bool;
 
     /// Some if item exists.
     fn take<I: Item>(&mut self, key: Key<I>) -> Option<I>;
+
+    /// Some if item exists.
+    /// Will call free on the item and won't drop it, just free it's memory.
+    unsafe fn free<I: ?Sized + 'static, R>(
+        &mut self,
+        key: Key<I>,
+        free: impl FnOnce(&[MaybeUninit<u8>]) -> R,
+    ) -> Option<R>;
 
     /// Some if item exists.
     fn get<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Self::Ref<'_, I>>;
