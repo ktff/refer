@@ -99,30 +99,30 @@ impl<T: ?Sized + 'static> Ref<T> {
     }
 
     pub fn entry<C: Collection>(self, coll: &C) -> C::Ref<'_, T> {
-        coll.get(self.key()).expect("Reference isn't active")
+        coll.get(self.key()).expect("Entry isn't present")
     }
 
     pub fn entry_mut<C: Collection>(self, coll: &mut C) -> C::Mut<'_, T> {
-        coll.get_mut(self.key()).expect("Reference isn't active")
+        coll.get_mut(self.key()).expect("Entry isn't present")
     }
 
     pub fn item<C: ItemCollection>(self, coll: &C) -> &T {
-        coll.get(self.key()).expect("Reference isn't active")
+        coll.get(self.key()).expect("Item isn't present")
     }
 
     pub fn item_mut<C: ItemCollection>(self, coll: &mut C) -> &mut T {
-        coll.get_mut(self.key()).expect("Reference isn't active")
+        coll.get_mut(self.key()).expect("Item isn't present")
     }
 
     pub fn shell<C: ShellCollection>(self, coll: &C) -> C::Ref<'_, T> {
-        coll.get(self.key()).expect("Reference isn't active")
+        coll.get(self.key()).expect("Shell isn't present")
     }
 
     pub fn shell_mut<C: ShellCollection>(self, coll: &mut C) -> C::Mut<'_, T> {
-        coll.get_mut(self.key()).expect("Reference isn't active")
+        coll.get_mut(self.key()).expect("Shell isn't present")
     }
 
     pub fn mut_shell<'a, C: MutShellCollection<'a>>(self, coll: &C) -> C::Mut<T> {
-        coll.get_mut(self.key()).expect("Reference isn't active")
+        coll.get_mut(self.key()).expect("Shell isn't present")
     }
 }
