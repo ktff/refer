@@ -45,8 +45,8 @@ ne cini korisnim.
       - Ovo je prakticno rjesenje za problem duplog MutEntry jedan posudenog od drugog nad istim itemom gdje unutrasnji
         MutEntry remova item te se vrati na vanjski MutEntry koji ocekuje valjani podatak ali ga nema.
       - Da se ovo fixa a da se omoguci followanje referenci,
-   *. Izdvoji parrallelnost
-   *. Ukloni Locality
+   x. Izdvoji parrallelnost
+   x. Ukloni Locality
    x. Ukloniti Path
 */
 
@@ -92,43 +92,9 @@ ne cini korisnim.
 //     }
 // }
 
-// ********************* Locality *********************
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Locality {
-    /// Top
-    Global,
-    /// Bottom
-    Local,
-}
-
-pub trait Localized {
-    const L: Locality;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Global;
-
-impl Localized for Global {
-    const L: Locality = Locality::Global;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Local;
-
-impl Localized for Local {
-    const L: Locality = Locality::Local;
-}
-
-/// Speed bump to encourage proper usage
-pub enum LocalizedData<T> {
-    Global(T),
-    Local(T),
-}
-
 // ************************ Convenient methods *************************** //
 
-impl<T: ?Sized + 'static> Ref<T, Global> {
+impl<T: ?Sized + 'static> Ref<T> {
     /// Some if to shells exist, otherwise None.
     pub fn connect<F: ?Sized + 'static>(
         from: Key<F>,
@@ -136,7 +102,7 @@ impl<T: ?Sized + 'static> Ref<T, Global> {
         collection: &mut impl ShellCollection,
     ) -> Option<Self> {
         let mut to_shell = collection.get_mut(to)?;
-        to_shell.add_from(Ref::<F, Global>::new(from).into());
+        to_shell.add_from(Ref::<F>::new(from).into());
         Some(Self::new(to))
     }
 
@@ -147,7 +113,7 @@ impl<T: ?Sized + 'static> Ref<T, Global> {
         collection: &mut impl ShellCollection,
     ) -> bool {
         if let Some(mut to_shell) = collection.get_mut(self.key()) {
-            to_shell.remove_from(Ref::<F, Global>::new(from).into())
+            to_shell.remove_from(Ref::<F>::new(from).into())
         } else {
             false
         }

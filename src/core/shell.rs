@@ -1,10 +1,12 @@
-use super::{AnyKey, AnyRef, Key};
+use super::{AnyKey, AnyRef, Key, Prefix};
 use std::any::TypeId;
 
 /// A shell of an entity.
 /// Shells are connected to each other.
 pub trait AnyShell<'a>: 'a {
     fn type_id(&self) -> TypeId;
+
+    fn prefix(&self) -> Option<Prefix>;
 
     fn key_any(&self) -> AnyKey;
 

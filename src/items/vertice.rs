@@ -5,10 +5,10 @@ use crate::core::*;
 pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
 
 /// F --> T
-pub struct Vertice<T: ?Sized + 'static>(Vec<Ref<T, Global>>);
+pub struct Vertice<T: ?Sized + 'static>(Vec<Ref<T>>);
 
 impl<T: ?Sized + 'static> Vertice<T> {
-    pub fn new(refs: Vec<Ref<T, Global>>) -> Self {
+    pub fn new(refs: Vec<Ref<T>>) -> Self {
         Vertice(refs)
     }
 
@@ -45,7 +45,7 @@ impl<T: ?Sized + 'static> Vertice<T> {
 }
 
 impl<T: ?Sized + 'static> Deref for Vertice<T> {
-    type Target = [Ref<T, Global>];
+    type Target = [Ref<T>];
     fn deref(&self) -> &Self::Target {
         &self.0
     }

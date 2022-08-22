@@ -3,6 +3,8 @@ use std::{
     fmt::{self, Debug},
     hash::{Hash, Hasher},
     marker::PhantomData,
+    num::NonZeroU64,
+    ops::Add,
 };
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
@@ -13,8 +15,16 @@ use std::{
 
 // NOTE: Index could be larger than u64 so the possibility of changing that to u128 is left as an option.
 
+/// Index shouldn't be zero. Instead impl can use this for optimizations and to check for invalid composite keys.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Index(pub u64);
+#[repr(transparent)]
+pub struct Index(pub NonZeroU64);
+
+impl Index {
+    pub const fn len(self) -> usize {
+        std::mem::size_of::<Self>() * 8 - self.0.get().leading_zeros() as usize
+    }
+}
 
 impl Debug for Index {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -39,6 +49,10 @@ impl<T: ?Sized> Key<T> {
         T: 'static,
     {
         self.into()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -107,6 +121,10 @@ impl AnyKey {
     pub fn index(&self) -> Index {
         self.1
     }
+
+    pub fn len(&self) -> usize {
+        self.1.len()
+    }
 }
 
 impl<T: ?Sized + 'static> PartialEq<Key<T>> for AnyKey {
@@ -124,5 +142,45 @@ impl std::fmt::Debug for AnyKey {
 impl<T: ?Sized + 'static> From<Key<T>> for AnyKey {
     fn from(key: Key<T>) -> Self {
         AnyKey(TypeId::of::<T>(), key.0)
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub struct Prefix {
+    prefix: Index,
+    key_len: usize,
+}
+
+impl Prefix {
+    pub fn new(prefix: Index, key_len: usize) -> Self {
+        debug_assert!(prefix.len() + key_len <= std::mem::size_of::<Index>() * 8);
+        Prefix { prefix, key_len }
+    }
+}
+
+impl Add<Index> for Prefix {
+    type Output = Index;
+
+    fn add(self, other: Index) -> Self::Output {
+        debug_assert!(other.len() <= self.key_len);
+        Index(
+            NonZeroU64::new(self.prefix.0.get() << self.key_len | other.0.get())
+                .expect("Shouldn't be zero"),
+        )
+    }
+}
+
+impl<T: ?Sized> Add<Key<T>> for Prefix {
+    type Output = Key<T>;
+
+    fn add(self, other: Key<T>) -> Self::Output {
+        Key::new(self + other.0)
+    }
+}
+
+impl Add<AnyKey> for Prefix {
+    type Output = AnyKey;
+    fn add(self, other: AnyKey) -> Self::Output {
+        AnyKey::new(other.0, self + other.1)
     }
 }

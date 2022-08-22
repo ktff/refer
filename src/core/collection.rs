@@ -1,3 +1,5 @@
+use std::path::Prefix;
+
 use super::{Item, Key, MutEntity, MutShell, RefEntity, RefShell};
 
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
@@ -29,12 +31,17 @@ pub trait Collection: KeyCollection {
     type MutIter<'a, I: ?Sized + 'static>: Iterator<Item = Self::Mut<'a, I>>
     where
         Self: 'a;
-
+    // TODO: Ovo moze biti sa MutShell
     /// Err if collection is out of keys.
-    fn add<I: Item>(&mut self, item: I) -> Result<Key<I>, I>;
+    /// May panic if some of the references don't exist or if prefix doesn't exist.
+    fn add<I: Item>(&mut self, prefix: Option<Prefix>, item: I) -> Result<Key<I>, I>;
 
     /// None if collection is out of keys.
-    fn add_copy<I: Item + Copy + ?Sized>(&mut self, item: &I) -> Option<Key<I>>;
+    fn add_copy<I: Item + Copy + ?Sized>(
+        &mut self,
+        prefix: Option<Prefix>,
+        item: &I,
+    ) -> Option<Key<I>>;
 
     /// True Item existed so it was removed.
     fn remove<I: Item + ?Sized>(&mut self, key: Key<I>) -> bool;
@@ -140,6 +147,9 @@ pub trait MutShellCollection<'a>: 'a {
 }
 
 pub trait KeyCollection {
+    /// Prefix
+    fn prefix(&self) -> Option<Prefix>;
+
     fn first<I: ?Sized + 'static>(&self) -> Option<Key<I>>;
 
     /// Returns following key after given in ascending order.

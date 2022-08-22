@@ -5,10 +5,10 @@ use crate::core::*;
 pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
 
 /// Connects T <--F--> T.
-pub struct Edge<T: ?Sized + 'static>([Ref<T, Global>; 2]);
+pub struct Edge<T: ?Sized + 'static>([Ref<T>; 2]);
 
 impl<T: ?Sized + 'static> Edge<T> {
-    pub fn new(refs: [Ref<T, Global>; 2]) -> Self {
+    pub fn new(refs: [Ref<T>; 2]) -> Self {
         Edge(refs)
     }
 
@@ -22,8 +22,8 @@ impl<T: ?Sized + 'static> Edge<T> {
         let mut a_shell = coll.get_mut(a)?;
         let mut b_shell = coll.get_mut(b)?;
 
-        a_shell.add_from(Ref::<F, Global>::new(this).into());
-        b_shell.add_from(Ref::<F, Global>::new(this).into());
+        a_shell.add_from(Ref::<F>::new(this).into());
+        b_shell.add_from(Ref::<F>::new(this).into());
 
         Some(Self([Ref::new(a), Ref::new(b)]))
     }
@@ -36,12 +36,12 @@ impl<T: ?Sized + 'static> Edge<T> {
     ) -> bool {
         let mut success_a = false;
         if let Some(mut a_shell) = coll.get_mut(self.0[0].key()) {
-            success_a = a_shell.remove_from(Ref::<F, Global>::new(this).into());
+            success_a = a_shell.remove_from(Ref::<F>::new(this).into());
         }
 
         let mut success_b = false;
         if let Some(mut b_shell) = coll.get_mut(self.0[1].key()) {
-            success_b = b_shell.remove_from(Ref::<F, Global>::new(this).into());
+            success_b = b_shell.remove_from(Ref::<F>::new(this).into());
         }
 
         success_a && success_b
