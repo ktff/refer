@@ -16,10 +16,10 @@ impl<T: ?Sized + 'static> From<Ref<T>> for AnyRef {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Ref<T: ?Sized>(pub(crate) Key<T>);
+pub struct Ref<T: ?Sized>(Key<T>);
 
 impl<T: ?Sized> Ref<T> {
-    pub(crate) fn new(key: Key<T>) -> Self {
+    pub fn new(key: Key<T>) -> Self {
         Ref(key)
     }
 
@@ -33,5 +33,11 @@ impl<T: ?Sized> Copy for Ref<T> {}
 impl<T: ?Sized> Clone for Ref<T> {
     fn clone(&self) -> Self {
         Ref(self.0)
+    }
+}
+
+impl<T: ?Sized> From<Ref<T>> for Key<T> {
+    fn from(ref_: Ref<T>) -> Self {
+        ref_.0
     }
 }

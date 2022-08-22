@@ -97,80 +97,32 @@ impl<T: ?Sized + 'static> Ref<T> {
             false
         }
     }
+
+    pub fn entry<C: Collection>(self, coll: &C) -> C::Ref<'_, T> {
+        coll.get(self.key()).expect("Reference isn't active")
+    }
+
+    pub fn entry_mut<C: Collection>(self, coll: &mut C) -> C::Mut<'_, T> {
+        coll.get_mut(self.key()).expect("Reference isn't active")
+    }
+
+    pub fn item<C: ItemCollection>(self, coll: &C) -> &T {
+        coll.get(self.key()).expect("Reference isn't active")
+    }
+
+    pub fn item_mut<C: ItemCollection>(self, coll: &mut C) -> &mut T {
+        coll.get_mut(self.key()).expect("Reference isn't active")
+    }
+
+    pub fn shell<C: ShellCollection>(self, coll: &C) -> C::Ref<'_, T> {
+        coll.get(self.key()).expect("Reference isn't active")
+    }
+
+    pub fn shell_mut<C: ShellCollection>(self, coll: &mut C) -> C::Mut<'_, T> {
+        coll.get_mut(self.key()).expect("Reference isn't active")
+    }
+
+    pub fn mut_shell<'a, C: MutShellCollection<'a>>(self, coll: &C) -> C::Mut<T> {
+        coll.get_mut(self.key()).expect("Reference isn't active")
+    }
 }
-
-// impl<D: Directioned, T: ?Sized + 'static> Ref<T, Global, D> {
-//     /// Initializes T with provided init closure and adds self as reference.
-//     pub fn add<'a, P: PathMut<'a>, M: MutEntry<'a, P>>(
-//         from: &mut M,
-//         init: impl FnOnce(<P::Top as Collection<T>>::IE<'_, &mut P::Top>) -> Result<Key<T>, Error>,
-//     ) -> Result<Self, Error>
-//     where
-//         P::Top: Collection<T> + Collection<M::T>,
-//     {
-//         let key = init(Collection::<T>::add(from.path_mut().top_mut()))?;
-
-//         Self::bind(from, key)
-//     }
-
-//     pub fn init<'a, P: PathMut<'a>, E: InitItemEntry<'a, P>>(
-//         from: &mut E,
-//         key: Key<T>,
-//     ) -> Result<Self, Error>
-//     where
-//         P::Top: Collection<T> + Collection<E::T>,
-//     {
-//         let this = Ref::<T, Global, D>(key, PhantomData);
-//         from.add_to(this)?;
-
-//         Ok(this)
-//     }
-
-//     pub fn entry<'a: 'b, 'b, P: PathRef<'a>, M: RefItemEntry<'a, P>>(
-//         self,
-//         from: &'b M,
-//     ) -> Result<<P::Top as Collection<T>>::RE<'b, &'b P::Top>, Error>
-//     where
-//         P::Top: Collection<T>,
-//     {
-//         Collection::<T>::entry(from.path().top(), self.key())
-//     }
-
-//     pub fn entry_mut<'a: 'b, 'b, P: PathMut<'a>, M: MutEntry<'a, P>>(
-//         self,
-//         from: &'b mut M,
-//     ) -> Result<<P::Top as Collection<T>>::ME<'b, &'b mut P::Top>, Error>
-//     where
-//         P::Top: Collection<T>,
-//     {
-//         Collection::<T>::entry_mut(from.path_mut().top_mut(), self.key())
-//     }
-
-//     pub fn get<'a: 'b, 'b, P: PathRef<'a>, M: RefItemEntry<'a, P>>(
-//         self,
-//         from: &'b M,
-//     ) -> Result<<<P::Top as Collection<T>>::RE<'b, &'b P::Top>>::Item, Error>
-//     where
-//         P::Top: Collection<T>,
-//     {
-//         self.entry(from)?.item()
-//     }
-
-//     pub fn get_mut<'a: 'b, 'b, P: PathMut<'a>, M: MutEntry<'a, P>>(
-//         self,
-//         from: &'b mut M,
-//     ) -> Result<<<P::Top as Collection<T>>::ME<'b, &'b mut P::Top>>::MutItem, Error>
-//     where
-//         P::Top: Collection<T>,
-//     {
-//         self.entry_mut(from)?.item_mut()
-//     }
-
-//     /// Returns Ref referencing from.
-//     fn from<'a, P: PathRef<'a>, M: RefItemEntry<'a, P>>(self, from: &M) -> Ref<M::T, Global, D>
-//     where
-//         P::Top: Collection<T> + Collection<M::T>,
-//     {
-//         Ref::<M::T, Global, D>(from.key(), PhantomData)
-//     }
-// }

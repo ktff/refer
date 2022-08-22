@@ -172,38 +172,3 @@ pub trait KeyCollection {
     /// Returns following key after given in ascending order.
     fn next<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Key<I>>;
 }
-
-// ********************** Convenience methods **********************
-
-// impl<T: ?Sized + 'static> Key<T> {
-//     pub fn entry<C: Collection<T> + ?Sized>(self, coll: &C) -> Result<C::RE<'_, &C>, Error> {
-//         Collection::<T>::entry(coll, self)
-//     }
-
-//     pub fn entry_mut<C: Collection<T> + ?Sized>(
-//         self,
-//         coll: &mut C,
-//     ) -> Result<C::ME<'_, &mut C>, Error> {
-//         Collection::<T>::entry_mut(coll, self)
-//     }
-
-//     pub fn next_key<C: Collection<T> + ?Sized>(self, coll: &C) -> Option<Key<T>> {
-//         Collection::<T>::next_key(coll, self)
-//     }
-// }
-
-// pub trait CollectedType<C: Collection<Self> + ?Sized>: 'static {
-//     fn first_key(coll: &mut C) -> Option<Key<Self>>;
-
-//     fn add<'a>(coll: &'a mut C) -> C::IE<'a, &'a mut C>;
-// }
-
-// impl<T: ?Sized + 'static, C: Collection<T> + ?Sized> CollectedType<C> for T {
-//     fn first_key(coll: &mut C) -> Option<Key<T>> {
-//         coll.first_key()
-//     }
-
-//     fn add<'a>(coll: &'a mut C) -> C::IE<'a, &'a mut C> {
-//         Collection::<T>::add(coll)
-//     }
-// }
