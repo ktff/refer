@@ -82,7 +82,7 @@ impl<T: ?Sized + 'static> Ref<T> {
     pub fn connect(
         from: AnyKey,
         to: Key<T>,
-        collection: &mut impl ShellCollection,
+        collection: &mut impl ShellCollection<T>,
     ) -> Option<Self> {
         let mut to_shell = collection.get_mut(to)?;
         to_shell.add_from(from);
@@ -90,7 +90,7 @@ impl<T: ?Sized + 'static> Ref<T> {
     }
 
     /// True if there was reference to remove.
-    pub fn disconnect(self, from: AnyKey, collection: &mut impl ShellCollection) -> bool {
+    pub fn disconnect(self, from: AnyKey, collection: &mut impl ShellCollection<T>) -> bool {
         if let Some(mut to_shell) = collection.get_mut(self.key()) {
             to_shell.remove_from(from)
         } else {
@@ -98,31 +98,31 @@ impl<T: ?Sized + 'static> Ref<T> {
         }
     }
 
-    pub fn entry<C: Collection>(self, coll: &C) -> C::Ref<'_, T> {
+    pub fn entry<C: Collection<T>>(self, coll: &C) -> C::Ref<'_> {
         coll.get(self.key()).expect("Entry isn't present")
     }
 
-    pub fn entry_mut<C: Collection>(self, coll: &mut C) -> C::Mut<'_, T> {
+    pub fn entry_mut<C: Collection<T>>(self, coll: &mut C) -> C::Mut<'_> {
         coll.get_mut(self.key()).expect("Entry isn't present")
     }
 
-    pub fn item<C: ItemCollection>(self, coll: &C) -> &T {
+    pub fn item<C: ItemCollection<T>>(self, coll: &C) -> &T {
         coll.get(self.key()).expect("Item isn't present")
     }
 
-    pub fn item_mut<C: ItemCollection>(self, coll: &mut C) -> &mut T {
+    pub fn item_mut<C: ItemCollection<T>>(self, coll: &mut C) -> &mut T {
         coll.get_mut(self.key()).expect("Item isn't present")
     }
 
-    pub fn shell<C: ShellCollection>(self, coll: &C) -> C::Ref<'_, T> {
+    pub fn shell<C: ShellCollection<T>>(self, coll: &C) -> C::Ref<'_> {
         coll.get(self.key()).expect("Shell isn't present")
     }
 
-    pub fn shell_mut<C: ShellCollection>(self, coll: &mut C) -> C::Mut<'_, T> {
+    pub fn shell_mut<C: ShellCollection<T>>(self, coll: &mut C) -> C::Mut<'_> {
         coll.get_mut(self.key()).expect("Shell isn't present")
     }
 
-    pub fn mut_shell<'a, C: MutShellCollection<'a>>(self, coll: &C) -> C::Mut<T> {
+    pub fn mut_shell<'a, C: MutShellCollection<'a, T>>(self, coll: &C) -> C::Mut<'_> {
         coll.get_mut(self.key()).expect("Shell isn't present")
     }
 }

@@ -16,7 +16,7 @@ impl<T: ?Sized + 'static> Vertice<T> {
     /// Fails if any of the shells don't exist.
     pub fn connect(
         &mut self,
-        collection: &mut impl ShellCollection,
+        collection: &mut impl ShellCollection<T>,
         this: AnyKey,
         to: Key<T>,
     ) -> Option<()> {
@@ -29,7 +29,7 @@ impl<T: ?Sized + 'static> Vertice<T> {
     /// True if removed. False if there was nothing to remove.
     pub fn disconnect(
         &mut self,
-        collection: &mut impl ShellCollection,
+        collection: &mut impl ShellCollection<T>,
         this: AnyKey,
         to: usize,
     ) -> bool {
@@ -39,7 +39,10 @@ impl<T: ?Sized + 'static> Vertice<T> {
     }
 
     /// Iterates through T items pointing to this one.
-    pub fn iter_from<'a>(&self, this: &impl RefShell<'a, T>) -> impl Iterator<Item = Key<T>> + 'a {
+    pub fn iter_from<'a>(
+        &self,
+        this: &impl RefShell<'a, T = T>,
+    ) -> impl Iterator<Item = Key<T>> + 'a {
         this.from()
     }
 }

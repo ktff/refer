@@ -14,7 +14,7 @@ impl<T: ?Sized + 'static> Edge<T> {
 
     /// Some if both shells exist.
     pub fn add<'a>(
-        coll: &impl MutShellCollection<'a>,
+        coll: &impl MutShellCollection<'a, T>,
         this: AnyKey,
         a: Key<T>,
         b: Key<T>,
@@ -29,7 +29,7 @@ impl<T: ?Sized + 'static> Edge<T> {
     }
 
     /// True if everything that should exist existed.
-    pub fn remove(self, coll: &mut impl ShellCollection, this: AnyKey) -> bool {
+    pub fn remove(self, coll: &mut impl ShellCollection<T>, this: AnyKey) -> bool {
         let mut success_a = false;
         if let Some(mut a_shell) = coll.get_mut(self.0[0].key()) {
             success_a = a_shell.remove_from(this);

@@ -1,11 +1,15 @@
 use super::{AnyKey, Key};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AnyRef(pub AnyKey);
 
 impl AnyRef {
     pub fn key(&self) -> AnyKey {
         self.0
+    }
+
+    pub fn downcast<T: ?Sized + 'static>(self) -> Option<Ref<T>> {
+        self.0.downcast().map(Ref)
     }
 }
 

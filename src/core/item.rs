@@ -4,7 +4,7 @@ use std::any::Any;
 pub trait Item: AnyItem {
     type I<'a>: Iterator<Item = AnyRef>;
 
-    /// All internal references
+    /// All internal references. Must be stable.
     fn references(&self) -> Self::I<'_>;
 }
 

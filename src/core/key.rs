@@ -44,6 +44,10 @@ impl<T: ?Sized> Key<T> {
         self.0
     }
 
+    pub fn as_usize(&self) -> usize {
+        (self.0).0.get().try_into().expect("Index is too large")
+    }
+
     pub fn upcast(self) -> AnyKey
     where
         T: 'static,
@@ -102,7 +106,7 @@ impl<T: ?Sized> Debug for Key<T> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AnyKey(TypeId, Index);
 
 impl AnyKey {
