@@ -1,6 +1,6 @@
 use std::mem::MaybeUninit;
 
-use super::{Item, Key, MutEntity, MutShell, Prefix, RefEntity, RefShell};
+use super::{Item, Key, MutShell, Prefix, RefShell};
 
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
 //       implementations from implementing all *Collection traits on the same type.
@@ -16,19 +16,17 @@ pub trait Collection<T: ?Sized + 'static>: KeyCollection {
 
     type Shells: ShellCollection<T>;
 
-    type Ref<'a>: RefEntity<'a, T = T>
+    type Iter<'a>: Iterator<Item = (Key<T>, &'a T, <Self::Shells as ShellCollection<T>>::Ref<'a>)>
     where
         Self: 'a;
 
-    type Mut<'a>: MutEntity<'a, T = T>
-    where
-        Self: 'a;
-
-    type Iter<'a>: Iterator<Item = (Key<T>, Self::Ref<'a>)>
-    where
-        Self: 'a;
-
-    type MutIter<'a>: Iterator<Item = (Key<T>, Self::Mut<'a>)>
+    type MutIter<'a>: Iterator<
+        Item = (
+            Key<T>,
+            &'a mut T,
+            <Self::Shells as ShellCollection<T>>::Ref<'a>,
+        ),
+    >
     where
         Self: 'a;
 
@@ -81,10 +79,19 @@ pub trait Collection<T: ?Sized + 'static>: KeyCollection {
         T: Item + Sized;
 
     /// Some if item exists.
-    fn get(&self, key: Key<T>) -> Option<Self::Ref<'_>>;
+    fn get(&self, key: Key<T>) -> Option<(&T, <Self::Shells as ShellCollection<T>>::Ref<'_>)> {
+        let (items, shells) = self.split();
+        Some((items.get(key)?, shells.get(key)?))
+    }
 
     /// Some if item exists.
-    fn get_mut(&mut self, key: Key<T>) -> Option<Self::Mut<'_>>;
+    fn get_mut(
+        &mut self,
+        key: Key<T>,
+    ) -> Option<(&mut T, <Self::Shells as ShellCollection<T>>::Ref<'_>)> {
+        let (items, shells) = self.split_mut();
+        Some((items.get_mut(key)?, shells.get(key)?))
+    }
 
     /// Consistent ascending order.
     fn iter(&self) -> Self::Iter<'_>;
@@ -92,20 +99,26 @@ pub trait Collection<T: ?Sized + 'static>: KeyCollection {
     /// Consistent ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 
-    fn shells(&self) -> &Self::Shells;
-
-    fn shells_mut(&mut self) -> &mut Self::Shells {
+    fn shells(&self) -> &Self::Shells {
         self.split().1
     }
 
-    fn items(&self) -> &Self::Items;
+    fn shells_mut(&mut self) -> &mut Self::Shells {
+        self.split_mut().1
+    }
 
-    fn items_mut(&mut self) -> &mut Self::Items {
+    fn items(&self) -> &Self::Items {
         self.split().0
     }
 
+    fn items_mut(&mut self) -> &mut Self::Items {
+        self.split_mut().0
+    }
+
+    fn split(&self) -> (&Self::Items, &Self::Shells);
+
     /// Splits to views of items and shells
-    fn split(&mut self) -> (&mut Self::Items, &mut Self::Shells);
+    fn split_mut(&mut self) -> (&mut Self::Items, &mut Self::Shells);
 }
 
 /// Polly ItemCollection can split &mut self to multiple &mut views each with set of types that don't overlap.

@@ -1,12 +1,10 @@
 mod collection;
-mod entity;
 mod item;
 mod key;
 mod reference;
 mod shell;
 
 pub use collection::*;
-pub use entity::*;
 pub use item::*;
 pub use key::*;
 pub use reference::*;
@@ -48,6 +46,10 @@ ne cini korisnim.
    x. Izdvoji parrallelnost
    x. Ukloni Locality
    x. Ukloniti Path
+   *. poly
+   *. Composite
+   *. unsized T
+   *. [u8]
 */
 
 // #[derive(Debug, Clone, PartialEq, Eq, Copy)]
@@ -98,11 +100,17 @@ impl<T: ?Sized + 'static> Ref<T> {
         }
     }
 
-    pub fn entry<C: Collection<T>>(self, coll: &C) -> C::Ref<'_> {
+    pub fn get<C: Collection<T>>(
+        self,
+        coll: &C,
+    ) -> (&T, <C::Shells as ShellCollection<T>>::Ref<'_>) {
         coll.get(self.key()).expect("Entry isn't present")
     }
 
-    pub fn entry_mut<C: Collection<T>>(self, coll: &mut C) -> C::Mut<'_> {
+    pub fn get_mut<C: Collection<T>>(
+        self,
+        coll: &mut C,
+    ) -> (&mut T, <C::Shells as ShellCollection<T>>::Ref<'_>) {
         coll.get_mut(self.key()).expect("Entry isn't present")
     }
 

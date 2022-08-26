@@ -1,12 +1,5 @@
 use crate::core::*;
-use std::{
-    any::{Any, TypeId},
-    cell::UnsafeCell,
-    marker::PhantomData,
-    mem::MaybeUninit,
-    num::NonZeroU64,
-    ops::{Deref, DerefMut},
-};
+use std::{any::TypeId, cell::UnsafeCell, marker::PhantomData, mem::MaybeUninit, num::NonZeroU64};
 
 pub type ItemIter<'a, T: 'static> = impl Iterator<Item = (Key<T>, &'a T)>;
 pub type ItemMutIter<'a, T: 'static> = impl Iterator<Item = (Key<T>, &'a mut T)>;
@@ -16,8 +9,9 @@ pub type VecRefShellIter<'a, F: ?Sized + 'static> = impl Iterator<Item = Key<F>>
 pub type ShellIter<'a, T: ?Sized + 'static> = impl Iterator<Item = (Key<T>, VecRefShell<'a, T>)>;
 pub type ShellMutIter<'a, T: ?Sized + 'static> = impl Iterator<Item = (Key<T>, VecMutShell<'a, T>)>;
 
-pub type EntityIter<'a, T: 'static> = impl Iterator<Item = (Key<T>, VecRefEntity<'a, T>)>;
-pub type EntityMutIter<'a, T: 'static> = impl Iterator<Item = (Key<T>, VecMutEntity<'a, T>)>;
+pub type EntityIter<'a, T: 'static> = impl Iterator<Item = (Key<T>, &'a T, VecRefShell<'a, T>)>;
+pub type EntityMutIter<'a, T: 'static> =
+    impl Iterator<Item = (Key<T>, &'a mut T, VecRefShell<'a, T>)>;
 
 /// A simple vec collection of items of the same type.
 pub struct VecCollection<T: 'static> {
@@ -84,10 +78,6 @@ impl<T: 'static> Collection<T> for VecCollection<T> {
     type Items = VecItemCollection<T>;
 
     type Shells = VecShellCollection<T>;
-
-    type Ref<'a> = VecRefEntity<'a, T> where Self: 'a;
-
-    type Mut<'a> = VecMutEntity<'a, T> where Self: 'a;
 
     type Iter<'a> = EntityIter<'a,T> where Self: 'a;
 
@@ -271,27 +261,13 @@ impl<T: 'static> Collection<T> for VecCollection<T> {
         item
     }
 
-    fn get(&self, key: Key<T>) -> Option<Self::Ref<'_>> {
-        Some(VecRefEntity {
-            item: self.items.get(key)?,
-            shell: self.shells.get(key)?,
-        })
-    }
-
-    fn get_mut(&mut self, key: Key<T>) -> Option<Self::Mut<'_>> {
-        Some(VecMutEntity {
-            item: self.items.get_mut(key)?,
-            shell: self.shells.get(key)?,
-        })
-    }
-
     fn iter(&self) -> Self::Iter<'_> {
         self.items
             .iter()
             .zip(self.shells.iter())
             .map(|((k0, item), (k1, shell))| {
                 debug_assert_eq!(k0, k1);
-                (k0, VecRefEntity { item, shell })
+                (k0, item, shell)
             })
     }
 
@@ -301,19 +277,15 @@ impl<T: 'static> Collection<T> for VecCollection<T> {
             .zip(self.shells.iter())
             .map(|((k0, item), (k1, shell))| {
                 debug_assert_eq!(k0, k1);
-                (k0, VecMutEntity { item, shell })
+                (k0, item, shell)
             })
     }
 
-    fn shells(&self) -> &Self::Shells {
-        &self.shells
+    fn split(&self) -> (&Self::Items, &Self::Shells) {
+        (&self.items, &self.shells)
     }
 
-    fn items(&self) -> &Self::Items {
-        &self.items
-    }
-
-    fn split(&mut self) -> (&mut Self::Items, &mut Self::Shells) {
+    fn split_mut(&mut self) -> (&mut Self::Items, &mut Self::Shells) {
         (&mut self.items, &mut self.shells)
     }
 }
@@ -356,95 +328,6 @@ impl<T: 'static> KeyCollection for VecCollection<T> {
                 })
             })
             .next()
-    }
-}
-
-pub struct VecRefEntity<'a, T: 'static> {
-    item: &'a T,
-    shell: VecRefShell<'a, T>,
-}
-
-impl<'a, T: 'static> RefEntity<'a> for VecRefEntity<'a, T> {
-    fn item(&self) -> &'a Self::T {
-        self.item
-    }
-}
-
-impl<'a, T: 'static> AnyEntity<'a> for VecRefEntity<'a, T> {
-    fn item_any(&self) -> Option<&dyn Any> {
-        Some(self.item)
-    }
-}
-
-impl<'a, T: 'static> RefShell<'a> for VecRefEntity<'a, T> {
-    type T = T;
-    type Iter<F: ?Sized + 'static> = <VecRefShell<'a, T> as RefShell<'a>>::Iter<F>;
-
-    fn from<F: ?Sized + 'static>(&self) -> Self::Iter<F> {
-        self.shell.from()
-    }
-}
-
-impl<'a, T: 'static> AnyShell<'a> for VecRefEntity<'a, T> {
-    fn item_ty(&self) -> TypeId {
-        self.shell.item_ty()
-    }
-
-    fn from_any(&self) -> Vec<AnyKey> {
-        self.shell.from_any()
-    }
-
-    fn from_count(&self) -> usize {
-        self.shell.from_count()
-    }
-}
-
-pub struct VecMutEntity<'a, T: 'static> {
-    item: &'a mut T,
-    shell: VecRefShell<'a, T>,
-}
-
-impl<'a, T: 'static> MutEntity<'a> for VecMutEntity<'a, T> {}
-
-impl<'a, T: 'static> Deref for VecMutEntity<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        self.item
-    }
-}
-
-impl<'a, T: 'static> DerefMut for VecMutEntity<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.item
-    }
-}
-
-impl<'a, T: 'static> AnyEntity<'a> for VecMutEntity<'a, T> {
-    fn item_any(&self) -> Option<&dyn Any> {
-        Some(self.item)
-    }
-}
-
-impl<'a, T: 'static> RefShell<'a> for VecMutEntity<'a, T> {
-    type T = T;
-    type Iter<F: ?Sized + 'static> = <VecRefShell<'a, T> as RefShell<'a>>::Iter<F>;
-
-    fn from<F: ?Sized + 'static>(&self) -> Self::Iter<F> {
-        self.shell.from()
-    }
-}
-
-impl<'a, T: 'static> AnyShell<'a> for VecMutEntity<'a, T> {
-    fn item_ty(&self) -> TypeId {
-        self.shell.item_ty()
-    }
-
-    fn from_any(&self) -> Vec<AnyKey> {
-        self.shell.from_any()
-    }
-
-    fn from_count(&self) -> usize {
-        self.shell.from_count()
     }
 }
 
