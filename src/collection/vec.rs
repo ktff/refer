@@ -331,6 +331,12 @@ impl<T: 'static> KeyCollection for VecCollection<T> {
     }
 }
 
+impl<T: 'static> Default for VecCollection<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct VecItemCollection<T: 'static>(Vec<Option<T>>);
 
 impl<T: 'static> ItemCollection<T> for VecItemCollection<T> {
