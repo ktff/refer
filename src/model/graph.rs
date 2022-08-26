@@ -1,10 +1,11 @@
+use crate::{collection::vec::VecCollection, core::*, item::vertice::Vertice as Node};
 use std::{
     any::Any,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
-use crate::{collection::vec::VecCollection, core::*, item::vertice::Vertice as Node};
+// TODO: methods useful for manipulating and using graph
 
 pub type Id<T> = Key<Vertice<T>>;
 
@@ -22,8 +23,6 @@ impl<T: 'static, C: Collection<Vertice<T>>> Graph<T, C> {
     pub fn new(coll: C) -> Self {
         Graph(coll, PhantomData)
     }
-
-    // TODO: methods useful for manipulating graph
 }
 
 impl<T: 'static, C: Collection<Vertice<T>> + Default> Default for Graph<T, C> {

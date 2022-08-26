@@ -1,10 +1,11 @@
+use crate::{core::*, item::edge};
 use std::{
     any::Any,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
-use crate::{core::*, item::edge};
+// TODO: methods useful for manipulating and using graph
 
 pub type Id<T, D> = Key<Vertice<T, D>>;
 pub type EdgeId<T, D> = Key<Edge<T, D>>;
@@ -27,8 +28,6 @@ impl<T: 'static, D: 'static, C: Collection<Vertice<T, D>> + Collection<Edge<T, D
     pub fn new(coll: C) -> Self {
         TaggedGraph(coll, PhantomData)
     }
-
-    // TODO: methods useful for manipulating graph
 }
 
 impl<T: 'static, D: 'static, C: Collection<Vertice<T, D>> + Collection<Edge<T, D>> + Default>
