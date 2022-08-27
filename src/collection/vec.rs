@@ -59,33 +59,14 @@ impl<T: Item> Collection<T> for VecCollection<T> {
         assert_eq!(self.free.pop(), Some(key));
 
         self.items.0[key.as_usize()] = Some(item);
-        self.shells.0[key.as_usize()] = Some(VecShell::new());
-    }
-
-    fn fulfill_copy(&mut self, key: Key<T>, item: &T)
-    where
-        T: Copy,
-    {
-        self.fulfill(key, *item);
-    }
-
-    fn refill_copy(&mut self, key: Key<T>, set: &T) -> bool
-    where
-        T: Copy,
-    {
-        self.items_mut()
-            .get_mut(key)
-            .map(|item| *item = *set)
-            .is_some()
-    }
-
-    /// Frees if it exists.
-    fn unfill(&mut self, key: Key<T>) -> bool {
-        self.unfill_sized(key).is_some()
+        self.shells.0[key.as_usize()] = Some(VecShell {
+            from: Vec::new(),
+            _data: PhantomData,
+        });
     }
 
     /// Frees and returns item if it exists
-    fn unfill_sized(&mut self, key: Key<T>) -> Option<T>
+    fn unfill(&mut self, key: Key<T>) -> Option<T>
     where
         T: Sized,
     {
@@ -144,7 +125,7 @@ impl<T: Item> AnyCollection for VecCollection<T> {
 
     fn unfill_any(&mut self, key: AnyKey) -> bool {
         if let Some(key) = key.downcast() {
-            self.unfill(key)
+            self.unfill(key).is_some()
         } else {
             false
         }
@@ -409,13 +390,4 @@ impl<'a, T: Item + ?Sized> MutShell<'a> for VecMutShell<'a, T> {
 struct VecShell<T: Item + ?Sized> {
     from: Vec<AnyKey>,
     _data: PhantomData<T>,
-}
-
-impl<T: Item + ?Sized> VecShell<T> {
-    fn new() -> Self {
-        Self {
-            from: Vec::new(),
-            _data: PhantomData,
-        }
-    }
 }

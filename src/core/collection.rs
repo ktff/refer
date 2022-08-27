@@ -45,24 +45,8 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     where
         T: Sized;
 
-    /// Fulfills reservation.
-    /// Panics if there is no reservation, if it's already fulfilled,
-    /// or may panic if this item differs from one during reservation.
-    fn fulfill_copy(&mut self, key: Key<T>, item: &T)
-    where
-        T: Copy;
-
-    /// Re fulfills reservation by resizing for item if necessary.
-    /// False if key isn't present.
-    fn refill_copy(&mut self, key: Key<T>, item: &T) -> bool
-    where
-        T: Copy;
-
-    /// Frees if it exists.
-    fn unfill(&mut self, key: Key<T>) -> bool;
-
     /// Frees and returns item if it exists
-    fn unfill_sized(&mut self, key: Key<T>) -> Option<T>
+    fn unfill(&mut self, key: Key<T>) -> Option<T>
     where
         T: Sized;
 
@@ -97,32 +81,6 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
         Ok(key)
     }
 
-    /// None if collection is out of keys.
-    fn add_copy(&mut self, prefix: Option<Prefix>, item: &T) -> Option<Key<T>>
-    where
-        T: Item + Copy,
-    {
-        assert!(prefix.is_none(), "Not yet implemented");
-
-        // Allocate slot
-        let key = self.reserve(&item)?;
-
-        // Update connections
-        if !super::util::add_references(self.shells_mut(), key, item) {
-            // Failed
-
-            // Deallocate slot
-            self.cancel(key);
-
-            return None;
-        }
-
-        // Add item & shell
-        self.fulfill_copy(key, item);
-
-        Some(key)
-    }
-
     /// Err if some of the references don't exist.
     fn set(&mut self, key: Key<T>, set: T) -> Result<T, T>
     where
@@ -146,57 +104,6 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
         Ok(std::mem::replace(old, set))
     }
 
-    /// True if set. False if some of it's references don't exist.
-    fn set_copy(&mut self, key: Key<T>, set: &T) -> bool
-    where
-        T: Item + Copy,
-    {
-        let (items, shells) = self.split_mut();
-        let old = if let Some(item) = items.get(key) {
-            item
-        } else {
-            // No item
-            return false;
-        };
-
-        // Update connections
-        if !super::util::update_diff(shells, key, old, &set) {
-            // Failed
-            return false;
-        }
-
-        // Replace item
-        self.refill_copy(key, set);
-        true
-    }
-
-    /// True Item existed so it was removed.
-    fn remove(&mut self, key: Key<T>) -> bool
-    where
-        T: Item,
-    {
-        let mut remove = Vec::new();
-
-        // Update connections
-        if super::util::remove_references(self, key.into(), &mut remove).is_none() {
-            // Failed
-            return false;
-        }
-        // Deallocate
-        assert!(self.unfill(key), "Should exist");
-
-        // Recursive remove
-        while let Some(rf) = remove.pop() {
-            // Update connections
-            if super::util::remove_references(self, rf, &mut remove).is_some() {
-                // Deallocate
-                let _ = self.unfill_any(rf);
-            }
-        }
-
-        true
-    }
-
     /// Some if item exists.
     fn take(&mut self, key: Key<T>) -> Option<T>
     where
@@ -207,7 +114,7 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
         // Update connections
         super::util::remove_references(self, key.into(), &mut remove)?;
         // Deallocate
-        let item = self.unfill_sized(key).expect("Should exist");
+        let item = self.unfill(key).expect("Should exist");
 
         // Recursive remove
         while let Some(rf) = remove.pop() {
