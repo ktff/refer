@@ -32,7 +32,7 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     /// None if collection is out of keys.
     /// Must be eventually canceled or fulfilled, otherwise memory can be leaked.
     /// Consecutive calls without canceling or fulfilling have undefined behavior.
-    fn reserve(&mut self, item: &T) -> Option<Key<T>>;
+    fn reserve(&mut self) -> Option<Key<T>>;
 
     /// Cancels reservation for item.
     /// Panics if an item is present.
@@ -59,7 +59,7 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
         assert!(prefix.is_none(), "Not yet implemented");
 
         // Allocate slot
-        let key = if let Some(key) = self.reserve(&item) {
+        let key = if let Some(key) = self.reserve() {
             key
         } else {
             return Err(item);

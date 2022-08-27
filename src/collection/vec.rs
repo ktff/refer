@@ -39,7 +39,7 @@ impl<T: Item> Collection<T> for VecCollection<T> {
 
     type MutIter<'a> = EntityMutIter<'a,T> where Self: 'a;
 
-    fn reserve(&mut self, _: &T) -> Option<Key<T>> {
+    fn reserve(&mut self) -> Option<Key<T>> {
         if self.free.is_empty() {
             self.free.push(Key::new(Index(
                 NonZeroU64::new(self.items.0.len() as u64).expect("Zero index"),
