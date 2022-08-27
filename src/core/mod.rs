@@ -1,4 +1,5 @@
 mod collection;
+mod container;
 mod item;
 mod key;
 mod reference;
@@ -6,6 +7,7 @@ mod shell;
 pub mod util;
 
 pub use collection::*;
+pub use container::*;
 pub use item::*;
 pub use key::*;
 pub use reference::*;
@@ -87,14 +89,14 @@ impl<T: ?Sized + 'static> Ref<T> {
         to: Key<T>,
         collection: &mut impl ShellCollection<T>,
     ) -> Option<Self> {
-        let mut to_shell = collection.get_mut(to)?;
+        let to_shell = collection.get_mut(to)?;
         to_shell.add_from(from);
         Some(Self::new(to))
     }
 
     /// True if there was reference to remove.
     pub fn disconnect(self, from: AnyKey, collection: &mut impl ShellCollection<T>) -> bool {
-        if let Some(mut to_shell) = collection.get_mut(self.key()) {
+        if let Some(to_shell) = collection.get_mut(self.key()) {
             to_shell.remove_from(from)
         } else {
             false
@@ -104,14 +106,14 @@ impl<T: ?Sized + 'static> Ref<T> {
     pub fn get<C: Collection<T>>(
         self,
         coll: &C,
-    ) -> (&T, <C::Shells as ShellCollection<T>>::Ref<'_>) {
+    ) -> (&T, &<C::Shells as ShellCollection<T>>::Shell) {
         coll.get(self.key()).expect("Entry isn't present")
     }
 
     pub fn get_mut<C: Collection<T>>(
         self,
         coll: &mut C,
-    ) -> (&mut T, <C::Shells as ShellCollection<T>>::Ref<'_>) {
+    ) -> (&mut T, &<C::Shells as ShellCollection<T>>::Shell) {
         coll.get_mut(self.key()).expect("Entry isn't present")
     }
 
@@ -123,11 +125,11 @@ impl<T: ?Sized + 'static> Ref<T> {
         coll.get_mut(self.key()).expect("Item isn't present")
     }
 
-    pub fn shell<C: ShellCollection<T>>(self, coll: &C) -> C::Ref<'_> {
+    pub fn shell<C: ShellCollection<T>>(self, coll: &C) -> &C::Shell {
         coll.get(self.key()).expect("Shell isn't present")
     }
 
-    pub fn shell_mut<C: ShellCollection<T>>(self, coll: &mut C) -> C::Mut<'_> {
+    pub fn shell_mut<C: ShellCollection<T>>(self, coll: &mut C) -> &mut C::Shell {
         coll.get_mut(self.key()).expect("Shell isn't present")
     }
 }

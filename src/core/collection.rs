@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, Item, Key, MutShell, Prefix, RefShell};
+use super::{AnyContainer, AnyKey, AnyRef, Container, Item, Key, Prefix, Shell};
 
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
 //       implementations from implementing all *Collection traits on the same type.
@@ -9,12 +9,18 @@ use super::{AnyKey, AnyRef, Item, Key, MutShell, Prefix, RefShell};
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: ?Sized + 'static>: AnyCollection {
+pub trait Collection<T: ?Sized + 'static>: Container<T> + AnyCollection {
     type Items: ItemCollection<T>;
 
     type Shells: ShellCollection<T>;
 
-    type Iter<'a>: Iterator<Item = (Key<T>, &'a T, <Self::Shells as ShellCollection<T>>::Ref<'a>)>
+    type Iter<'a>: Iterator<
+        Item = (
+            Key<T>,
+            &'a T,
+            &'a <Self::Shells as ShellCollection<T>>::Shell,
+        ),
+    >
     where
         Self: 'a;
 
@@ -22,33 +28,11 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
         Item = (
             Key<T>,
             &'a mut T,
-            <Self::Shells as ShellCollection<T>>::Ref<'a>,
+            &'a <Self::Shells as ShellCollection<T>>::Shell,
         ),
     >
     where
         Self: 'a;
-
-    /// Reserves slot for item.
-    /// None if collection is out of keys.
-    /// Must be eventually canceled or fulfilled, otherwise memory can be leaked.
-    /// Consecutive calls without canceling or fulfilling have undefined behavior.
-    fn reserve(&mut self) -> Option<Key<T>>;
-
-    /// Cancels reservation for item.
-    /// Panics if an item is present.
-    fn cancel(&mut self, key: Key<T>);
-
-    /// Fulfills reservation.
-    /// Panics if there is no reservation, if it's already fulfilled,
-    /// or may panic if this item differs from one during reservation.
-    fn fulfill(&mut self, key: Key<T>, item: T)
-    where
-        T: Sized;
-
-    /// Frees and returns item if it exists
-    fn unfill(&mut self, key: Key<T>) -> Option<T>
-    where
-        T: Sized;
 
     /// Err if collection is out of keys.
     /// May panic if some of the references don't exist or if prefix doesn't exist.
@@ -129,7 +113,7 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     }
 
     /// Some if item exists.
-    fn get(&self, key: Key<T>) -> Option<(&T, <Self::Shells as ShellCollection<T>>::Ref<'_>)> {
+    fn get(&self, key: Key<T>) -> Option<(&T, &<Self::Shells as ShellCollection<T>>::Shell)> {
         let (items, shells) = self.split();
         Some((items.get(key)?, shells.get(key)?))
     }
@@ -138,7 +122,7 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     fn get_mut(
         &mut self,
         key: Key<T>,
-    ) -> Option<(&mut T, <Self::Shells as ShellCollection<T>>::Ref<'_>)> {
+    ) -> Option<(&mut T, &<Self::Shells as ShellCollection<T>>::Shell)> {
         let (items, shells) = self.split_mut();
         Some((items.get_mut(key)?, shells.get(key)?))
     }
@@ -171,13 +155,15 @@ pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     fn split_mut(&mut self) -> (&mut Self::Items, &mut Self::Shells);
 }
 
-pub trait AnyCollection: KeyCollection {
+pub trait AnyCollection: AnyContainer {
     type AnyItems: AnyItemCollection;
 
     type AnyShells: AnyShellCollection;
 
     /// Frees if it exists.
-    fn unfill_any(&mut self, key: AnyKey) -> bool;
+    fn unfill_any(&mut self, key: AnyKey) -> bool {
+        self.any_unfill(key)
+    }
 
     /// Splits to views of items and shells
     fn split_any_mut(&mut self) -> (&mut Self::AnyItems, &mut Self::AnyShells);
@@ -206,39 +192,49 @@ pub trait ItemCollection<T: ?Sized + 'static>: AnyItemCollection {
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
-pub trait AnyItemCollection {
-    fn contains(&self, key: AnyKey) -> bool;
+pub trait AnyItemCollection: AnyContainer {
+    fn contains(&self, key: AnyKey) -> bool {
+        self.any_get_slot(key).is_some()
+    }
 
     /// None if item doesn't exist.
-    fn references(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
+    fn references(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
+        self.any_get_slot(key).map(|(item, _)| {
+            // This is safe since self: AnyItemCollection has exclusive access to shells
+            // and we have here shared access to self.
+            let item = unsafe { &*item.get() };
+            item.references_any()
+        })
+    }
 
     /// False if reference still exists.
-    fn remove_reference(&mut self, key: AnyKey, rf: AnyKey) -> bool;
+    fn remove_reference(&mut self, key: AnyKey, rf: AnyKey) -> bool {
+        self.any_get_slot(key).map_or(true, |(item, _)| {
+            // This is safe since self: AnyItemCollection has exclusive access to shells
+            // and we have here exclusive access to self.
+            let item = unsafe { &mut *item.get() };
+            item.remove_reference(rf)
+        })
+    }
 }
 
 /// Polly ShellCollection can't split this.
 pub trait ShellCollection<T: ?Sized + 'static>: AnyShellCollection {
-    type Ref<'a>: RefShell<'a, T = T>
+    type Shell: Shell<T = T>;
+
+    type Iter<'a>: Iterator<Item = (Key<T>, &'a Self::Shell)>
     where
         Self: 'a;
 
-    type Mut<'a>: MutShell<'a>
-    where
-        Self: 'a;
-
-    type Iter<'a>: Iterator<Item = (Key<T>, Self::Ref<'a>)>
-    where
-        Self: 'a;
-
-    type MutIter<'a>: Iterator<Item = (Key<T>, Self::Mut<'a>)>
+    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut Self::Shell)>
     where
         Self: 'a;
 
     /// Some if item exists.
-    fn get(&self, key: Key<T>) -> Option<Self::Ref<'_>>;
+    fn get(&self, key: Key<T>) -> Option<&Self::Shell>;
 
     /// Some if item exists.
-    fn get_mut(&mut self, key: Key<T>) -> Option<Self::Mut<'_>>;
+    fn get_mut(&mut self, key: Key<T>) -> Option<&mut Self::Shell>;
 
     /// Consistent ascending order.
     fn iter(&self) -> Self::Iter<'_>;
@@ -247,25 +243,40 @@ pub trait ShellCollection<T: ?Sized + 'static>: AnyShellCollection {
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
-pub trait AnyShellCollection {
-    fn contains(&self, key: AnyKey) -> bool;
+pub trait AnyShellCollection: AnyContainer {
+    fn contains(&self, key: AnyKey) -> bool {
+        self.any_get_slot(key).is_some()
+    }
 
     /// Fails if key->shell doesn't exist.
-    fn add_from(&mut self, key: AnyKey, rf: AnyKey) -> bool;
+    fn add_from(&mut self, key: AnyKey, rf: AnyKey) -> bool {
+        self.any_get_slot(key)
+            .map(|(_, shell)| {
+                // This is safe since self: AnyShellCollection has exclusive access to shells
+                // and we have here exclusive access to self.
+                let shell = unsafe { &mut *shell.get() };
+                shell.add_from(rf);
+            })
+            .is_some()
+    }
 
     /// None if it doesn't exist.
-    fn from(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyKey> + '_>>;
+    fn from(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyKey> + '_>> {
+        self.any_get_slot(key).map(|(_, shell)| {
+            // This is safe since self: AnyShellCollection has exclusive access to shells
+            // and we have here shared access to self.
+            let shell = unsafe { &*shell.get() };
+            shell.from_any()
+        })
+    }
 
     /// Fails if key->shell doesn't exist or if shell[rf] doesn't exist.
-    fn remove_from(&mut self, key: AnyKey, rf: AnyKey) -> bool;
-}
-
-pub trait KeyCollection {
-    /// Prefix
-    fn prefix(&self) -> Option<Prefix>;
-
-    fn first<I: ?Sized + 'static>(&self) -> Option<Key<I>>;
-
-    /// Returns following key after given in ascending order.
-    fn next<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Key<I>>;
+    fn remove_from(&mut self, key: AnyKey, rf: AnyKey) -> bool {
+        self.any_get_slot(key).map_or(false, |(_, shell)| {
+            // This is safe since self: AnyShellCollection has exclusive access to shells
+            // and we have here exclusive access to self.
+            let shell = unsafe { &mut *shell.get() };
+            shell.remove_from(rf)
+        })
+    }
 }

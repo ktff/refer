@@ -35,6 +35,7 @@ type ArcRef<T> = Arc<RwLock<(usize, Vec<ArcRef<Any>>, Box<T>)>>;
 #![feature(type_alias_impl_trait)]
 
 pub mod collection;
+pub mod container;
 pub mod core;
 pub mod item;
 pub mod model;

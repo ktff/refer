@@ -39,10 +39,7 @@ impl<T: ?Sized + 'static> Vertice<T> {
     }
 
     /// Iterates through T items pointing to this one.
-    pub fn iter_from<'a>(
-        &self,
-        this: &impl RefShell<'a, T = T>,
-    ) -> impl Iterator<Item = Key<T>> + 'a {
+    pub fn iter_from<'a>(&self, this: &'a impl Shell<T = T>) -> impl Iterator<Item = Key<T>> + 'a {
         this.from()
     }
 }

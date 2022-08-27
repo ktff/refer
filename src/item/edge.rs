@@ -21,12 +21,12 @@ impl<T: ?Sized + 'static> Edge<T> {
     /// True if everything that should exist existed.
     pub fn remove(self, coll: &mut impl ShellCollection<T>, this: AnyKey) -> bool {
         let mut success_a = false;
-        if let Some(mut a_shell) = coll.get_mut(self.0[0].key()) {
+        if let Some(a_shell) = coll.get_mut(self.0[0].key()) {
             success_a = a_shell.remove_from(this);
         }
 
         let mut success_b = false;
-        if let Some(mut b_shell) = coll.get_mut(self.0[1].key()) {
+        if let Some(b_shell) = coll.get_mut(self.0[1].key()) {
             success_b = b_shell.remove_from(this);
         }
 

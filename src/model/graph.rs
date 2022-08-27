@@ -1,4 +1,4 @@
-use crate::{collection::vec::VecCollection, core::*, item::vertice::Vertice as Node};
+use crate::{core::*, item::vertice::Vertice as Node};
 use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
@@ -13,10 +13,7 @@ pub type Id<T> = Key<Vertice<T>>;
 /// Graph contains vertices and edges between them.
 ///
 /// Vertice can carry data T.
-pub struct Graph<T: 'static = (), C: Collection<Vertice<T>> = VecCollection<Vertice<T>>>(
-    C,
-    PhantomData<T>,
-);
+pub struct Graph<T: 'static, C: Collection<Vertice<T>>>(C, PhantomData<T>);
 
 impl<T: 'static, C: Collection<Vertice<T>>> Graph<T, C> {
     pub fn new(coll: C) -> Self {
