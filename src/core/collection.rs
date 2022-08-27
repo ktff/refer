@@ -311,10 +311,6 @@ pub trait AnyItemCollection {
 
 /// Polly ShellCollection can't split this.
 pub trait ShellCollection<T: ?Sized + 'static>: AnyShellCollection {
-    type MutColl<'a>: MutShellCollection<'a, T>
-    where
-        Self: 'a;
-
     type Ref<'a>: RefShell<'a, T = T>
     where
         Self: 'a;
@@ -342,8 +338,6 @@ pub trait ShellCollection<T: ?Sized + 'static>: AnyShellCollection {
 
     /// Consistent ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
-
-    fn mut_coll(&mut self) -> Self::MutColl<'_>;
 }
 
 pub trait AnyShellCollection {
@@ -357,17 +351,6 @@ pub trait AnyShellCollection {
 
     /// Fails if key->shell doesn't exist or if shell[rf] doesn't exist.
     fn remove_from(&mut self, key: AnyKey, rf: AnyKey) -> bool;
-}
-
-/// Enables holding on to multiple MutShells at the same time.
-/// To enable that it usually won't enable viewing of the data.
-pub trait MutShellCollection<'a, T: ?Sized + 'static>: 'a {
-    type Mut<'b>: MutShell<'b>
-    where
-        Self: 'b;
-
-    /// Some if shell exists.
-    fn get_mut(&self, key: Key<T>) -> Option<Self::Mut<'_>>;
 }
 
 pub trait KeyCollection {

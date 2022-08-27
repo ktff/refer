@@ -10,20 +10,12 @@ impl<T: ?Sized + 'static> Edge<T> {
         Edge(refs)
     }
 
-    /// Some if both shells exist.
-    pub fn add<'a>(
-        coll: &impl MutShellCollection<'a, T>,
-        this: AnyKey,
-        a: Key<T>,
-        b: Key<T>,
-    ) -> Option<Self> {
-        let mut a_shell = coll.get_mut(a)?;
-        let mut b_shell = coll.get_mut(b)?;
+    /// Panics if a or b don't exist.
+    pub fn add(coll: &mut impl ShellCollection<T>, this: AnyKey, a: Key<T>, b: Key<T>) -> Self {
+        coll.get_mut(a).expect("Should exist").add_from(this.into());
+        coll.get_mut(b).expect("Should exist").add_from(this.into());
 
-        a_shell.add_from(this);
-        b_shell.add_from(this);
-
-        Some(Self([Ref::new(a), Ref::new(b)]))
+        Self([Ref::new(a), Ref::new(b)])
     }
 
     /// True if everything that should exist existed.

@@ -1,5 +1,5 @@
 use crate::core::*;
-use std::{any::TypeId, cell::UnsafeCell, marker::PhantomData, num::NonZeroU64};
+use std::{any::TypeId, marker::PhantomData, num::NonZeroU64};
 
 pub type ItemIter<'a, T: Item> = impl Iterator<Item = (Key<T>, &'a T)>;
 pub type ItemMutIter<'a, T: Item> = impl Iterator<Item = (Key<T>, &'a mut T)>;
@@ -268,10 +268,6 @@ impl<T: Item> AnyItemCollection for VecItemCollection<T> {
 pub struct VecShellCollection<T: Item + ?Sized>(Vec<Option<VecShell<T>>>);
 
 impl<T: Item + ?Sized> ShellCollection<T> for VecShellCollection<T> {
-    type MutColl<'a>=VecMutShellCollection<'a,T>
-    where
-        Self: 'a;
-
     type Ref<'a>= VecRefShell<'a, T>
     where
         Self: 'a;
@@ -327,10 +323,6 @@ impl<T: Item + ?Sized> ShellCollection<T> for VecShellCollection<T> {
             })
         })
     }
-
-    fn mut_coll(&mut self) -> Self::MutColl<'_> {
-        VecMutShellCollection(self)
-    }
 }
 
 impl<T: Item + ?Sized> AnyShellCollection for VecShellCollection<T> {
@@ -371,7 +363,7 @@ impl<'a, T: Item + ?Sized> AnyShell<'a> for VecRefShell<'a, T> {
     }
 
     fn from_count(&self) -> usize {
-        self.0.from().len()
+        self.0.from.len()
     }
 }
 
@@ -381,7 +373,7 @@ impl<'a, T: Item + ?Sized> RefShell<'a> for VecRefShell<'a, T> {
     type AnyIter = VecRefShellAnyIter<'a>;
 
     fn iter(&self) -> Self::AnyIter {
-        self.0.from().iter().copied()
+        self.0.from.iter().copied()
     }
 
     fn from<F: ?Sized + 'static>(&self) -> Self::Iter<F> {
@@ -393,68 +385,20 @@ pub struct VecMutShell<'a, T: Item + ?Sized>(&'a mut VecShell<T>);
 
 impl<'a, T: Item + ?Sized> MutShell<'a> for VecMutShell<'a, T> {
     fn add_from(&mut self, from: AnyKey) {
-        self.0.from.get_mut().push(from);
+        self.0.from.push(from);
     }
 
     fn remove_from(&mut self, from: AnyKey) -> bool {
-        let vec = self.0.from.get_mut();
-
         // TODO: This will be really slow for large froms.
-        if let Some((i, _)) = vec.iter().enumerate().rev().find(|(_, key)| key == &&from) {
-            vec.remove(i);
-            true
-        } else {
-            false
-        }
-    }
-}
-
-pub struct VecMutShellCollection<'a, T: Item + ?Sized>(&'a mut VecShellCollection<T>);
-
-impl<'a, T: Item + ?Sized> MutShellCollection<'a, T> for VecMutShellCollection<'a, T> {
-    type Mut<'b> = VecRefMutShell<'b, T> where Self: 'b;
-
-    fn get_mut(&self, key: Key<T>) -> Option<Self::Mut<'_>> {
-        (self.0)
+        if let Some((i, _)) = self
             .0
-            .get(key.as_usize())
-            .and_then(|slot| slot.as_ref())
-            .map(VecRefMutShell)
-    }
-}
-
-pub struct VecRefMutShell<'a, T: Item + ?Sized>(&'a VecShell<T>);
-
-impl<'a, T: Item + ?Sized> VecRefMutShell<'a, T> {
-    /// This function is safe to call with combination of &'a mut of shell collection
-    /// being bounded in VecMutShellCollection and that all uses of this field don't overlap.
-    /// This exclusivity is achieved by the caller ensuring that:
-    /// - This isn't leaked outside of it.
-    /// - It doesn't allow in any way creation of additional reference for this field.
-    unsafe fn enter(&self) -> &mut Vec<AnyKey> {
-        // Caller must ensure no other references to this field exist nor
-        // will there exist for this lifetime.
-        &mut *self.0.from.get()
-    }
-}
-
-impl<'a, T: Item + ?Sized> MutShell<'a> for VecRefMutShell<'a, T> {
-    fn add_from(&mut self, from: AnyKey) {
-        // By the contract of enter this reference isn't leaked and there is no
-        // way for following operations to create additional references.
-        let vec = unsafe { self.enter() };
-
-        vec.push(from);
-    }
-
-    fn remove_from(&mut self, from: AnyKey) -> bool {
-        // By the contract of enter this reference isn't leaked and there is no
-        // way for following operations to create additional references.
-        let vec = unsafe { self.enter() };
-
-        // TODO: This will be really slow for large froms.
-        if let Some((i, _)) = vec.iter().enumerate().rev().find(|(_, key)| key == &&from) {
-            vec.remove(i);
+            .from
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, key)| key == &&from)
+        {
+            self.0.from.remove(i);
             true
         } else {
             false
@@ -463,20 +407,15 @@ impl<'a, T: Item + ?Sized> MutShell<'a> for VecRefMutShell<'a, T> {
 }
 
 struct VecShell<T: Item + ?Sized> {
-    from: UnsafeCell<Vec<AnyKey>>,
+    from: Vec<AnyKey>,
     _data: PhantomData<T>,
 }
 
 impl<T: Item + ?Sized> VecShell<T> {
     fn new() -> Self {
         Self {
-            from: UnsafeCell::new(Vec::new()),
+            from: Vec::new(),
             _data: PhantomData,
         }
-    }
-
-    fn from(&self) -> &Vec<AnyKey> {
-        // This is safe on it's own.
-        unsafe { &*self.from.get() }
     }
 }

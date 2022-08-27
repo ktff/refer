@@ -130,8 +130,4 @@ impl<T: ?Sized + 'static> Ref<T> {
     pub fn shell_mut<C: ShellCollection<T>>(self, coll: &mut C) -> C::Mut<'_> {
         coll.get_mut(self.key()).expect("Shell isn't present")
     }
-
-    pub fn mut_shell<'a, C: MutShellCollection<'a, T>>(self, coll: &C) -> C::Mut<'_> {
-        coll.get_mut(self.key()).expect("Shell isn't present")
-    }
 }
