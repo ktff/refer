@@ -1,6 +1,5 @@
 use crate::{collection::vec::VecCollection, core::*, item::vertice::Vertice as Node};
 use std::{
-    any::Any,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -46,8 +45,8 @@ impl<T: 'static> AnyItem for Vertice<T> {
         self.1.references_any()
     }
 
-    fn remove_reference(&mut self, key: AnyKey, item: &impl Any) -> bool {
-        self.1.remove_reference(key, item)
+    fn remove_reference(&mut self, key: AnyKey) -> bool {
+        self.1.remove_reference(key)
     }
 }
 

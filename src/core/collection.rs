@@ -1,6 +1,4 @@
-use std::mem::MaybeUninit;
-
-use super::{Item, Key, MutShell, Prefix, RefShell};
+use super::{AnyKey, AnyRef, Item, Key, MutShell, Prefix, RefShell};
 
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
 //       implementations from implementing all *Collection traits on the same type.
@@ -11,7 +9,7 @@ use super::{Item, Key, MutShell, Prefix, RefShell};
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: ?Sized + 'static>: KeyCollection {
+pub trait Collection<T: ?Sized + 'static>: AnyCollection {
     type Items: ItemCollection<T>;
 
     type Shells: ShellCollection<T>;
@@ -30,53 +28,198 @@ pub trait Collection<T: ?Sized + 'static>: KeyCollection {
     where
         Self: 'a;
 
+    /// Reserves slot for item.
     /// None if collection is out of keys.
-    ///
-    /// Unsafe since caller must ensure to properly initialize data in all cases.
-    /// Returned byte array is of size and alignment of the item.
-    ///
-    /// Mainly used for composite collections.
-    unsafe fn allocate(&mut self, item: &T) -> Option<(Key<T>, &mut [MaybeUninit<u8>])>;
+    /// Must be eventually canceled or fulfilled, otherwise memory can be leaked.
+    /// Consecutive calls without canceling or fulfilling have undefined behavior.
+    fn reserve(&mut self, item: &T) -> Option<Key<T>>;
 
-    /// Some if item exists.
-    /// Will call free on the item and won't drop it, just free it's memory.
-    /// Mainly used for composite collections.
-    unsafe fn free<R>(
-        &mut self,
-        key: Key<T>,
-        free: impl FnOnce(&[MaybeUninit<u8>]) -> R,
-    ) -> Option<R>;
+    /// Cancels reservation for item.
+    /// Panics if an item is present.
+    fn cancel(&mut self, key: Key<T>);
+
+    /// Fulfills reservation.
+    /// Panics if there is no reservation, if it's already fulfilled,
+    /// or may panic if this item differs from one during reservation.
+    fn fulfill(&mut self, key: Key<T>, item: T)
+    where
+        T: Sized;
+
+    /// Fulfills reservation.
+    /// Panics if there is no reservation, if it's already fulfilled,
+    /// or may panic if this item differs from one during reservation.
+    fn fulfill_copy(&mut self, key: Key<T>, item: &T)
+    where
+        T: Copy;
+
+    /// Re fulfills reservation by resizing for item if necessary.
+    /// False if key isn't present.
+    fn refill_copy(&mut self, key: Key<T>, item: &T) -> bool
+    where
+        T: Copy;
+
+    /// Frees if it exists.
+    fn unfill(&mut self, key: Key<T>) -> bool;
+
+    /// Frees and returns item if it exists
+    fn unfill_sized(&mut self, key: Key<T>) -> Option<T>
+    where
+        T: Sized;
 
     /// Err if collection is out of keys.
     /// May panic if some of the references don't exist or if prefix doesn't exist.
     fn add(&mut self, prefix: Option<Prefix>, item: T) -> Result<Key<T>, T>
     where
-        T: Item + Sized;
+        T: Item + Sized,
+    {
+        assert!(prefix.is_none(), "Not yet implemented");
+
+        // Allocate slot
+        let key = if let Some(key) = self.reserve(&item) {
+            key
+        } else {
+            return Err(item);
+        };
+
+        // Update connections
+        if !super::util::add_references(self.shells_mut(), key, &item) {
+            // Failed
+
+            // Deallocate slot
+            self.cancel(key);
+
+            return Err(item);
+        }
+
+        // Add item & shell
+        self.fulfill(key, item);
+
+        Ok(key)
+    }
 
     /// None if collection is out of keys.
     fn add_copy(&mut self, prefix: Option<Prefix>, item: &T) -> Option<Key<T>>
     where
-        T: Item + Copy;
+        T: Item + Copy,
+    {
+        assert!(prefix.is_none(), "Not yet implemented");
+
+        // Allocate slot
+        let key = self.reserve(&item)?;
+
+        // Update connections
+        if !super::util::add_references(self.shells_mut(), key, item) {
+            // Failed
+
+            // Deallocate slot
+            self.cancel(key);
+
+            return None;
+        }
+
+        // Add item & shell
+        self.fulfill_copy(key, item);
+
+        Some(key)
+    }
 
     /// Err if some of the references don't exist.
     fn set(&mut self, key: Key<T>, set: T) -> Result<T, T>
     where
-        T: Item + Sized;
+        T: Item + Sized,
+    {
+        let (items, shells) = self.split_mut();
+        let old = if let Some(item) = items.get_mut(key) {
+            item
+        } else {
+            // No item
+            return Err(set);
+        };
+
+        // Update connections
+        if !super::util::update_diff(shells, key, old, &set) {
+            // Failed
+            return Err(set);
+        }
+
+        // Replace item
+        Ok(std::mem::replace(old, set))
+    }
 
     /// True if set. False if some of it's references don't exist.
     fn set_copy(&mut self, key: Key<T>, set: &T) -> bool
     where
-        T: Item + Copy;
+        T: Item + Copy,
+    {
+        let (items, shells) = self.split_mut();
+        let old = if let Some(item) = items.get(key) {
+            item
+        } else {
+            // No item
+            return false;
+        };
+
+        // Update connections
+        if !super::util::update_diff(shells, key, old, &set) {
+            // Failed
+            return false;
+        }
+
+        // Replace item
+        self.refill_copy(key, set);
+        true
+    }
 
     /// True Item existed so it was removed.
     fn remove(&mut self, key: Key<T>) -> bool
     where
-        T: Item;
+        T: Item,
+    {
+        let mut remove = Vec::new();
+
+        // Update connections
+        if super::util::remove_references(self, key.into(), &mut remove).is_none() {
+            // Failed
+            return false;
+        }
+        // Deallocate
+        assert!(self.unfill(key), "Should exist");
+
+        // Recursive remove
+        while let Some(rf) = remove.pop() {
+            // Update connections
+            if super::util::remove_references(self, rf, &mut remove).is_some() {
+                // Deallocate
+                let _ = self.unfill_any(rf);
+            }
+        }
+
+        true
+    }
 
     /// Some if item exists.
     fn take(&mut self, key: Key<T>) -> Option<T>
     where
-        T: Item + Sized;
+        T: Item + Sized,
+    {
+        let mut remove = Vec::new();
+
+        // Update connections
+        super::util::remove_references(self, key.into(), &mut remove)?;
+        // Deallocate
+        let item = self.unfill_sized(key).expect("Should exist");
+
+        // Recursive remove
+        while let Some(rf) = remove.pop() {
+            // Update connections
+            if super::util::remove_references(self, rf, &mut remove).is_some() {
+                // Deallocate
+                let _ = self.unfill_any(rf);
+            }
+        }
+
+        Some(item)
+    }
 
     /// Some if item exists.
     fn get(&self, key: Key<T>) -> Option<(&T, <Self::Shells as ShellCollection<T>>::Ref<'_>)> {
@@ -121,8 +264,20 @@ pub trait Collection<T: ?Sized + 'static>: KeyCollection {
     fn split_mut(&mut self) -> (&mut Self::Items, &mut Self::Shells);
 }
 
+pub trait AnyCollection: KeyCollection {
+    type AnyItems: AnyItemCollection;
+
+    type AnyShells: AnyShellCollection;
+
+    /// Frees if it exists.
+    fn unfill_any(&mut self, key: AnyKey) -> bool;
+
+    /// Splits to views of items and shells
+    fn split_any_mut(&mut self) -> (&mut Self::AnyItems, &mut Self::AnyShells);
+}
+
 /// Polly ItemCollection can split &mut self to multiple &mut views each with set of types that don't overlap.
-pub trait ItemCollection<T: ?Sized + 'static> {
+pub trait ItemCollection<T: ?Sized + 'static>: AnyItemCollection {
     type Iter<'a>: Iterator<Item = (Key<T>, &'a T)>
     where
         Self: 'a;
@@ -144,8 +299,18 @@ pub trait ItemCollection<T: ?Sized + 'static> {
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
+pub trait AnyItemCollection {
+    fn contains(&self, key: AnyKey) -> bool;
+
+    /// None if item doesn't exist.
+    fn references(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
+
+    /// False if reference still exists.
+    fn remove_reference(&mut self, key: AnyKey, rf: AnyKey) -> bool;
+}
+
 /// Polly ShellCollection can't split this.
-pub trait ShellCollection<T: ?Sized + 'static> {
+pub trait ShellCollection<T: ?Sized + 'static>: AnyShellCollection {
     type MutColl<'a>: MutShellCollection<'a, T>
     where
         Self: 'a;
@@ -154,7 +319,7 @@ pub trait ShellCollection<T: ?Sized + 'static> {
     where
         Self: 'a;
 
-    type Mut<'a>: MutShell<'a, T = T>
+    type Mut<'a>: MutShell<'a>
     where
         Self: 'a;
 
@@ -181,10 +346,23 @@ pub trait ShellCollection<T: ?Sized + 'static> {
     fn mut_coll(&mut self) -> Self::MutColl<'_>;
 }
 
+pub trait AnyShellCollection {
+    fn contains(&self, key: AnyKey) -> bool;
+
+    /// Fails if key->shell doesn't exist.
+    fn add_from(&mut self, key: AnyKey, rf: AnyKey) -> bool;
+
+    /// None if it doesn't exist.
+    fn from(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyKey> + '_>>;
+
+    /// Fails if key->shell doesn't exist or if shell[rf] doesn't exist.
+    fn remove_from(&mut self, key: AnyKey, rf: AnyKey) -> bool;
+}
+
 /// Enables holding on to multiple MutShells at the same time.
 /// To enable that it usually won't enable viewing of the data.
 pub trait MutShellCollection<'a, T: ?Sized + 'static>: 'a {
-    type Mut<'b>: MutShell<'b, T = T>
+    type Mut<'b>: MutShell<'b>
     where
         Self: 'b;
 

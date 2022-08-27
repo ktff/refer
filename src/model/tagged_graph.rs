@@ -1,6 +1,5 @@
 use crate::{core::*, item::edge};
 use std::{
-    any::Any,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -53,7 +52,7 @@ impl<T: 'static, D: 'static> AnyItem for Vertice<T, D> {
         Box::new(std::iter::empty())
     }
 
-    fn remove_reference(&mut self, _: AnyKey, _: &impl Any) -> bool {
+    fn remove_reference(&mut self, _: AnyKey) -> bool {
         true
     }
 }
@@ -87,8 +86,8 @@ impl<T: 'static, D: 'static> AnyItem for Edge<T, D> {
         self.1.references_any()
     }
 
-    fn remove_reference(&mut self, key: AnyKey, item: &impl Any) -> bool {
-        self.1.remove_reference(key, item)
+    fn remove_reference(&mut self, key: AnyKey) -> bool {
+        self.1.remove_reference(key)
     }
 }
 

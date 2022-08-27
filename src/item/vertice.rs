@@ -1,4 +1,4 @@
-use std::{any::Any, ops::Deref};
+use std::ops::Deref;
 
 use crate::core::*;
 
@@ -67,7 +67,7 @@ impl<T: ?Sized + 'static> AnyItem for Vertice<T> {
         Box::new(self.references())
     }
 
-    fn remove_reference(&mut self, key: AnyKey, _: &impl Any) -> bool {
+    fn remove_reference(&mut self, key: AnyKey) -> bool {
         let key = key.downcast::<T>().expect("Key is not of T");
         let (i, _) = self
             .0

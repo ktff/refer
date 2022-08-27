@@ -3,6 +3,7 @@ mod item;
 mod key;
 mod reference;
 mod shell;
+pub mod util;
 
 pub use collection::*;
 pub use item::*;

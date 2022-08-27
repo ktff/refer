@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::core::*;
 
 pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
@@ -57,7 +55,7 @@ impl<T: ?Sized + 'static> AnyItem for Edge<T> {
         Box::new(self.references())
     }
 
-    fn remove_reference(&mut self, key: AnyKey, _: &impl Any) -> bool {
+    fn remove_reference(&mut self, key: AnyKey) -> bool {
         // Both references are crucial so this removes it self.
         debug_assert!(self.0[0].key().upcast() == key || self.0[1].key().upcast() == key);
 

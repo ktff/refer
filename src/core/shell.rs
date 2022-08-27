@@ -6,28 +6,27 @@ use std::any::TypeId;
 pub trait AnyShell<'a>: 'a {
     fn item_ty(&self) -> TypeId;
 
-    fn from_any(&self) -> Vec<AnyKey>;
+    fn from_any(&self) -> Box<dyn Iterator<Item = AnyKey> + 'a>;
 
     /// Number of items referencing this item.
     fn from_count(&self) -> usize {
-        self.from_any().len()
+        self.from_any().count()
     }
 }
 
 pub trait RefShell<'a>: AnyShell<'a> {
     type T: ?Sized + 'static;
     type Iter<F: ?Sized + 'static>: Iterator<Item = Key<F>> + 'a;
+    type AnyIter: Iterator<Item = AnyKey> + 'a;
 
     fn from<F: ?Sized + 'static>(&self) -> Self::Iter<F>;
+
+    fn iter(&self) -> Self::AnyIter;
 }
 
 /// Changes can be delayed until drop.
 pub trait MutShell<'a> {
-    type T: ?Sized + 'static;
-
-    /// Expects original reference with key of item referencing this one.
     fn add_from(&mut self, from: AnyKey);
 
-    /// Expects original reference with key of item referencing this one.
     fn remove_from(&mut self, from: AnyKey) -> bool;
 }

@@ -11,9 +11,9 @@ pub trait Item: AnyItem {
 /// An item of entity.
 pub trait AnyItem: Any + 'static {
     /// All internal references
-    fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a>;
+    fn references_any(&self) -> Box<dyn Iterator<Item = AnyRef> + '_>;
 
     /// True if removed, false if not and this item should be removed as a result.
     /// May panic if not present.
-    fn remove_reference(&mut self, key: AnyKey, item: &impl Any) -> bool;
+    fn remove_reference(&mut self, key: AnyKey) -> bool;
 }
