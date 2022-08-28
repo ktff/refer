@@ -50,7 +50,7 @@ pub trait Collection<T: ?Sized + 'static>: Container<T> + AnyCollection {
         };
 
         // Update connections
-        if !super::util::add_references(self.shells_mut(), key, &item) {
+        if !super::util::add_references(self.shells_mut(), key.key(), &item) {
             // Failed
 
             // Deallocate slot
@@ -60,9 +60,7 @@ pub trait Collection<T: ?Sized + 'static>: Container<T> + AnyCollection {
         }
 
         // Add item & shell
-        self.fulfill(key, item);
-
-        Ok(key)
+        Ok(self.fulfill(key, item))
     }
 
     /// Err if some of the references don't exist.

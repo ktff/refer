@@ -1,4 +1,4 @@
-use std::cell::UnsafeCell;
+use std::{cell::UnsafeCell, mem::forget};
 
 use super::{AnyItem, AnyKey, AnyShell, Key, Prefix, Shell};
 
@@ -11,18 +11,15 @@ pub trait Container<T: ?Sized + 'static>: AnyContainer {
 
     /// Reserves slot for item.
     /// None if collection is out of keys.
-    /// Must be eventually canceled or fulfilled, otherwise memory can be leaked.
-    /// Consecutive calls without canceling or fulfilling have undefined behavior.
-    fn reserve(&mut self) -> Option<Key<T>>;
+    fn reserve(&mut self) -> Option<ReservedKey<T>>;
 
     /// Cancels reservation for item.
-    /// Panics if an item is present.
-    fn cancel(&mut self, key: Key<T>);
+    /// Panics if there is no reservation.
+    fn cancel(&mut self, key: ReservedKey<T>);
 
     /// Fulfills reservation.
-    /// Panics if there is no reservation, if it's already fulfilled,
-    /// or may panic if this item differs from one during reservation.
-    fn fulfill(&mut self, key: Key<T>, item: T)
+    /// Panics if there is no reservation.
+    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> Key<T>
     where
         T: Sized;
 
@@ -54,4 +51,31 @@ pub trait KeyContainer {
 
     /// Returns following key after given in ascending order.
     fn next<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Key<I>>;
+}
+
+/// Helps to make allocate process easier to do correctly.
+pub struct ReservedKey<T: ?Sized>(Key<T>);
+
+impl<T: ?Sized> ReservedKey<T> {
+    /// Should only be constructed by Containers.
+    pub fn new(key: Key<T>) -> Self {
+        Self(key)
+    }
+
+    pub fn key(&self) -> Key<T> {
+        self.0
+    }
+
+    /// Only proper way to finish reservation.
+    pub fn take(self) -> Key<T> {
+        let key = self.0;
+        forget(self);
+        key
+    }
+}
+
+impl<T: ?Sized> Drop for ReservedKey<T> {
+    fn drop(&mut self) {
+        // TODO: Log that it was leaked.
+    }
 }

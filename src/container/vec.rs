@@ -12,6 +12,7 @@ pub struct VecContainer<T: Item> {
     items: Vec<Option<UnsafeCell<T>>>,
     shells: Vec<Option<UnsafeCell<VecShell<T>>>>,
     free: Vec<Key<T>>,
+    reserved: Vec<Key<T>>,
 }
 
 impl<T: Item> VecContainer<T> {
@@ -20,7 +21,19 @@ impl<T: Item> VecContainer<T> {
             items: vec![None],
             shells: vec![None],
             free: Vec::new(),
+            reserved: Vec::new(),
         }
+    }
+
+    fn resolve_reservation(&mut self, key: ReservedKey<T>) -> Key<T> {
+        let (i, _) = self
+            .reserved
+            .iter()
+            .enumerate()
+            .find(|(_, k)| **k == key.key())
+            .expect("There is no reservation");
+        self.reserved.remove(i);
+        key.take()
     }
 }
 
@@ -29,28 +42,29 @@ impl<T: Item> Container<T> for VecContainer<T> {
 
     type CellIter<'a> = CellIter<'a, T> where Self: 'a;
 
-    fn reserve(&mut self) -> Option<Key<T>> {
-        if self.free.is_empty() {
-            self.free.push(Key::new(Index(
+    fn reserve(&mut self) -> Option<ReservedKey<T>> {
+        let key = if let Some(key) = self.free.pop() {
+            key
+        } else {
+            let key = Key::new(Index(
                 NonZeroU64::new(self.items.len() as u64).expect("Zero index"),
-            )));
+            ));
             self.items.push(None);
             self.shells.push(None);
-        }
-        self.free.last().copied()
+            key
+        };
+
+        self.reserved.push(key);
+        Some(ReservedKey::new(key))
     }
 
-    fn cancel(&mut self, key: Key<T>) {
-        assert!(self
-            .items
-            .get(key.as_usize())
-            .and_then(|slot| slot.as_ref())
-            .is_none());
-        assert_eq!(self.free.last().copied(), Some(key));
+    fn cancel(&mut self, key: ReservedKey<T>) {
+        let key = self.resolve_reservation(key);
+        self.free.push(key);
     }
 
-    fn fulfill(&mut self, key: Key<T>, item: T) {
-        assert_eq!(self.free.pop(), Some(key));
+    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> Key<T> {
+        let key = self.resolve_reservation(key);
 
         self.items[key.as_usize()] = Some(item.into());
         self.shells[key.as_usize()] = Some(
@@ -60,6 +74,8 @@ impl<T: Item> Container<T> for VecContainer<T> {
             }
             .into(),
         );
+
+        key
     }
 
     /// Frees and returns item if it exists
