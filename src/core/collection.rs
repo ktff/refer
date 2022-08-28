@@ -1,4 +1,4 @@
-use super::{AnyContainer, AnyKey, AnyRef, Container, Item, Key, Prefix, Shell};
+use super::{AnyContainer, AnyItem, AnyKey, AnyRef, Container, Item, Key, Prefix, Shell};
 
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
 //       implementations from implementing all *Collection traits on the same type.
@@ -9,7 +9,7 @@ use super::{AnyContainer, AnyKey, AnyRef, Container, Item, Key, Prefix, Shell};
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: ?Sized + 'static>: Container<T> + AnyCollection {
+pub trait Collection<T: AnyItem + ?Sized>: Container<T> + AnyCollection {
     type Items: ItemCollection<T>;
 
     type Shells: ShellCollection<T>;

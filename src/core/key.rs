@@ -129,6 +129,10 @@ impl AnyKey {
     pub fn len(&self) -> usize {
         self.1.len()
     }
+
+    pub fn ty_id(&self) -> TypeId {
+        self.0
+    }
 }
 
 impl<T: ?Sized + 'static> PartialEq<Key<T>> for AnyKey {

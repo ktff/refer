@@ -1,8 +1,8 @@
-use std::{cell::UnsafeCell, mem::forget};
+use std::{any::Any, cell::UnsafeCell, mem::forget};
 
 use super::{AnyItem, AnyKey, AnyShell, Key, Prefix, Shell};
 
-pub trait Container<T: ?Sized + 'static>: AnyContainer {
+pub trait Container<T: AnyItem + ?Sized>: AnyContainer + KeyContainer {
     type Shell: Shell<T = T>;
 
     type CellIter<'a>: Iterator<Item = (Key<T>, &'a UnsafeCell<T>, &'a UnsafeCell<Self::Shell>)>
@@ -30,10 +30,11 @@ pub trait Container<T: ?Sized + 'static>: AnyContainer {
 
     fn get_slot(&self, key: Key<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)>;
 
-    fn iter_slot(&self) -> Self::CellIter<'_>;
+    /// Even if some it may be empty.
+    fn iter_slot(&self) -> Option<Self::CellIter<'_>>;
 }
 
-pub trait AnyContainer: KeyContainer {
+pub trait AnyContainer: Any {
     fn any_get_slot(
         &self,
         key: AnyKey,
@@ -47,10 +48,12 @@ pub trait KeyContainer {
     /// Prefix
     fn prefix(&self) -> Option<Prefix>;
 
-    fn first<I: ?Sized + 'static>(&self) -> Option<Key<I>>;
+    // TODO: Enable for I: ?Sized once you have that figured out
+    fn first<I: AnyItem>(&self) -> Option<Key<I>>;
 
+    // TODO: Enable for I: ?Sized once you have that figured out
     /// Returns following key after given in ascending order.
-    fn next<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Key<I>>;
+    fn next<I: AnyItem>(&self, key: Key<I>) -> Option<Key<I>>;
 }
 
 /// Helps to make allocate process easier to do correctly.

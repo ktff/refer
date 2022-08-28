@@ -80,9 +80,19 @@ ne cini korisnim.
 //     // NotLocalKey(AnyKey),
 // }
 
+/// A family of containers.
+pub trait ContainerFamily: 'static {
+    type C<T: AnyItem + ?Sized>: AnyContainer + KeyContainer + Default + 'static;
+}
+
+/// A family of containers for sized types.
+pub trait SizedContainerFamily: 'static {
+    type C<T: AnyItem>: AnyContainer + KeyContainer + Default + 'static;
+}
+
 // ************************ Convenient methods *************************** //
 
-impl<T: ?Sized + 'static> Ref<T> {
+impl<T: AnyItem + ?Sized> Ref<T> {
     /// Some if to shells exist, otherwise None.
     pub fn connect(
         from: AnyKey,

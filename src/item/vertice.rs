@@ -2,12 +2,12 @@ use std::ops::Deref;
 
 use crate::core::*;
 
-pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
+pub type RefIter<'a, T: AnyItem + ?Sized> = impl Iterator<Item = AnyRef> + 'a;
 
 /// F --> T
-pub struct Vertice<T: ?Sized + 'static>(Vec<Ref<T>>);
+pub struct Vertice<T: AnyItem + ?Sized>(Vec<Ref<T>>);
 
-impl<T: ?Sized + 'static> Vertice<T> {
+impl<T: AnyItem + ?Sized> Vertice<T> {
     pub fn new(refs: Vec<Ref<T>>) -> Self {
         Vertice(refs)
     }
@@ -44,14 +44,14 @@ impl<T: ?Sized + 'static> Vertice<T> {
     }
 }
 
-impl<T: ?Sized + 'static> Deref for Vertice<T> {
+impl<T: AnyItem + ?Sized> Deref for Vertice<T> {
     type Target = [Ref<T>];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T: ?Sized + 'static> Item for Vertice<T> {
+impl<T: AnyItem + ?Sized> Item for Vertice<T> {
     type I<'a> = RefIter<'a, T>;
 
     fn references(&self) -> Self::I<'_> {
@@ -59,7 +59,7 @@ impl<T: ?Sized + 'static> Item for Vertice<T> {
     }
 }
 
-impl<T: ?Sized + 'static> AnyItem for Vertice<T> {
+impl<T: AnyItem + ?Sized> AnyItem for Vertice<T> {
     fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a> {
         Box::new(self.references())
     }

@@ -4,18 +4,24 @@ use std::{any::TypeId, cell::UnsafeCell, marker::PhantomData, num::NonZeroU64};
 pub type VecRefShellIter<'a, F: ?Sized + 'static> = impl Iterator<Item = Key<F>> + 'a;
 pub type VecRefShellAnyIter<'a> = impl Iterator<Item = AnyKey> + 'a;
 
-pub type CellIter<'a, T: Item> =
+pub type CellIter<'a, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a UnsafeCell<T>, &'a UnsafeCell<VecShell<T>>)>;
 
+pub struct VecContainerFamily;
+
+impl SizedContainerFamily for VecContainerFamily {
+    type C<T: AnyItem> = VecContainer<T>;
+}
+
 /// A simple vec collection of items of the same type.
-pub struct VecContainer<T: Item> {
+pub struct VecContainer<T: AnyItem> {
     items: Vec<Option<UnsafeCell<T>>>,
     shells: Vec<Option<UnsafeCell<VecShell<T>>>>,
     free: Vec<Key<T>>,
     reserved: Vec<Key<T>>,
 }
 
-impl<T: Item> VecContainer<T> {
+impl<T: AnyItem> VecContainer<T> {
     pub fn new() -> Self {
         Self {
             items: vec![None],
@@ -37,7 +43,7 @@ impl<T: Item> VecContainer<T> {
     }
 }
 
-impl<T: Item> Container<T> for VecContainer<T> {
+impl<T: AnyItem> Container<T> for VecContainer<T> {
     type Shell = VecShell<T>;
 
     type CellIter<'a> = CellIter<'a, T> where Self: 'a;
@@ -109,24 +115,26 @@ impl<T: Item> Container<T> for VecContainer<T> {
         Some((item, shell))
     }
 
-    fn iter_slot(&self) -> Self::CellIter<'_> {
-        self.items
-            .iter()
-            .zip(self.shells.iter())
-            .enumerate()
-            .filter_map(|(i, (item, shell))| {
-                let item = item.as_ref()?;
-                let shell = shell.as_ref().expect("Should exist");
-                Some((
-                    Key::new(Index(NonZeroU64::new(i as u64).expect("Zero index"))),
-                    item,
-                    shell,
-                ))
-            })
+    fn iter_slot(&self) -> Option<Self::CellIter<'_>> {
+        Some(
+            self.items
+                .iter()
+                .zip(self.shells.iter())
+                .enumerate()
+                .filter_map(|(i, (item, shell))| {
+                    let item = item.as_ref()?;
+                    let shell = shell.as_ref().expect("Should exist");
+                    Some((
+                        Key::new(Index(NonZeroU64::new(i as u64).expect("Zero index"))),
+                        item,
+                        shell,
+                    ))
+                }),
+        )
     }
 }
 
-impl<T: Item> AnyContainer for VecContainer<T> {
+impl<T: AnyItem> AnyContainer for VecContainer<T> {
     fn any_get_slot(
         &self,
         key: AnyKey,
@@ -156,12 +164,12 @@ impl<T: Item> AnyContainer for VecContainer<T> {
     }
 }
 
-impl<T: Item> KeyContainer for VecContainer<T> {
+impl<T: AnyItem> KeyContainer for VecContainer<T> {
     fn prefix(&self) -> Option<Prefix> {
         None
     }
 
-    fn first<I: ?Sized + 'static>(&self) -> Option<Key<I>> {
+    fn first<I: AnyItem>(&self) -> Option<Key<I>> {
         if TypeId::of::<I>() == TypeId::of::<T>() {
             self.items
                 .iter()
@@ -179,7 +187,7 @@ impl<T: Item> KeyContainer for VecContainer<T> {
         }
     }
 
-    fn next<I: ?Sized + 'static>(&self, key: Key<I>) -> Option<Key<I>> {
+    fn next<I: AnyItem>(&self, key: Key<I>) -> Option<Key<I>> {
         if TypeId::of::<I>() == TypeId::of::<T>() {
             self.items
                 .iter()
@@ -199,18 +207,18 @@ impl<T: Item> KeyContainer for VecContainer<T> {
     }
 }
 
-impl<T: Item> Default for VecContainer<T> {
+impl<T: AnyItem> Default for VecContainer<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub struct VecShell<T: Item + ?Sized> {
+pub struct VecShell<T: AnyItem + ?Sized> {
     from: Vec<AnyKey>,
     _data: PhantomData<T>,
 }
 
-impl<T: Item + ?Sized> AnyShell for VecShell<T> {
+impl<T: AnyItem + ?Sized> AnyShell for VecShell<T> {
     fn item_ty(&self) -> TypeId {
         TypeId::of::<T>()
     }
@@ -244,7 +252,7 @@ impl<T: Item + ?Sized> AnyShell for VecShell<T> {
     }
 }
 
-impl<T: Item + ?Sized> Shell for VecShell<T> {
+impl<T: AnyItem + ?Sized> Shell for VecShell<T> {
     type T = T;
     type Iter<'a, F: ?Sized + 'static> = VecRefShellIter<'a, F>;
     type AnyIter<'a> = VecRefShellAnyIter<'a>;
