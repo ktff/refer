@@ -2,6 +2,7 @@ use std::{any::Any, cell::UnsafeCell, mem::forget};
 
 use super::{AnyItem, AnyKey, AnyShell, Key, Prefix, Shell};
 
+/// It's responsibility is to contain items and shells, not to manage access to them.
 pub trait Container<T: AnyItem + ?Sized>: AnyContainer + KeyContainer {
     type Shell: Shell<T = T>;
 

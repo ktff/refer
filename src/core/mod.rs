@@ -49,7 +49,7 @@ ne cini korisnim.
    x. Izdvoji parrallelnost
    x. Ukloni Locality
    x. Ukloniti Path
-   *. poly
+   x. poly
    *. Composite
    *. unsized T
    *. [u8]
