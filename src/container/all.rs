@@ -7,7 +7,9 @@ use std::{
 
 use crate::core::*;
 
-pub struct AllContainer<F: SizedContainerFamily> {
+use super::vec::VecContainerFamily;
+
+pub struct AllContainer<F: SizedContainerFamily = VecContainerFamily> {
     /// T -> F::C<T>
     collections: HashMap<TypeId, Box<dyn AnyContainer>>,
     _family: PhantomData<F>,
