@@ -37,19 +37,19 @@ impl<T: ?Sized + 'static> Edge<T> {
 impl<T: ?Sized + 'static> Item for Edge<T> {
     type I<'a> = RefIter<'a, T>;
 
-    fn references(&self) -> Self::I<'_> {
+    fn references(&self, _: Index) -> Self::I<'_> {
         self.0.iter().copied().map(Into::into)
     }
 }
 
 impl<T: ?Sized + 'static> AnyItem for Edge<T> {
-    fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a> {
-        Box::new(self.references())
+    fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
+        Some(Box::new(self.references(this)))
     }
 
-    fn remove_reference(&mut self, key: AnyKey) -> bool {
+    fn remove_reference(&mut self, _: Index, key: AnyKey) -> bool {
         // Both references are crucial so this removes it self.
-        debug_assert!(self.0[0].key().upcast() == key || self.0[1].key().upcast() == key);
+        debug_assert!(key == self.0[0].key().into() || key == self.0[1].key().into());
 
         false
     }

@@ -1,4 +1,4 @@
-use super::{AnyContainer, AnyItem, AnyKey, AnyRef, Container, Item, Key, Prefix, Shell};
+use super::{Allocator, AnyContainer, AnyItem, AnyKey, AnyRef, Container, Item, Key, Shell};
 
 // NOTE: Generic naming is intentionally here so to trigger naming conflicts to discourage
 //       implementations from implementing all *Collection traits on the same type.
@@ -9,7 +9,7 @@ use super::{AnyContainer, AnyItem, AnyKey, AnyRef, Container, Item, Key, Prefix,
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: AnyItem + ?Sized>: Container<T> + AnyCollection {
+pub trait Collection<T: AnyItem + ?Sized>: Allocator<T> + Container<T> + AnyCollection {
     type Items: ItemCollection<T>;
 
     type Shells: ShellCollection<T>;
@@ -36,21 +36,19 @@ pub trait Collection<T: AnyItem + ?Sized>: Container<T> + AnyCollection {
 
     /// Err if collection is out of keys.
     /// May panic if some of the references don't exist or if prefix doesn't exist.
-    fn add(&mut self, prefix: Option<Prefix>, item: T) -> Result<Key<T>, T>
+    fn add(&mut self, item: T) -> Result<Key<T>, T>
     where
         T: Item + Sized,
     {
-        assert!(prefix.is_none(), "Not yet implemented");
-
         // Allocate slot
-        let key = if let Some(key) = self.reserve() {
+        let key = if let Some(key) = self.reserve(&item) {
             key
         } else {
             return Err(item);
         };
 
         // Update connections
-        if !super::util::add_references(self.shells_mut(), key.key(), &item) {
+        if !super::util::add_references(self.shells_mut(), key.key().into_key(), &item) {
             // Failed
 
             // Deallocate slot
@@ -60,7 +58,7 @@ pub trait Collection<T: AnyItem + ?Sized>: Container<T> + AnyCollection {
         }
 
         // Add item & shell
-        Ok(self.fulfill(key, item))
+        Ok(self.fulfill(key, item).into_key())
     }
 
     /// Err if some of the references don't exist.
@@ -96,7 +94,7 @@ pub trait Collection<T: AnyItem + ?Sized>: Container<T> + AnyCollection {
         // Update connections
         super::util::remove_references(self, key.into(), &mut remove)?;
         // Deallocate
-        let item = self.unfill(key).expect("Should exist");
+        let item = self.unfill(key.into()).expect("Should exist");
 
         // Recursive remove
         while let Some(rf) = remove.pop() {
@@ -160,7 +158,7 @@ pub trait AnyCollection: AnyContainer {
 
     /// Frees if it exists.
     fn unfill_any(&mut self, key: AnyKey) -> bool {
-        self.any_unfill(key)
+        self.any_unfill(key.into())
     }
 
     /// Splits to views of items and shells
@@ -192,26 +190,26 @@ pub trait ItemCollection<T: ?Sized + 'static>: AnyItemCollection {
 
 pub trait AnyItemCollection: AnyContainer {
     fn contains(&self, key: AnyKey) -> bool {
-        self.any_get_slot(key).is_some()
+        self.any_get_slot(key.into()).is_some()
     }
 
     /// None if item doesn't exist.
     fn references(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
-        self.any_get_slot(key).map(|(item, _)| {
+        self.any_get_slot(key.into()).and_then(|(item, _)| {
             // This is safe since self: AnyItemCollection has exclusive access to shells
             // and we have here shared access to self.
             let item = unsafe { &*item.get() };
-            item.references_any()
+            item.references_any(key.index())
         })
     }
 
     /// False if reference still exists.
     fn remove_reference(&mut self, key: AnyKey, rf: AnyKey) -> bool {
-        self.any_get_slot(key).map_or(true, |(item, _)| {
+        self.any_get_slot(key.into()).map_or(true, |(item, _)| {
             // This is safe since self: AnyItemCollection has exclusive access to shells
             // and we have here exclusive access to self.
             let item = unsafe { &mut *item.get() };
-            item.remove_reference(rf)
+            item.remove_reference(key.index(), rf)
         })
     }
 }
@@ -243,12 +241,12 @@ pub trait ShellCollection<T: ?Sized + 'static>: AnyShellCollection {
 
 pub trait AnyShellCollection: AnyContainer {
     fn contains(&self, key: AnyKey) -> bool {
-        self.any_get_slot(key).is_some()
+        self.any_get_slot(key.into()).is_some()
     }
 
     /// Fails if key->shell doesn't exist.
     fn add_from(&mut self, key: AnyKey, rf: AnyKey) -> bool {
-        self.any_get_slot(key)
+        self.any_get_slot(key.into())
             .map(|(_, shell)| {
                 // This is safe since self: AnyShellCollection has exclusive access to shells
                 // and we have here exclusive access to self.
@@ -260,7 +258,7 @@ pub trait AnyShellCollection: AnyContainer {
 
     /// None if it doesn't exist.
     fn from(&self, key: AnyKey) -> Option<Box<dyn Iterator<Item = AnyKey> + '_>> {
-        self.any_get_slot(key).map(|(_, shell)| {
+        self.any_get_slot(key.into()).map(|(_, shell)| {
             // This is safe since self: AnyShellCollection has exclusive access to shells
             // and we have here shared access to self.
             let shell = unsafe { &*shell.get() };
@@ -270,7 +268,7 @@ pub trait AnyShellCollection: AnyContainer {
 
     /// Fails if key->shell doesn't exist or if shell[rf] doesn't exist.
     fn remove_from(&mut self, key: AnyKey, rf: AnyKey) -> bool {
-        self.any_get_slot(key).map_or(false, |(_, shell)| {
+        self.any_get_slot(key.into()).map_or(false, |(_, shell)| {
             // This is safe since self: AnyShellCollection has exclusive access to shells
             // and we have here exclusive access to self.
             let shell = unsafe { &mut *shell.get() };

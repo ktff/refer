@@ -1,6 +1,9 @@
 use super::{AnyKey, Key};
 use std::any::TypeId;
 
+// TODO: Somehow enable for Shell to know self Key so that it can use DeltaKey,
+// TODO: or just expose DeltaKey directly.
+
 /// A shell of an entity.
 /// Shells are connected to each other.
 pub trait AnyShell {
@@ -19,7 +22,7 @@ pub trait AnyShell {
 }
 
 pub trait Shell: AnyShell {
-    // TODO: Is this really needed?
+    /// This is mostly used for type checking/constraining.
     type T: ?Sized + 'static;
     type Iter<'a, F: ?Sized + 'static>: Iterator<Item = Key<F>> + 'a
     where

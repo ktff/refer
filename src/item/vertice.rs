@@ -54,17 +54,17 @@ impl<T: AnyItem + ?Sized> Deref for Vertice<T> {
 impl<T: AnyItem + ?Sized> Item for Vertice<T> {
     type I<'a> = RefIter<'a, T>;
 
-    fn references(&self) -> Self::I<'_> {
+    fn references(&self, _: Index) -> Self::I<'_> {
         self.0.iter().copied().map(Into::into)
     }
 }
 
 impl<T: AnyItem + ?Sized> AnyItem for Vertice<T> {
-    fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a> {
-        Box::new(self.references())
+    fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
+        Some(Box::new(self.references(this)))
     }
 
-    fn remove_reference(&mut self, key: AnyKey) -> bool {
+    fn remove_reference(&mut self, _: Index, key: AnyKey) -> bool {
         let key = key.downcast::<T>().expect("Key is not of T");
         let (i, _) = self
             .0

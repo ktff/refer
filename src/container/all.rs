@@ -49,20 +49,14 @@ impl<F: SizedContainerFamily> AllContainer<F> {
     }
 }
 
-impl<T: AnyItem, F: SizedContainerFamily> Container<T> for AllContainer<F>
+impl<T: AnyItem, F: SizedContainerFamily> Allocator<T> for AllContainer<F>
 where
-    F::C<T>: Container<T>,
+    F::C<T>: Allocator<T>,
 {
-    type Shell = <F::C<T> as Container<T>>::Shell;
-
-    type CellIter<'a>=<F::C<T> as Container<T>>::CellIter<'a>
-    where
-        Self: 'a;
-
     /// Reserves slot for item.
     /// None if collection is out of keys.
-    fn reserve(&mut self) -> Option<ReservedKey<T>> {
-        self.coll_or_insert().reserve()
+    fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
+        self.coll_or_insert().reserve(item)
     }
 
     /// Cancels reservation for item.
@@ -73,7 +67,7 @@ where
 
     /// Fulfills reservation.
     /// Panics if there is no reservation.
-    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> Key<T>
+    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T>
     where
         T: Sized,
     {
@@ -83,14 +77,25 @@ where
     }
 
     /// Frees and returns item if it exists
-    fn unfill(&mut self, key: Key<T>) -> Option<T>
+    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
     where
         T: Sized,
     {
         self.coll_mut()?.unfill(key)
     }
+}
 
-    fn get_slot(&self, key: Key<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
+impl<T: AnyItem, F: SizedContainerFamily> Container<T> for AllContainer<F>
+where
+    F::C<T>: Container<T>,
+{
+    type Shell = <F::C<T> as Container<T>>::Shell;
+
+    type CellIter<'a>=<F::C<T> as Container<T>>::CellIter<'a>
+    where
+        Self: 'a;
+
+    fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
         self.coll()?.get_slot(key)
     }
 
@@ -102,7 +107,7 @@ where
 impl<F: SizedContainerFamily> AnyContainer for AllContainer<F> {
     fn any_get_slot(
         &self,
-        key: AnyKey,
+        key: AnySubKey,
     ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)> {
         self.collections
             .get(&key.ty_id())
@@ -111,7 +116,7 @@ impl<F: SizedContainerFamily> AnyContainer for AllContainer<F> {
     }
 
     /// Frees if it exists.
-    fn any_unfill(&mut self, key: AnyKey) -> bool {
+    fn any_unfill(&mut self, key: AnySubKey) -> bool {
         self.collections
             .get_mut(&key.ty_id())
             .map(|c| &mut **c)
@@ -121,15 +126,15 @@ impl<F: SizedContainerFamily> AnyContainer for AllContainer<F> {
 }
 
 impl<F: SizedContainerFamily> KeyContainer for AllContainer<F> {
-    fn prefix(&self) -> Option<Prefix> {
-        unimplemented!()
-    }
+    // fn prefix(&self) -> Option<Prefix> {
+    //     unimplemented!()
+    // }
 
-    fn first<I: AnyItem>(&self) -> Option<Key<I>> {
+    fn first<I: AnyItem>(&self) -> Option<SubKey<I>> {
         self.coll::<I>()?.first()
     }
 
-    fn next<I: AnyItem>(&self, key: Key<I>) -> Option<Key<I>> {
+    fn next<I: AnyItem>(&self, key: SubKey<I>) -> Option<SubKey<I>> {
         self.coll::<I>()?.next(key)
     }
 }

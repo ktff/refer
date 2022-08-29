@@ -1,3 +1,4 @@
+mod allocator;
 mod collection;
 mod container;
 mod item;
@@ -6,6 +7,7 @@ mod reference;
 mod shell;
 pub mod util;
 
+pub use allocator::*;
 pub use collection::*;
 pub use container::*;
 pub use item::*;

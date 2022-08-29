@@ -10,12 +10,12 @@ pub fn add_references<T: Item + ?Sized>(
     item: &T,
 ) -> bool {
     // item --> others
-    for (i, rf) in item.references().enumerate() {
+    for (i, rf) in item.references(key.index()).enumerate() {
         if !shells.add_from(rf.key(), key.into()) {
             // Reference doesn't exist
 
             // Rollback and return error
-            for rf in item.references().take(i) {
+            for rf in item.references(key.index()).take(i) {
                 assert!(shells.remove_from(rf.key(), key.into()), "Should exist");
             }
 
@@ -36,8 +36,8 @@ pub fn update_diff<T: Item + ?Sized>(
     new: &T,
 ) -> bool {
     // Preparation for diff computation
-    let mut old = old.references().collect::<Vec<_>>();
-    let mut new = new.references().collect::<Vec<_>>();
+    let mut old = old.references(key.index()).collect::<Vec<_>>();
+    let mut new = new.references(key.index()).collect::<Vec<_>>();
     old.sort();
     new.sort();
 

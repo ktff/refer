@@ -42,17 +42,17 @@ pub struct Vertice<T: 'static, D: 'static>(T, PhantomData<Edge<T, D>>);
 impl<T: 'static, D: 'static> Item for Vertice<T, D> {
     type I<'a> = std::iter::Empty<AnyRef>;
 
-    fn references(&self) -> Self::I<'_> {
+    fn references(&self, _: Index) -> Self::I<'_> {
         std::iter::empty()
     }
 }
 
 impl<T: 'static, D: 'static> AnyItem for Vertice<T, D> {
-    fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a> {
-        Box::new(std::iter::empty())
+    fn references_any<'a>(&'a self, _: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
+        None
     }
 
-    fn remove_reference(&mut self, _: AnyKey) -> bool {
+    fn remove_reference(&mut self, _: Index, _: AnyKey) -> bool {
         true
     }
 }
@@ -76,18 +76,18 @@ pub struct Edge<T: 'static, D: 'static>(D, edge::Edge<Vertice<T, D>>);
 impl<T: 'static, D: 'static> Item for Edge<T, D> {
     type I<'a> = <edge::Edge<Vertice<T, D>> as Item>::I<'a>;
 
-    fn references(&self) -> Self::I<'_> {
-        self.1.references()
+    fn references(&self, this: Index) -> Self::I<'_> {
+        self.1.references(this)
     }
 }
 
 impl<T: 'static, D: 'static> AnyItem for Edge<T, D> {
-    fn references_any<'a>(&'a self) -> Box<dyn Iterator<Item = AnyRef> + 'a> {
-        self.1.references_any()
+    fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
+        self.1.references_any(this)
     }
 
-    fn remove_reference(&mut self, key: AnyKey) -> bool {
-        self.1.remove_reference(key)
+    fn remove_reference(&mut self, this: Index, key: AnyKey) -> bool {
+        self.1.remove_reference(this, key)
     }
 }
 
