@@ -11,7 +11,7 @@ pub type SlotIter<'a, T: 'static> =
 
 pub struct ItemContainerFamily;
 
-impl SizedContainerFamily for ItemContainerFamily {
+impl ContainerFamily for ItemContainerFamily {
     type C<T: AnyItem> = ItemContainer<T>;
 
     fn new<T: AnyItem>(_: u32) -> Self::C<T> {

@@ -49,10 +49,16 @@ ne cini korisnim.
    x. Ukloni Locality
    x. Ukloniti Path
    x. poly
-   *. Composite NOTE: Nope. MOra biti flat struktura gdje su samo leaf itemi koji se mogu referencirati.
-   *. unsized T | Wandrer
-   *. [u8]      |
-   ?. Delayed, Split Item Access, zahtjeva da se dropa potpora za locking
+   x. Composite NOTE: Nope. MOra biti flat struktura gdje su samo leaf itemi koji se mogu referencirati.
+
+   * Tests
+   * Documentation
+   * If a branch is not correct from the point of logic/expectations but the end result is the same then just log the
+   * * the inconsistency and continue. And if the result is not the same return Option/Error. While for
+   * * fatal/unrecoverable/incosistent_states it should panic. remove -> bool is one such case where bool can be ommited and
+   * * the function can log the inconsistency in debug instead.
+   * LocalBox<T> | wandrer
+   * Split Item Access, zahtjeva da se dropa potpora za locking, Polly ItemCollection can split &mut self to multiple &mut views each with set of types that don't overlap. možda | wandrer
 
    Chunking can be done according to one of two points:
         a) Connection

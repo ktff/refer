@@ -14,25 +14,19 @@ use super::{
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: AnyItem + ?Sized>: Access<T> {
+pub trait Collection<T: Item>: Access<T> {
     /// Err if collection is out of keys.
     /// May panic if some of the references don't exist or if prefix doesn't exist.
-    fn add(&mut self, item: T) -> Result<Key<T>, T>
-    where
-        T: Item + Sized;
+    fn add(&mut self, item: T) -> Result<Key<T>, T>;
 
     /// Err if some of the references don't exist.
-    fn set(&mut self, key: Key<T>, set: T) -> Result<T, T>
-    where
-        T: Item + Sized;
+    fn set(&mut self, key: Key<T>, set: T) -> Result<T, T>;
 
     /// Some if item exists.
-    fn take(&mut self, key: Key<T>) -> Option<T>
-    where
-        T: Item + Sized;
+    fn take(&mut self, key: Key<T>) -> Option<T>;
 }
 
-pub trait Access<T: ?Sized + 'static>: AnyAccess {
+pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
     type Shell: Shell<T = T>;
 
     type ItemsMut<'a>: ItemsMut<T> + 'a

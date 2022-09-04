@@ -1,19 +1,19 @@
 use crate::core::*;
 use std::{any::TypeId, collections::HashSet};
 
-pub type ItemIter<'a, C: Container<T> + 'static, T: ?Sized + 'static> =
+pub type ItemIter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a T)>;
-pub type ItemMutIter<'a, C: Container<T> + 'static, T: ?Sized + 'static> =
+pub type ItemMutIter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a mut T)>;
 
-pub type ShellsIter<'a, C: Container<T> + 'static, T: ?Sized + 'static> =
+pub type ShellsIter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a <C as Container<T>>::Shell)>;
-pub type ShellsMutIter<'a, C: Container<T> + 'static, T: ?Sized + 'static> =
+pub type ShellsMutIter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a mut <C as Container<T>>::Shell)>;
 
-pub type Iter<'a, C: Container<T> + 'static, T: ?Sized + 'static> =
+pub type Iter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a T, &'a C::Shell)>;
-pub type MutIter<'a, C: Container<T> + 'static, T: ?Sized + 'static> =
+pub type MutIter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a mut T, &'a C::Shell)>;
 
 /// Impl collection for provided container by having full ownership of it.
@@ -25,13 +25,8 @@ impl<C: 'static> Owned<C> {
     }
 }
 
-impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item + ?Sized> Collection<T>
-    for Owned<C>
-{
-    fn add(&mut self, item: T) -> Result<Key<T>, T>
-    where
-        T: Item + Sized,
-    {
+impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collection<T> for Owned<C> {
+    fn add(&mut self, item: T) -> Result<Key<T>, T> {
         // Allocate slot
         let key = if let Some(key) = self.0.reserve(&item) {
             key
@@ -53,10 +48,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item + ?Sized> 
         Ok(self.0.fulfill(key, item).into_key())
     }
 
-    fn set(&mut self, key: Key<T>, set: T) -> Result<T, T>
-    where
-        T: Item + Sized,
-    {
+    fn set(&mut self, key: Key<T>, set: T) -> Result<T, T> {
         let (mut items, mut shells) = self.split_mut();
         let old = if let Some(item) = items.get_mut(key) {
             item
@@ -75,10 +67,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item + ?Sized> 
         Ok(std::mem::replace(old, set))
     }
 
-    fn take(&mut self, key: Key<T>) -> Option<T>
-    where
-        T: Item + Sized,
-    {
+    fn take(&mut self, key: Key<T>) -> Option<T> {
         let mut remove = Vec::new();
 
         // Update connections
@@ -99,7 +88,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item + ?Sized> 
     }
 }
 
-impl<C: Allocator<T> + 'static, T: ?Sized + 'static> Allocator<T> for Owned<C> {
+impl<C: Allocator<T> + 'static, T: 'static> Allocator<T> for Owned<C> {
     fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
         self.0.reserve(item)
     }
@@ -123,7 +112,7 @@ impl<C: Allocator<T> + 'static, T: ?Sized + 'static> Allocator<T> for Owned<C> {
     }
 }
 
-impl<C: Container<T> + 'static, T: ?Sized + 'static> Access<T> for Owned<C> {
+impl<C: Container<T> + 'static, T: AnyItem> Access<T> for Owned<C> {
     type Shell = <C as Container<T>>::Shell;
 
     type ItemsMut<'a> = AccessItemsMut<'a,C>
@@ -267,7 +256,7 @@ impl<'c, C: 'static> AccessItemsMut<'c, C> {
     }
 }
 
-impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> ItemsMut<T> for AccessItemsMut<'c, C> {
+impl<'c, C: Container<T> + 'static, T: AnyItem> ItemsMut<T> for AccessItemsMut<'c, C> {
     type MutIter<'a> = ItemMutIter<'a,C, T> where Self:'a;
 
     fn get_mut(&mut self, key: Key<T>) -> Option<&mut T> {
@@ -293,7 +282,7 @@ impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> ItemsMut<T> for AccessI
     }
 }
 
-impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> Items<T> for AccessItemsMut<'c, C> {
+impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItemsMut<'c, C> {
     type Iter<'a> = ItemIter<'a,C, T> where Self:'a;
 
     fn get(&self, key: Key<T>) -> Option<&T> {
@@ -306,7 +295,7 @@ impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> Items<T> for AccessItem
 }
 
 impl<'c, C: AnyContainer + 'static> AnyItems for AccessItemsMut<'c, C> {
-    fn get_item_any(&self, key: AnyKey) -> Option<&dyn AnyItem> {
+    fn get_any(&self, key: AnyKey) -> Option<&dyn AnyItem> {
         (self.0).0.any_get_slot(key.into()).map(|(item, _)| {
             // This is safe because Self has total access to items and
             // we borrow &self so we can't mutate any item hence &AnyItem is safe.
@@ -314,7 +303,7 @@ impl<'c, C: AnyContainer + 'static> AnyItems for AccessItemsMut<'c, C> {
         })
     }
 
-    fn get_item_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyItem> {
+    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyItem> {
         (self.0).0.any_get_slot(key.into()).map(|(item, _)| {
             // This is safe because Self has total access to items and
             // we borrow &mut self so there is no other &mut AnyItem hence &mut AnyItem is safe.
@@ -334,7 +323,7 @@ impl<'c, C: 'static> AccessItems<'c, C> {
     }
 }
 
-impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> Items<T> for AccessItems<'c, C> {
+impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItems<'c, C> {
     type Iter<'a> = ItemIter<'a,C, T> where Self:'a;
 
     fn get(&self, key: Key<T>) -> Option<&T> {
@@ -369,7 +358,7 @@ impl<C: 'static> AccessItemsAny<C> {
 }
 
 impl<C: AnyContainer + 'static> AnyItems for AccessItemsAny<C> {
-    fn get_item_any(&self, key: AnyKey) -> Option<&dyn AnyItem> {
+    fn get_any(&self, key: AnyKey) -> Option<&dyn AnyItem> {
         self.0.any_get_slot(key.into()).map(|(item, _)| {
             // This is safe because Self has total access to items and
             // we borrow &self so we can't mutate any item hence &AnyItem is safe.
@@ -377,7 +366,7 @@ impl<C: AnyContainer + 'static> AnyItems for AccessItemsAny<C> {
         })
     }
 
-    fn get_item_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyItem> {
+    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyItem> {
         self.0.any_get_slot(key.into()).map(|(item, _)| {
             // This is safe because Self has total access to items and
             // we borrow &mut self so there is no other &mut AnyItem hence &mut AnyItem is safe.
@@ -397,7 +386,7 @@ impl<'c, C: 'static> AccessShellsMut<'c, C> {
     }
 }
 
-impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> ShellsMut<T> for AccessShellsMut<'c, C> {
+impl<'c, C: Container<T> + 'static, T: AnyItem> ShellsMut<T> for AccessShellsMut<'c, C> {
     type MutIter<'a> = ShellsMutIter<'a,C, T> where Self:'a;
 
     fn get_mut(&mut self, key: Key<T>) -> Option<&mut Self::Shell> {
@@ -423,7 +412,7 @@ impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> ShellsMut<T> for Access
     }
 }
 
-impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> Shells<T> for AccessShellsMut<'c, C> {
+impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShellsMut<'c, C> {
     type Shell = <C as Container<T>>::Shell;
 
     type Iter<'a> = ShellsIter<'a,C, T> where Self:'a;
@@ -438,7 +427,7 @@ impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> Shells<T> for AccessShe
 }
 
 impl<'c, C: AnyContainer + 'static> AnyShells for AccessShellsMut<'c, C> {
-    fn get_shell_any(&self, key: AnyKey) -> Option<&dyn AnyShell> {
+    fn get_any(&self, key: AnyKey) -> Option<&dyn AnyShell> {
         (self.0).0.any_get_slot(key.into()).map(|(_, shell)| {
             // This is safe because Self has total access to shells and
             // we borrow &self so we can't mutate the Shell hence &Shell is safe.
@@ -446,7 +435,7 @@ impl<'c, C: AnyContainer + 'static> AnyShells for AccessShellsMut<'c, C> {
         })
     }
 
-    fn get_shell_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell> {
+    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell> {
         (self.0).0.any_get_slot(key.into()).map(|(_, shell)| {
             // This is safe because Self has total access to shells and
             // we borrow &mut self so there is no other &mut Shell hence &mut Shell is safe.
@@ -466,7 +455,7 @@ impl<'c, C: 'static> AccessShells<'c, C> {
     }
 }
 
-impl<'c, C: Container<T> + 'static, T: ?Sized + 'static> Shells<T> for AccessShells<'c, C> {
+impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShells<'c, C> {
     type Shell = <C as Container<T>>::Shell;
 
     type Iter<'a> = ShellsIter<'a,C, T> where Self:'a;
@@ -503,7 +492,7 @@ impl<C: 'static> AccessShellsAny<C> {
 }
 
 impl<C: AnyContainer + 'static> AnyShells for AccessShellsAny<C> {
-    fn get_shell_any(&self, key: AnyKey) -> Option<&dyn AnyShell> {
+    fn get_any(&self, key: AnyKey) -> Option<&dyn AnyShell> {
         self.0.any_get_slot(key.into()).map(|(_, shell)| {
             // This is safe because Self has total access to shells and
             // we borrow &self so we can't mutate the Shell hence &Shell is safe.
@@ -511,7 +500,7 @@ impl<C: AnyContainer + 'static> AnyShells for AccessShellsAny<C> {
         })
     }
 
-    fn get_shell_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell> {
+    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell> {
         self.0.any_get_slot(key.into()).map(|(_, shell)| {
             // This is safe because Self has total access to shells and
             // we borrow &mut self so there is no other &mut Shell hence &mut Shell is safe.

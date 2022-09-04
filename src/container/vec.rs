@@ -8,7 +8,7 @@ pub type SlotIter<'a, T: AnyItem> =
 
 pub struct VecContainerFamily;
 
-impl SizedContainerFamily for VecContainerFamily {
+impl ContainerFamily for VecContainerFamily {
     type C<T: AnyItem> = VecContainer<T>;
 
     fn new<T: AnyItem>(key_len: u32) -> Self::C<T> {

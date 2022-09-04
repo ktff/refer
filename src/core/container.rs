@@ -6,16 +6,11 @@ use std::{
 
 use super::{AnyItem, AnyShell, AnySubKey, ReservedKey, Shell, SubKey};
 
-/// Note, containers can panic/assume  if you try to access a key that was not produced at any
+/// Note, containers can panic  if you try to access a key that was not produced at any
 /// point by that container.
 
-// /// A family of containers.
-// pub trait ContainerFamily: 'static {
-//     type C<T: ?Sized + 'static>: 'static;
-// }
-
 /// A family of containers for sized types.
-pub trait SizedContainerFamily: 'static {
+pub trait ContainerFamily: 'static {
     type C<T: AnyItem>: AnyContainer + 'static;
 
     fn new<T: AnyItem>(key_len: u32) -> Self::C<T>;
@@ -23,7 +18,7 @@ pub trait SizedContainerFamily: 'static {
 
 /// It's responsibility is to contain items and shells, not to manage access to them.
 /// UNSAFE: It is unsafe for Containers to be Sync.
-pub trait Container<T: ?Sized + 'static>: AnyContainer {
+pub trait Container<T: AnyItem>: AnyContainer {
     type Shell: Shell<T = T>;
 
     type SlotIter<'a>: Iterator<Item = (SubKey<T>, &'a UnsafeCell<T>, &'a UnsafeCell<Self::Shell>)>
@@ -59,7 +54,7 @@ pub trait AnyContainer: Any {
 }
 
 /// It's responsibility is to manage allocation/placement/deallocation of item
-pub trait Allocator<T: ?Sized + 'static> {
+pub trait Allocator<T: 'static> {
     /// Reserves slot for item.
     /// None if collection is out of keys or memory.
     fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>>;

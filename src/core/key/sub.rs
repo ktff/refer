@@ -5,8 +5,6 @@ use std::{
     num::NonZeroU64,
 };
 
-use crate::core::Container;
-
 use super::{AnyKey, Index, Key, MAX_KEY_LEN};
 
 /// This is builded from top by pushing prefixes on top from bottom.

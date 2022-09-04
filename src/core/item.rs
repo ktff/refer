@@ -19,7 +19,6 @@ pub trait AnyItem: Any {
     fn remove_reference(&mut self, this: Index, key: AnyKey) -> bool;
 }
 
-/// TODO: Polly ItemCollection can split &mut self to multiple &mut views each with set of types that don't overlap.
 pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
     type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut T)>
     where
@@ -45,7 +44,7 @@ pub trait Items<T: ?Sized + 'static> {
 }
 
 pub trait AnyItems {
-    fn get_item_any(&self, key: AnyKey) -> Option<&dyn AnyItem>;
+    fn get_any(&self, key: AnyKey) -> Option<&dyn AnyItem>;
 
-    fn get_item_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyItem>;
+    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyItem>;
 }

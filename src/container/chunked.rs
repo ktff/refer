@@ -2,7 +2,7 @@ use std::{any::TypeId, cell::UnsafeCell, collections::HashSet};
 
 use crate::core::*;
 
-pub type SlotIter<'a, L: ChunkingLogic, T: ?Sized + 'static>
+pub type SlotIter<'a, L: ChunkingLogic, T: AnyItem>
 where
     L::C: Container<T>,
 = impl Iterator<
@@ -17,7 +17,7 @@ pub trait ChunkingLogic: 'static {
     type C: 'static;
 
     /// Assign item to some chunk.
-    fn assign<T: ?Sized + 'static>(&mut self, chunks: &mut Vec<Self::C>, item: &T) -> Option<usize>
+    fn assign<T: AnyItem>(&mut self, chunks: &mut Vec<Self::C>, item: &T) -> Option<usize>
     where
         Self::C: Allocator<T>;
 
@@ -39,7 +39,7 @@ impl<L: ChunkingLogic> Chunked<L> {
     }
 }
 
-impl<L: ChunkingLogic, T: ?Sized + 'static> Allocator<T> for Chunked<L>
+impl<L: ChunkingLogic, T: AnyItem> Allocator<T> for Chunked<L>
 where
     L::C: Allocator<T>,
 {
@@ -73,7 +73,7 @@ where
 
 impl<L: ChunkingLogic> !Sync for Chunked<L> {}
 
-impl<L: ChunkingLogic, T: ?Sized + 'static> Container<T> for Chunked<L>
+impl<L: ChunkingLogic, T: AnyItem> Container<T> for Chunked<L>
 where
     L::C: Container<T>,
 {

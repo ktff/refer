@@ -3,9 +3,9 @@ use std::mem::forget;
 use super::{Index, SubKey};
 
 /// Helps to make allocate process easier to do correctly.
-pub struct ReservedKey<T: ?Sized>(SubKey<T>);
+pub struct ReservedKey<T>(SubKey<T>);
 
-impl<T: ?Sized> ReservedKey<T> {
+impl<T> ReservedKey<T> {
     /// Should only be constructed by Containers.
     pub const fn new(key: SubKey<T>) -> Self {
         Self(key)
@@ -43,7 +43,7 @@ impl<T: ?Sized> ReservedKey<T> {
     }
 }
 
-impl<T: ?Sized> Drop for ReservedKey<T> {
+impl<T> Drop for ReservedKey<T> {
     fn drop(&mut self) {
         // TODO: Log that it was leaked.
     }

@@ -1,9 +1,6 @@
 use super::{AnyKey, Key};
 use std::any::{Any, TypeId};
 
-// TODO: Somehow enable for Shell to know self Key so that it can use DeltaKey,
-// TODO: or just expose DeltaKey directly.
-
 pub trait Shell: AnyShell {
     /// This is mostly used for type checking/constraining.
     type T: ?Sized + 'static;
@@ -63,8 +60,7 @@ pub trait Shells<T: ?Sized + 'static> {
 }
 
 pub trait AnyShells {
-    // TODO: Maybe _any suffix is too much?
-    fn get_shell_any(&self, key: AnyKey) -> Option<&dyn AnyShell>;
+    fn get_any(&self, key: AnyKey) -> Option<&dyn AnyShell>;
 
-    fn get_shell_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell>;
+    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell>;
 }

@@ -9,14 +9,14 @@ use crate::core::*;
 
 use super::vec::VecContainerFamily;
 
-pub struct AllContainer<F: SizedContainerFamily = VecContainerFamily> {
+pub struct AllContainer<F: ContainerFamily = VecContainerFamily> {
     /// T -> F::C<T>
     collections: HashMap<TypeId, Box<dyn AnyContainer>>,
     key_len: u32,
     _family: PhantomData<F>,
 }
 
-impl<F: SizedContainerFamily> AllContainer<F> {
+impl<F: ContainerFamily> AllContainer<F> {
     pub fn new(key_len: u32) -> Self {
         Self {
             collections: HashMap::new(),
@@ -52,7 +52,7 @@ impl<F: SizedContainerFamily> AllContainer<F> {
     }
 }
 
-impl<T: AnyItem, F: SizedContainerFamily> Allocator<T> for AllContainer<F>
+impl<T: AnyItem, F: ContainerFamily> Allocator<T> for AllContainer<F>
 where
     F::C<T>: Allocator<T>,
 {
@@ -88,9 +88,9 @@ where
     }
 }
 
-impl<F: SizedContainerFamily> !Sync for AllContainer<F> {}
+impl<F: ContainerFamily> !Sync for AllContainer<F> {}
 
-impl<T: AnyItem, F: SizedContainerFamily> Container<T> for AllContainer<F>
+impl<T: AnyItem, F: ContainerFamily> Container<T> for AllContainer<F>
 where
     F::C<T>: Container<T>,
 {
@@ -109,7 +109,7 @@ where
     }
 }
 
-impl<F: SizedContainerFamily> AnyContainer for AllContainer<F> {
+impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
     fn any_get_slot(
         &self,
         key: AnySubKey,

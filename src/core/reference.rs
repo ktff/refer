@@ -1,4 +1,4 @@
-use super::{AnyItem, AnyKey, AnyShell, Collection, ItemsMut, Key, ShellsMut};
+use super::{Access, AnyItem, AnyKey, AnyShell, ItemsMut, Key, ShellsMut};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ref<T: ?Sized>(Key<T>);
@@ -30,11 +30,11 @@ impl<T: AnyItem + ?Sized> Ref<T> {
         }
     }
 
-    pub fn get<C: Collection<T>>(self, coll: &C) -> (&T, &C::Shell) {
+    pub fn get<C: Access<T>>(self, coll: &C) -> (&T, &C::Shell) {
         coll.get(self.key()).expect("Entry isn't present")
     }
 
-    pub fn get_mut<C: Collection<T>>(self, coll: &mut C) -> (&mut T, &C::Shell) {
+    pub fn get_mut<C: Access<T>>(self, coll: &mut C) -> (&mut T, &C::Shell) {
         coll.get_mut(self.key()).expect("Entry isn't present")
     }
 
