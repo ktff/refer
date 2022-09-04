@@ -59,6 +59,7 @@ ne cini korisnim.
    * * the function can log the inconsistency in debug instead.
    * LocalBox<T> | wandrer
    * Split Item Access, zahtjeva da se dropa potpora za locking, Polly ItemCollection can split &mut self to multiple &mut views each with set of types that don't overlap. možda | wandrer
+   * Finish DeltaKey
 
    Chunking can be done according to one of two points:
         a) Connection

@@ -121,12 +121,11 @@ impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
     }
 
     /// Frees if it exists.
-    fn any_unfill(&mut self, key: AnySubKey) -> bool {
+    fn unfill_any(&mut self, key: AnySubKey) {
         self.collections
             .get_mut(&key.type_id())
             .map(|c| &mut **c)
-            .map(|c| c.any_unfill(key))
-            .unwrap_or(false)
+            .map(|c| c.unfill_any(key));
     }
 
     fn first(&self, key: TypeId) -> Option<AnySubKey> {

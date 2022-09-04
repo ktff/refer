@@ -14,9 +14,13 @@ pub trait AnyItem: Any {
     /// Some can be empty.
     fn references_any(&self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
-    /// True if removed, false if not and this item should be removed as a result.
-    /// May panic if not present.
-    fn remove_reference(&mut self, this: Index, key: AnyKey) -> bool;
+    /// Item of given key has/is been removed.
+    ///
+    /// This item should return true if it's ok with it.
+    /// If false, this item will also be removed.
+    ///
+    /// Should be called for its references.
+    fn item_removed(&mut self, this: Index, key: AnyKey) -> bool;
 }
 
 pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {

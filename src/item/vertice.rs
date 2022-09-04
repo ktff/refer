@@ -13,29 +13,15 @@ impl<T: AnyItem + ?Sized> Vertice<T> {
     }
 
     /// Connects this --with-> to in collection.
-    /// Fails if any of the shells don't exist.
-    pub fn connect(
-        &mut self,
-        collection: &mut impl ShellsMut<T>,
-        this: AnyKey,
-        to: Key<T>,
-    ) -> Option<()> {
-        self.0.push(Ref::connect(this, to, collection)?);
-        Some(())
+    pub fn connect(&mut self, collection: &mut impl ShellsMut<T>, this: AnyKey, to: Key<T>) {
+        self.0.push(Ref::connect(this, to, collection));
     }
 
     /// Disconnects this --with-> to in collection.
     /// Panics if index is out of bounds.
-    /// True if removed. False if there was nothing to remove.
-    pub fn disconnect(
-        &mut self,
-        collection: &mut impl ShellsMut<T>,
-        this: AnyKey,
-        to: usize,
-    ) -> bool {
-        let success = self[to].disconnect(this, collection);
+    pub fn disconnect(&mut self, collection: &mut impl ShellsMut<T>, this: AnyKey, to: usize) {
+        self[to].disconnect(this, collection);
         self.0.remove(to);
-        success
     }
 
     /// Iterates through T items pointing to this one.
@@ -64,15 +50,9 @@ impl<T: AnyItem + ?Sized> AnyItem for Vertice<T> {
         Some(Box::new(self.references(this)))
     }
 
-    fn remove_reference(&mut self, _: Index, key: AnyKey) -> bool {
-        let key = key.downcast::<T>().expect("Key is not of T");
-        let (i, _) = self
-            .0
-            .iter()
-            .enumerate()
-            .find(|(_, ref_)| ref_.key() == key)
-            .expect("Key is not in Vertice");
-        self.0.remove(i);
+    fn item_removed(&mut self, _: Index, key: AnyKey) -> bool {
+        self.0.retain(|rf| rf.key().upcast() != key);
+
         true
     }
 }

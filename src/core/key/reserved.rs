@@ -1,6 +1,6 @@
-use std::mem::forget;
-
 use super::{Index, SubKey};
+use log::*;
+use std::mem::forget;
 
 /// Helps to make allocate process easier to do correctly.
 pub struct ReservedKey<T>(SubKey<T>);
@@ -45,6 +45,6 @@ impl<T> ReservedKey<T> {
 
 impl<T> Drop for ReservedKey<T> {
     fn drop(&mut self) {
-        // TODO: Log that it was leaked.
+        warn!("Leaked reserved key {:?}", self.0);
     }
 }

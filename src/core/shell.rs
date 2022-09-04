@@ -28,9 +28,11 @@ pub trait AnyShell: Any {
         self.from_any().count()
     }
 
+    /// Additive if called for same from multiple times.
     fn add_from(&mut self, from: AnyKey);
 
-    fn remove_from(&mut self, from: AnyKey) -> bool;
+    /// Subtracts if called for same from multiple times.
+    fn remove_from(&mut self, from: AnyKey);
 }
 
 pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {

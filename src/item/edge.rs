@@ -12,25 +12,16 @@ impl<T: ?Sized + 'static> Edge<T> {
 
     /// Panics if a or b don't exist.
     pub fn add(coll: &mut impl ShellsMut<T>, this: AnyKey, a: Key<T>, b: Key<T>) -> Self {
-        coll.get_mut(a).expect("Should exist").add_from(this.into());
-        coll.get_mut(b).expect("Should exist").add_from(this.into());
-
-        Self([Ref::new(a), Ref::new(b)])
+        Self([
+            Ref::connect(this.into(), a, coll),
+            Ref::connect(this.into(), b, coll),
+        ])
     }
 
-    /// True if everything that should exist existed.
-    pub fn remove(self, coll: &mut impl ShellsMut<T>, this: AnyKey) -> bool {
-        let mut success_a = false;
-        if let Some(a_shell) = coll.get_mut(self.0[0].key()) {
-            success_a = a_shell.remove_from(this);
+    pub fn remove(self, coll: &mut impl ShellsMut<T>, this: AnyKey) {
+        for rf in self.0 {
+            rf.disconnect(this, coll);
         }
-
-        let mut success_b = false;
-        if let Some(b_shell) = coll.get_mut(self.0[1].key()) {
-            success_b = b_shell.remove_from(this);
-        }
-
-        success_a && success_b
     }
 }
 
@@ -47,10 +38,8 @@ impl<T: ?Sized + 'static> AnyItem for Edge<T> {
         Some(Box::new(self.references(this)))
     }
 
-    fn remove_reference(&mut self, _: Index, key: AnyKey) -> bool {
-        // Both references are crucial so this removes it self.
-        debug_assert!(key == self.0[0].key().into() || key == self.0[1].key().into());
-
-        false
+    fn item_removed(&mut self, _: Index, key: AnyKey) -> bool {
+        // Both references are crucial
+        key != self.0[0].key().into() && key != self.0[1].key().into()
     }
 }

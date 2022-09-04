@@ -16,7 +16,7 @@ impl AnyItem for Unit {
         None
     }
 
-    fn remove_reference(&mut self, _: Index, _: AnyKey) -> bool {
+    fn item_removed(&mut self, _: Index, _: AnyKey) -> bool {
         true
     }
 }

@@ -116,11 +116,11 @@ where
         self.chunks.get(prefix)?.any_get_slot(suffix)
     }
 
-    fn any_unfill(&mut self, key: AnySubKey) -> bool {
+    fn unfill_any(&mut self, key: AnySubKey) {
         let (prefix, suffix) = key.split_prefix(self.logic.key_len());
         self.chunks
             .get_mut(prefix)
-            .map_or(false, |chunk| chunk.any_unfill(suffix))
+            .map(|chunk| chunk.unfill_any(suffix));
     }
 
     fn first(&self, key: TypeId) -> Option<AnySubKey> {

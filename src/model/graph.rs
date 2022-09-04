@@ -42,8 +42,8 @@ impl<T: 'static> AnyItem for Vertice<T> {
         self.1.references_any(this)
     }
 
-    fn remove_reference(&mut self, this: Index, key: AnyKey) -> bool {
-        self.1.remove_reference(this, key)
+    fn item_removed(&mut self, this: Index, key: AnyKey) -> bool {
+        self.1.item_removed(this, key)
     }
 }
 

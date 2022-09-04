@@ -71,16 +71,16 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         let mut remove = Vec::new();
 
         // Update connections
-        super::util::remove_references(self, key.into(), &mut remove)?;
+        super::util::notify_item_removed(self, key.into(), &mut remove)?;
         // Deallocate
-        let item = self.0.unfill(key.into()).expect("Should exist");
+        let item = self.0.unfill(key.into())?;
 
         // Recursive remove
         while let Some(rf) = remove.pop() {
             // Update connections
-            if super::util::remove_references(self, rf, &mut remove).is_some() {
+            if super::util::notify_item_removed(self, rf, &mut remove).is_some() {
                 // Deallocate
-                let _ = self.0.any_unfill(rf.into());
+                self.0.unfill_any(rf.into());
             }
         }
 

@@ -15,8 +15,7 @@ use super::{
 ///
 /// Collection can be split into collections of items and shells.
 pub trait Collection<T: Item>: Access<T> {
-    /// Err if collection is out of keys.
-    /// May panic if some of the references don't exist or if prefix doesn't exist.
+    /// Err if collection is out of keys or if some of the references don't exist.
     fn add(&mut self, item: T) -> Result<Key<T>, T>;
 
     /// Err if some of the references don't exist.

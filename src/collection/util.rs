@@ -18,13 +18,7 @@ pub fn add_references<T: Item + ?Sized>(
 
             // Rollback and return error
             for rf in item.references(key.index()).take(i) {
-                assert!(
-                    shells
-                        .get_mut_any(rf.key())
-                        .expect("Should exist")
-                        .remove_from(key.into()),
-                    "Should exist"
-                );
+                rf.disconnect(key.into(), shells);
             }
 
             return false;
@@ -70,19 +64,10 @@ pub fn update_diff<T: Item + ?Sized>(
                         match cmp {
                             (Some(_), Some(_)) | (None, None) => (),
                             (Some(rf), None) => {
-                                shells
-                                    .get_mut_any(rf.key())
-                                    .expect("Should exist")
-                                    .add_from(key.into());
+                                let _ = AnyRef::connect(key.into(), rf.key(), shells);
                             }
                             (None, Some(rf)) => {
-                                assert!(
-                                    shells
-                                        .get_mut_any(rf.key())
-                                        .expect("Should exist")
-                                        .remove_from(key.into()),
-                                    "Should exist"
-                                );
+                                rf.disconnect(key.into(), shells);
                             }
                         }
                     }
@@ -96,14 +81,13 @@ pub fn update_diff<T: Item + ?Sized>(
     true
 }
 
-/// Removes references from item at key to others and
-/// removes references from others to item.
+/// Notifies items referencing this one that it was removed.
 ///
 /// Additional items that need to be removed are added to
 /// remove list.
 ///
 /// None if it doesn't exist
-pub fn remove_references(
+pub fn notify_item_removed(
     coll: &mut (impl AnyAccess + ?Sized),
     key: AnyKey,
     remove: &mut Vec<AnyKey>,
@@ -123,7 +107,7 @@ pub fn remove_references(
     for rf in shell.from_any() {
         if !items
             .get_mut_any(rf)
-            .map_or(true, |item| item.remove_reference(rf.index(), key.into()))
+            .map_or(true, |item| item.item_removed(rf.index(), key.into()))
         {
             remove.push(rf);
         }

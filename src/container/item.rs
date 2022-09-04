@@ -100,8 +100,10 @@ impl<T: AnyItem> AnyContainer for ItemContainer<T> {
         }
     }
 
-    fn any_unfill(&mut self, key: AnySubKey) -> bool {
-        key.downcast::<T>().is_some() && self.0.unfill().is_some()
+    fn unfill_any(&mut self, key: AnySubKey) {
+        if key.downcast::<T>().is_some() {
+            self.0.unfill();
+        }
     }
 
     fn first(&self, key: TypeId) -> Option<AnySubKey> {
@@ -167,8 +169,8 @@ impl<T: ?Sized + 'static> AnyShell for SizedShell<T> {
         self.from.push(from);
     }
 
-    fn remove_from(&mut self, from: AnyKey) -> bool {
-        // TODO: This will be really slow for large froms.
+    fn remove_from(&mut self, from: AnyKey) {
+        // TODO: This will be really slow for large self.from
         if let Some((i, _)) = self
             .from
             .iter()
@@ -177,9 +179,6 @@ impl<T: ?Sized + 'static> AnyShell for SizedShell<T> {
             .find(|(_, key)| key == &&from)
         {
             self.from.remove(i);
-            true
-        } else {
-            false
         }
     }
 }

@@ -39,8 +39,7 @@ pub trait AnyContainer: Any {
         key: AnySubKey,
     ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)>;
 
-    /// Frees if it exists.
-    fn any_unfill(&mut self, key: AnySubKey) -> bool;
+    fn unfill_any(&mut self, key: AnySubKey);
 
     /// Returns first key for given type
     fn first(&self, key: TypeId) -> Option<AnySubKey>;

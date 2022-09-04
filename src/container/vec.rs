@@ -147,11 +147,9 @@ impl<T: AnyItem> AnyContainer for VecContainer<T> {
         }
     }
 
-    fn any_unfill(&mut self, key: AnySubKey) -> bool {
+    fn unfill_any(&mut self, key: AnySubKey) {
         if let Some(key) = key.downcast() {
-            self.unfill(key).is_some()
-        } else {
-            false
+            self.unfill(key);
         }
     }
 
