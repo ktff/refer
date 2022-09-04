@@ -1,7 +1,7 @@
 use std::{
     any::{Any, TypeId},
     cell::UnsafeCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     marker::PhantomData,
 };
 
@@ -12,13 +12,15 @@ use super::vec::VecContainerFamily;
 pub struct AllContainer<F: SizedContainerFamily = VecContainerFamily> {
     /// T -> F::C<T>
     collections: HashMap<TypeId, Box<dyn AnyContainer>>,
+    key_len: u32,
     _family: PhantomData<F>,
 }
 
 impl<F: SizedContainerFamily> AllContainer<F> {
-    pub fn new() -> Self {
+    pub fn new(key_len: u32) -> Self {
         Self {
             collections: HashMap::new(),
+            key_len,
             _family: PhantomData,
         }
     }
@@ -40,10 +42,11 @@ impl<F: SizedContainerFamily> AllContainer<F> {
     }
 
     fn coll_or_insert<T: AnyItem>(&mut self) -> &mut F::C<T> {
+        let key_len = self.key_len;
         (self
             .collections
             .entry(TypeId::of::<T>())
-            .or_insert_with(|| Box::new(F::C::<T>::default())) as &mut dyn Any)
+            .or_insert_with(|| Box::new(F::new::<T>(key_len))) as &mut dyn Any)
             .downcast_mut()
             .expect("Should be correct type")
     }
@@ -85,13 +88,15 @@ where
     }
 }
 
+impl<F: SizedContainerFamily> !Sync for AllContainer<F> {}
+
 impl<T: AnyItem, F: SizedContainerFamily> Container<T> for AllContainer<F>
 where
     F::C<T>: Container<T>,
 {
     type Shell = <F::C<T> as Container<T>>::Shell;
 
-    type CellIter<'a>=<F::C<T> as Container<T>>::CellIter<'a>
+    type SlotIter<'a>=<F::C<T> as Container<T>>::SlotIter<'a>
     where
         Self: 'a;
 
@@ -99,7 +104,7 @@ where
         self.coll()?.get_slot(key)
     }
 
-    fn iter_slot(&self) -> Option<Self::CellIter<'_>> {
+    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
         self.coll()?.iter_slot()
     }
 }
@@ -110,7 +115,7 @@ impl<F: SizedContainerFamily> AnyContainer for AllContainer<F> {
         key: AnySubKey,
     ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)> {
         self.collections
-            .get(&key.ty_id())
+            .get(&key.type_id())
             .map(|c| &**c)?
             .any_get_slot(key)
     }
@@ -118,30 +123,27 @@ impl<F: SizedContainerFamily> AnyContainer for AllContainer<F> {
     /// Frees if it exists.
     fn any_unfill(&mut self, key: AnySubKey) -> bool {
         self.collections
-            .get_mut(&key.ty_id())
+            .get_mut(&key.type_id())
             .map(|c| &mut **c)
             .map(|c| c.any_unfill(key))
             .unwrap_or(false)
     }
-}
 
-impl<F: SizedContainerFamily> KeyContainer for AllContainer<F> {
-    // fn prefix(&self) -> Option<Prefix> {
-    //     unimplemented!()
-    // }
-
-    fn first<I: AnyItem>(&self) -> Option<SubKey<I>> {
-        self.coll::<I>()?.first()
+    fn first(&self, key: TypeId) -> Option<AnySubKey> {
+        self.collections.get(&key).and_then(|c| c.first(key))
     }
 
-    fn next<I: AnyItem>(&self, key: SubKey<I>) -> Option<SubKey<I>> {
-        self.coll::<I>()?.next(key)
+    fn next(&self, key: AnySubKey) -> Option<AnySubKey> {
+        self.collections
+            .get(&key.type_id())
+            .and_then(|c| c.next(key))
     }
-}
 
-/// Impl default
-impl<F: SizedContainerFamily> Default for AllContainer<F> {
-    fn default() -> Self {
-        Self::new()
+    fn types(&self) -> HashSet<TypeId> {
+        let mut set = HashSet::new();
+        for c in self.collections.values() {
+            set.extend(c.types());
+        }
+        set
     }
 }

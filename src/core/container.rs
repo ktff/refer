@@ -1,21 +1,43 @@
-use std::{any::Any, cell::UnsafeCell};
+use std::{
+    any::{Any, TypeId},
+    cell::UnsafeCell,
+    collections::HashSet,
+};
 
-use super::{AnyItem, AnyShell, AnySubKey, Shell, SubKey};
+use super::{AnyItem, AnyShell, AnySubKey, ReservedKey, Shell, SubKey};
+
+/// Note, containers can panic/assume  if you try to access a key that was not produced at any
+/// point by that container.
+
+// /// A family of containers.
+// pub trait ContainerFamily: 'static {
+//     type C<T: ?Sized + 'static>: 'static;
+// }
+
+/// A family of containers for sized types.
+pub trait SizedContainerFamily: 'static {
+    type C<T: AnyItem>: AnyContainer + 'static;
+
+    fn new<T: AnyItem>(key_len: u32) -> Self::C<T>;
+}
 
 /// It's responsibility is to contain items and shells, not to manage access to them.
-pub trait Container<T: AnyItem + ?Sized>: AnyContainer + KeyContainer {
+/// UNSAFE: It is unsafe for Containers to be Sync.
+pub trait Container<T: ?Sized + 'static>: AnyContainer {
     type Shell: Shell<T = T>;
 
-    type CellIter<'a>: Iterator<Item = (SubKey<T>, &'a UnsafeCell<T>, &'a UnsafeCell<Self::Shell>)>
+    type SlotIter<'a>: Iterator<Item = (SubKey<T>, &'a UnsafeCell<T>, &'a UnsafeCell<Self::Shell>)>
     where
         Self: 'a;
 
     fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)>;
 
     /// Even if some it may be empty.
-    fn iter_slot(&self) -> Option<Self::CellIter<'_>>;
+    /// UNSAFE: Guarantees no slot is returned twice in returned iterator.
+    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>>;
 }
 
+/// UNSAFE: It is unsafe for Containers to be Sync.
 pub trait AnyContainer: Any {
     fn any_get_slot(
         &self,
@@ -24,13 +46,36 @@ pub trait AnyContainer: Any {
 
     /// Frees if it exists.
     fn any_unfill(&mut self, key: AnySubKey) -> bool;
+
+    /// Returns first key for given type
+    fn first(&self, key: TypeId) -> Option<AnySubKey>;
+
+    /// Returns following key after given in ascending order
+    /// for the same type.
+    fn next(&self, key: AnySubKey) -> Option<AnySubKey>;
+
+    /// All types in the container.
+    fn types(&self) -> HashSet<TypeId>;
 }
 
-pub trait KeyContainer {
-    // TODO: Enable for I: ?Sized once you have that figured out
-    fn first<I: AnyItem>(&self) -> Option<SubKey<I>>;
+/// It's responsibility is to manage allocation/placement/deallocation of item
+pub trait Allocator<T: ?Sized + 'static> {
+    /// Reserves slot for item.
+    /// None if collection is out of keys or memory.
+    fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>>;
 
-    // TODO: Enable for I: ?Sized once you have that figured out
-    /// Returns following key after given in ascending order.
-    fn next<I: AnyItem>(&self, key: SubKey<I>) -> Option<SubKey<I>>;
+    /// Cancels reservation for item.
+    /// Panics if there is no reservation.
+    fn cancel(&mut self, key: ReservedKey<T>);
+
+    /// Fulfills reservation.
+    /// Panics if there is no reservation.
+    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T>
+    where
+        T: Sized;
+
+    /// Frees and returns item if it exists
+    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
+    where
+        T: Sized;
 }

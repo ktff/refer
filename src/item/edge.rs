@@ -11,7 +11,7 @@ impl<T: ?Sized + 'static> Edge<T> {
     }
 
     /// Panics if a or b don't exist.
-    pub fn add(coll: &mut impl ShellCollection<T>, this: AnyKey, a: Key<T>, b: Key<T>) -> Self {
+    pub fn add(coll: &mut impl ShellsMut<T>, this: AnyKey, a: Key<T>, b: Key<T>) -> Self {
         coll.get_mut(a).expect("Should exist").add_from(this.into());
         coll.get_mut(b).expect("Should exist").add_from(this.into());
 
@@ -19,7 +19,7 @@ impl<T: ?Sized + 'static> Edge<T> {
     }
 
     /// True if everything that should exist existed.
-    pub fn remove(self, coll: &mut impl ShellCollection<T>, this: AnyKey) -> bool {
+    pub fn remove(self, coll: &mut impl ShellsMut<T>, this: AnyKey) -> bool {
         let mut success_a = false;
         if let Some(a_shell) = coll.get_mut(self.0[0].key()) {
             success_a = a_shell.remove_from(this);

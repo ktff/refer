@@ -1,22 +1,30 @@
-use super::*;
+use crate::core::*;
 
 /// Adds references in item at key to shells.
 /// item --ref--> others
 ///
 /// Fails if any reference doesn't exist.
 pub fn add_references<T: Item + ?Sized>(
-    shells: &mut (impl AnyShellCollection + ?Sized),
+    shells: &mut (impl AnyShells + ?Sized),
     key: Key<T>,
     item: &T,
 ) -> bool {
     // item --> others
     for (i, rf) in item.references(key.index()).enumerate() {
-        if !shells.add_from(rf.key(), key.into()) {
+        if let Some(shell) = shells.get_shell_mut_any(rf.key()) {
+            shell.add_from(key.into());
+        } else {
             // Reference doesn't exist
 
             // Rollback and return error
             for rf in item.references(key.index()).take(i) {
-                assert!(shells.remove_from(rf.key(), key.into()), "Should exist");
+                assert!(
+                    shells
+                        .get_shell_mut_any(rf.key())
+                        .expect("Should exist")
+                        .remove_from(key.into()),
+                    "Should exist"
+                );
             }
 
             return false;
@@ -30,7 +38,7 @@ pub fn add_references<T: Item + ?Sized>(
 ///
 /// Fails if reference is not valid.
 pub fn update_diff<T: Item + ?Sized>(
-    shells: &mut (impl AnyShellCollection + ?Sized),
+    shells: &mut (impl AnyShells + ?Sized),
     key: Key<T>,
     old: &T,
     new: &T,
@@ -47,10 +55,14 @@ pub fn update_diff<T: Item + ?Sized>(
             (Some(_), Some(_)) | (None, None) => (),
             (Some(&rf), None) => {
                 // We don't care so much about this reference missing.
-                let _ = shells.remove_from(rf.key(), key.into());
+                shells
+                    .get_shell_mut_any(rf.key())
+                    .map(|shell| shell.remove_from(key.into()));
             }
             (None, Some(rf)) => {
-                if !shells.add_from(rf.key(), key.into()) {
+                if let Some(shell) = shells.get_shell_mut_any(rf.key()) {
+                    shell.add_from(key.into());
+                } else {
                     // Reference doesn't exist
 
                     // Rollback and return error
@@ -58,10 +70,19 @@ pub fn update_diff<T: Item + ?Sized>(
                         match cmp {
                             (Some(_), Some(_)) | (None, None) => (),
                             (Some(rf), None) => {
-                                assert!(shells.add_from(rf.key(), key.into()), "Should exist");
+                                shells
+                                    .get_shell_mut_any(rf.key())
+                                    .expect("Should exist")
+                                    .add_from(key.into());
                             }
                             (None, Some(rf)) => {
-                                assert!(shells.remove_from(rf.key(), key.into()), "Should exist");
+                                assert!(
+                                    shells
+                                        .get_shell_mut_any(rf.key())
+                                        .expect("Should exist")
+                                        .remove_from(key.into()),
+                                    "Should exist"
+                                );
                             }
                         }
                     }
@@ -83,20 +104,27 @@ pub fn update_diff<T: Item + ?Sized>(
 ///
 /// None if it doesn't exist
 pub fn remove_references(
-    coll: &mut (impl AnyCollection + ?Sized),
+    coll: &mut (impl AnyAccess + ?Sized),
     key: AnyKey,
     remove: &mut Vec<AnyKey>,
 ) -> Option<()> {
-    let (items, shells) = coll.split_any_mut();
-
     // remove item --> others
-    for rf in items.references(key)? {
-        let _ = shells.remove_from(rf.key(), key.into());
+    let (item, shells) = coll.split_item_any(key)?;
+    if let Some(references) = item.references_any(key.index()) {
+        for rf in references {
+            shells
+                .get_shell_mut_any(rf.key())
+                .map(|shell| shell.remove_from(key.into()));
+        }
     }
 
     // item <-- others
-    for rf in shells.from(key).expect("Should exist") {
-        if !items.remove_reference(rf, key.into()) {
+    let (items, shell) = coll.split_shell_any(key).expect("Should exist");
+    for rf in shell.from_any() {
+        if !items
+            .get_item_mut_any(rf)
+            .map_or(true, |item| item.remove_reference(rf.index(), key.into()))
+        {
             remove.push(rf);
         }
     }

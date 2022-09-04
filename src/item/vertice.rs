@@ -16,7 +16,7 @@ impl<T: AnyItem + ?Sized> Vertice<T> {
     /// Fails if any of the shells don't exist.
     pub fn connect(
         &mut self,
-        collection: &mut impl ShellCollection<T>,
+        collection: &mut impl ShellsMut<T>,
         this: AnyKey,
         to: Key<T>,
     ) -> Option<()> {
@@ -29,7 +29,7 @@ impl<T: AnyItem + ?Sized> Vertice<T> {
     /// True if removed. False if there was nothing to remove.
     pub fn disconnect(
         &mut self,
-        collection: &mut impl ShellCollection<T>,
+        collection: &mut impl ShellsMut<T>,
         this: AnyKey,
         to: usize,
     ) -> bool {
