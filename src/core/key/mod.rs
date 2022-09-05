@@ -18,10 +18,9 @@ pub use sub::*;
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
 // hence it needs to be able to know where something starts and ends which is not robustly possible for ref keys.
-
 // NOTE: That leaves us with numerical keys.
 
-/// It's the responsibility of collections to issue keys in a way that close by indices have close by items.
+/// It's the responsibility/optimization of collections to issue keys in a way that close by indices have close by items.
 pub struct Key<T: ?Sized>(Index, PhantomData<T>);
 
 impl<T: ?Sized> Key<T> {
@@ -45,7 +44,7 @@ impl<T: ?Sized> Key<T> {
     }
 
     pub fn len(&self) -> u32 {
-        self.0.len_low()
+        self.0.len_low_bits()
     }
 }
 
@@ -110,7 +109,7 @@ impl AnyKey {
     }
 
     pub fn len(&self) -> u32 {
-        self.1.len_low()
+        self.1.len_low_bits()
     }
 
     pub fn type_id(&self) -> TypeId {

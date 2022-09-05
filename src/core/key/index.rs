@@ -12,12 +12,12 @@ pub struct Index(pub NonZeroU64);
 
 impl Index {
     /// Length of low bits
-    pub const fn len_low(self) -> u32 {
+    pub const fn len_low_bits(self) -> u32 {
         INDEX_BITS - self.0.get().leading_zeros()
     }
 
     /// Length of high bits
-    pub const fn len_high(self) -> u32 {
+    pub const fn len_high_bits(self) -> u32 {
         INDEX_BITS - self.0.get().trailing_zeros()
     }
 
@@ -65,4 +65,96 @@ impl fmt::Debug for Index {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#x}", self.0)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn len_low() {
+        assert_eq!(Index(NonZeroU64::new(1).unwrap()).len_low_bits(), 1);
+        assert_eq!(Index(NonZeroU64::new(2).unwrap()).len_low_bits(), 2);
+        assert_eq!(Index(NonZeroU64::new(3).unwrap()).len_low_bits(), 2);
+        assert_eq!(Index(NonZeroU64::new(4).unwrap()).len_low_bits(), 3);
+    }
+
+    #[test]
+    fn len_high() {
+        assert_eq!(Index(NonZeroU64::new(1).unwrap()).len_high_bits(), 64);
+        assert_eq!(Index(NonZeroU64::new(2).unwrap()).len_high_bits(), 63);
+        assert_eq!(Index(NonZeroU64::new(3).unwrap()).len_high_bits(), 64);
+        assert_eq!(Index(NonZeroU64::new(4).unwrap()).len_high_bits(), 62);
+    }
+
+    #[test]
+    fn with_prefix() {
+        assert_eq!(
+            Index(NonZeroU64::new(0x1000_0000_0000_0000).unwrap()).with_prefix(16, 0x1234),
+            Index(NonZeroU64::new(0x1234_1000_0000_0000).unwrap())
+        );
+
+        assert_eq!(
+            Index(NonZeroU64::new(0x1000_0000_0000_0000).unwrap())
+                .with_prefix(16, 0x1234)
+                .with_prefix(8, 0x56),
+            Index(NonZeroU64::new(0x5612_3410_0000_0000).unwrap())
+        );
+    }
+
+    #[test]
+    fn split_prefix() {
+        assert_eq!(
+            Index(NonZeroU64::new(0x1234_1000_0000_0000).unwrap()).split_prefix(16),
+            (
+                0x1234,
+                Index(NonZeroU64::new(0x1000_0000_0000_0000).unwrap())
+            )
+        );
+
+        assert_eq!(
+            Index(NonZeroU64::new(0x5612_3410_0000_0000).unwrap())
+                .split_prefix(16)
+                .1
+                .split_prefix(8),
+            (0x34, Index(NonZeroU64::new(0x1000_0000_0000_0000).unwrap()))
+        );
+    }
+
+    #[test]
+    fn split_prefix_try() {
+        assert_eq!(
+            Index(NonZeroU64::new(0x1234_1000_0000_0000).unwrap()).split_prefix_try(16),
+            Ok((
+                0x1234,
+                Index(NonZeroU64::new(0x1000_0000_0000_0000).unwrap())
+            ))
+        );
+
+        assert_eq!(
+            Index(NonZeroU64::new(0x1234_0000_0000_0000).unwrap()).split_prefix_try(16),
+            Err(Index(NonZeroU64::new(0x1234).unwrap()))
+        );
+
+        assert_eq!(
+            Index(NonZeroU64::new(0x5612_3410_0000_0000).unwrap())
+                .split_prefix_try(16)
+                .unwrap()
+                .1
+                .split_prefix_try(8),
+            Ok((0x34, Index(NonZeroU64::new(0x1000_0000_0000_0000).unwrap())))
+        );
+
+        assert_eq!(
+            Index(NonZeroU64::new(0x5612_3400_0000_0000).unwrap())
+                .split_prefix_try(16)
+                .unwrap()
+                .1
+                .split_prefix_try(8),
+            Err(Index(NonZeroU64::new(0x34).unwrap()))
+        );
+    }
+
+
+    
 }

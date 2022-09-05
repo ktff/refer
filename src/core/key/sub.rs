@@ -19,13 +19,16 @@ impl<T: ?Sized> SubKey<T> {
     }
 
     pub fn index(&self, len: u32) -> Index {
-        Index(NonZeroU64::new((self.0).0.get() >> (MAX_KEY_LEN - len)).expect("Invalid key"))
+        Index(NonZeroU64::new(self.as_u64(len)).expect("Invalid key"))
     }
 
     pub fn as_usize(&self, len: u32) -> usize {
-        ((self.0).0.get() >> (MAX_KEY_LEN - len)) as usize
+        self.as_u64(len) as usize
     }
 
+    fn as_u64(&self, len: u32) -> u64 {
+        (self.0).0.get() >> (MAX_KEY_LEN - len)
+    }
     /// Caller must ensure that the sub key is fully builded,
     /// otherwise any use has high chance of failing.
     ///
@@ -53,6 +56,12 @@ impl<T: ?Sized> SubKey<T> {
             Ok((prefix, suffix)) => Ok((prefix, Self(suffix, PhantomData))),
             Err(suffix) => Err(suffix),
         }
+    }
+}
+
+impl<T: ?Sized> PartialEq for SubKey<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
     }
 }
 
@@ -136,5 +145,39 @@ impl From<AnyKey> for AnySubKey {
 impl Debug for AnySubKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "AnySubKey<{:?}>({:?})", self.0, self.1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sub_key() {
+        let index = Index(NonZeroU64::new(0x8f).unwrap());
+        let sub_key = SubKey::<u8>::new(8, index);
+        assert_eq!(sub_key.index(8), index);
+    }
+
+    #[test]
+    fn test_any_sub_key() {
+        let index = Index(NonZeroU64::new(0x8f).unwrap());
+        let sub_key = SubKey::new(8, index);
+        let any_sub_key: AnySubKey = sub_key.into();
+        assert_eq!(any_sub_key.downcast::<u8>(), Some(sub_key));
+        assert_eq!(any_sub_key.downcast::<u16>(), None);
+    }
+
+    #[test]
+    fn test_any_sub_key_with_prefix() {
+        let index = Index(NonZeroU64::new(0x8f).unwrap());
+        let sub_key = SubKey::new(8, index);
+        let any_sub_key: AnySubKey = sub_key.into();
+        let any_sub_key = any_sub_key.with_prefix(4, 0x1);
+        assert_eq!(
+            any_sub_key.downcast::<u8>(),
+            Some(sub_key.with_prefix(4, 0x1))
+        );
+        assert_eq!(any_sub_key.downcast::<u16>(), None);
     }
 }

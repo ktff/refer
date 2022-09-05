@@ -18,7 +18,7 @@ impl<T: ?Sized> DeltaKey<T> {
 
     /// Delta will have a string of same upper bits. Either 000....
     /// or 111...., but can also have a string on the lower bits if it's a key to
-    /// a high up item.
+    /// a high up item although that can be ignored for optimization.
     ///
     /// The length depends on the proximity of the key and index used to construct it.
     pub fn delta(self) -> u64 {
@@ -64,5 +64,19 @@ impl<T: ?Sized> Clone for DeltaKey<T> {
 impl<T: ?Sized> Debug for DeltaKey<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DeltaKey<{}>({:?})", any::type_name::<T>(), self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_delta() {
+        let key = Key::<u8>::new(Index(NonZeroU64::new(0xffff_0000_0020).unwrap()));
+        let index = Index(NonZeroU64::new(0xffff_0000_0000).unwrap());
+        let delta = key - index;
+        assert_eq!(delta.delta(), 0x20);
+        assert_eq!(delta + index, key);
     }
 }
