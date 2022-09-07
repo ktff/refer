@@ -9,13 +9,17 @@ use super::{AnyKey, Index, Key, MAX_KEY_LEN};
 
 /// This is builded from top by pushing prefixes on top from bottom.
 /// And deconstructed from top by removing prefixes.
-pub struct SubKey<T: ?Sized>(Index, PhantomData<T>);
+pub struct SubKey<T: ?Sized + 'static>(Index, PhantomData<T>);
 
-impl<T: ?Sized> SubKey<T> {
+impl<T: ?Sized + 'static> SubKey<T> {
     /// New Sub key with index of len.
     pub const fn new(len: u32, index: Index) -> Self {
         let index = NonZeroU64::new(index.0.get() << (MAX_KEY_LEN - len)).expect("Invalid suffix");
         Self(Index(index), PhantomData)
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 
     pub fn index(&self, len: u32) -> Index {
@@ -59,15 +63,15 @@ impl<T: ?Sized> SubKey<T> {
     }
 }
 
-impl<T: ?Sized> PartialEq for SubKey<T> {
+impl<T: ?Sized + 'static> PartialEq for SubKey<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T: ?Sized> Copy for SubKey<T> {}
+impl<T: ?Sized + 'static> Copy for SubKey<T> {}
 
-impl<T: ?Sized> Clone for SubKey<T> {
+impl<T: ?Sized + 'static> Clone for SubKey<T> {
     fn clone(&self) -> Self {
         SubKey(self.0, PhantomData)
     }
@@ -79,7 +83,7 @@ impl<T: ?Sized + 'static> From<Key<T>> for SubKey<T> {
     }
 }
 
-impl<T: ?Sized> Debug for SubKey<T> {
+impl<T: ?Sized + 'static> Debug for SubKey<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SubKey<{}>({:?})", any::type_name::<T>(), self.0)
     }

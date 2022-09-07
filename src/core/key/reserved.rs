@@ -1,11 +1,11 @@
 use super::{Index, SubKey};
 use log::*;
-use std::mem::forget;
+use std::{any::TypeId, mem::forget};
 
 /// Helps to make allocate process easier to do correctly.
-pub struct ReservedKey<T>(SubKey<T>);
+pub struct ReservedKey<T: 'static>(SubKey<T>);
 
-impl<T> ReservedKey<T> {
+impl<T: 'static> ReservedKey<T> {
     /// Should only be constructed by Containers.
     pub const fn new(key: SubKey<T>) -> Self {
         Self(key)
@@ -13,6 +13,10 @@ impl<T> ReservedKey<T> {
 
     pub fn key(&self) -> SubKey<T> {
         self.0
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        self.0.type_id()
     }
 
     /// Adds prefix of given len.
@@ -43,7 +47,7 @@ impl<T> ReservedKey<T> {
     }
 }
 
-impl<T> Drop for ReservedKey<T> {
+impl<T: 'static> Drop for ReservedKey<T> {
     fn drop(&mut self) {
         warn!("Leaked reserved key {:?}", self.0);
     }

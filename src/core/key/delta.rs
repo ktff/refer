@@ -9,9 +9,9 @@ use std::{
 use super::{Index, Key};
 
 /// A delta constructed from Key<T> - Index = Delta<T>
-pub struct DeltaKey<T: ?Sized>(u64, PhantomData<T>);
+pub struct DeltaKey<T: ?Sized + 'static>(u64, PhantomData<T>);
 
-impl<T: ?Sized> DeltaKey<T> {
+impl<T: ?Sized + 'static> DeltaKey<T> {
     pub fn new(delta: u64) -> Self {
         DeltaKey(delta, PhantomData)
     }
@@ -26,7 +26,7 @@ impl<T: ?Sized> DeltaKey<T> {
     }
 }
 
-impl<T: ?Sized> Sub<Index> for Key<T> {
+impl<T: ?Sized + 'static> Sub<Index> for Key<T> {
     type Output = DeltaKey<T>;
 
     fn sub(self, other: Index) -> Self::Output {
@@ -34,7 +34,7 @@ impl<T: ?Sized> Sub<Index> for Key<T> {
     }
 }
 
-impl<T: ?Sized> Add<DeltaKey<T>> for Index {
+impl<T: ?Sized + 'static> Add<DeltaKey<T>> for Index {
     type Output = Key<T>;
 
     fn add(self, other: DeltaKey<T>) -> Self::Output {
@@ -42,7 +42,7 @@ impl<T: ?Sized> Add<DeltaKey<T>> for Index {
     }
 }
 
-impl<T: ?Sized> Add<Index> for DeltaKey<T> {
+impl<T: ?Sized + 'static> Add<Index> for DeltaKey<T> {
     type Output = Key<T>;
 
     fn add(self, other: Index) -> Self::Output {
@@ -53,15 +53,15 @@ impl<T: ?Sized> Add<Index> for DeltaKey<T> {
     }
 }
 
-impl<T: ?Sized> Copy for DeltaKey<T> {}
+impl<T: ?Sized + 'static> Copy for DeltaKey<T> {}
 
-impl<T: ?Sized> Clone for DeltaKey<T> {
+impl<T: ?Sized + 'static> Clone for DeltaKey<T> {
     fn clone(&self) -> Self {
         DeltaKey(self.0, PhantomData)
     }
 }
 
-impl<T: ?Sized> Debug for DeltaKey<T> {
+impl<T: ?Sized + 'static> Debug for DeltaKey<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DeltaKey<{}>({:?})", any::type_name::<T>(), self.0)
     }

@@ -1,4 +1,5 @@
 use crate::core::*;
+use log::*;
 use std::{
     any::TypeId, cell::UnsafeCell, collections::HashSet, marker::PhantomData, num::NonZeroU64,
 };
@@ -72,7 +73,10 @@ impl<T: AnyItem> Container<T> for ItemContainer<T> {
     fn get_slot(&self, _: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
         match &self.0 {
             Slot::Free => None,
-            Slot::Reserved => panic!("Reserved slot"),
+            Slot::Reserved => {
+                warn!("Reserved slot {:?} was accessed", Self::key());
+                None
+            }
             Slot::Filled { item, shell } => Some((item, shell)),
         }
     }
@@ -81,7 +85,10 @@ impl<T: AnyItem> Container<T> for ItemContainer<T> {
         // This is safe since we only return reference to a single slot.
         match &self.0 {
             Slot::Free => None,
-            Slot::Reserved => panic!("Reserved slot"),
+            Slot::Reserved => {
+                warn!("Reserved slot {:?} was accessed", Self::key());
+                None
+            }
             Slot::Filled { item, shell } => Some(Some((Self::key(), item, shell)).into_iter()),
         }
     }
@@ -95,7 +102,10 @@ impl<T: AnyItem> AnyContainer for ItemContainer<T> {
         key.downcast::<T>()?;
         match &self.0 {
             Slot::Free => None,
-            Slot::Reserved => panic!("Reserved slot"),
+            Slot::Reserved => {
+                warn!("Reserved slot {:?} was accessed", Self::key());
+                None
+            }
             Slot::Filled { item, shell } => Some((item, shell)),
         }
     }
@@ -233,8 +243,126 @@ impl<T: 'static> Slot<T> {
     pub fn unfill(&mut self) -> Option<T> {
         match std::mem::replace(self, Slot::Free) {
             Slot::Free => None,
-            Slot::Reserved => panic!("Reserved slot is unfilled"),
+            Slot::Reserved => {
+                error!("Reserved Slot<{}> is unfilled", std::any::type_name::<T>());
+                None
+            }
             Slot::Filled { item, .. } => Some(item.into_inner()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::collection::owned::Owned;
+    use std::any::Any;
+
+    #[test]
+    fn allocate_item() {
+        let mut container = Owned::new(ItemContainer::<usize>::new());
+
+        let item = 42;
+        let key = container.reserve(&item).unwrap();
+        let key = container.fulfill(key, item).into_key();
+
+        assert_eq!(container.items().get(key), Some(&item));
+        assert!(container.reserve(&item).is_none());
+    }
+
+    #[test]
+    fn allocate_cancel() {
+        let mut container = Owned::new(ItemContainer::<usize>::new());
+
+        let item = 42;
+        let rkey = container.reserve(&item).unwrap();
+        let key = rkey.key().into_key();
+        container.cancel(rkey);
+
+        assert_eq!(container.items().get(key), None);
+        assert!(container.reserve(&item).is_some());
+    }
+
+    #[test]
+    fn allocate_unfill() {
+        let mut container = Owned::new(ItemContainer::<usize>::new());
+
+        let item = 42;
+        let key = container.reserve(&item).unwrap();
+        let key = container.fulfill(key, item).into_key();
+
+        assert_eq!(container.items().get(key), Some(&item));
+        assert_eq!(container.unfill(key.into()), Some(item));
+        assert_eq!(container.items().get(key), None);
+        assert!(container.reserve(&item).is_some());
+    }
+
+    #[test]
+    fn iter() {
+        let mut container = Owned::new(ItemContainer::<usize>::new());
+
+        let item = 42;
+        let key = container.add(item).unwrap();
+
+        assert_eq!(container.items().iter().count(), 1);
+        assert_eq!(container.items().iter().next().unwrap(), (key, &item));
+    }
+
+    #[test]
+    fn get_any() {
+        let mut container = Owned::new(ItemContainer::<usize>::new());
+
+        let item = 42;
+        let key = container.add(item).unwrap();
+
+        assert_eq!(
+            (container.items_mut().get_any(key.into()).unwrap() as &dyn Any)
+                .downcast_ref::<usize>(),
+            Some(&item)
+        );
+    }
+
+    #[test]
+    fn unfill_any() {
+        let mut container = ItemContainer::<usize>::new();
+
+        let item = 42;
+        let key = container.reserve(&item).unwrap();
+        let key = container.fulfill(key, item);
+
+        container.unfill_any(key.into());
+        assert!(container.get_slot(key.into()).is_none());
+    }
+
+    #[test]
+    fn iter_keys() {
+        let mut container = Owned::new(ItemContainer::<usize>::new());
+
+        let item = 42;
+        let key = container.add(item).unwrap();
+
+        let k = container.first(key.type_id());
+        assert_eq!(k, Some(key.into()));
+        assert!(container.next(k.unwrap()).is_none());
+    }
+
+    #[test]
+    fn shell() {
+        let mut container = Owned::new(ItemContainer::<usize>::new());
+
+        let item = 42;
+        let key = container.add(item).unwrap();
+
+        let mut shells = container.shells_mut();
+        let shell = shells.get_mut(key).unwrap();
+        shell.add_from(key.into());
+
+        assert_eq!(shell.from_count(), 1);
+        assert_eq!(shell.from::<usize>().collect::<Vec<_>>(), vec![key]);
+        assert_eq!(shell.from_any().collect::<Vec<_>>(), vec![key.into()]);
+        shell.remove_from(key.into());
+
+        assert_eq!(shell.from_count(), 0);
+        assert_eq!(shell.from::<usize>().collect::<Vec<_>>(), vec![]);
     }
 }

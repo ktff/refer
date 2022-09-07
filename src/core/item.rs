@@ -31,7 +31,7 @@ pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
     /// Some if item exists.
     fn get_mut(&mut self, key: Key<T>) -> Option<&mut T>;
 
-    /// Consistent ascending order.
+    /// Ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
@@ -43,7 +43,7 @@ pub trait Items<T: ?Sized + 'static> {
     /// Some if item exists.
     fn get(&self, key: Key<T>) -> Option<&T>;
 
-    /// Consistent ascending order.
+    /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;
 }
 

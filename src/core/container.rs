@@ -27,6 +27,7 @@ pub trait Container<T: AnyItem>: AnyContainer {
 
     fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)>;
 
+    /// Iterates in ascending order of key.
     /// Even if some it may be empty.
     /// UNSAFE: Guarantees no slot is returned twice in returned iterator.
     unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>>;

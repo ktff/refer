@@ -43,7 +43,7 @@ pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {
     /// Some if item exists.
     fn get_mut(&mut self, key: Key<T>) -> Option<&mut Self::Shell>;
 
-    /// Consistent ascending order.
+    /// Ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
@@ -57,7 +57,7 @@ pub trait Shells<T: ?Sized + 'static> {
     /// Some if item exists.
     fn get(&self, key: Key<T>) -> Option<&Self::Shell>;
 
-    /// Consistent ascending order.
+    /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;
 }
 

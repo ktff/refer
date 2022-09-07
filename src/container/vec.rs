@@ -54,7 +54,7 @@ impl<T: 'static> Allocator<T> for VecContainer<T> {
             debug_assert!(matches!(self.slots[index.as_usize()], Slot::Free));
             index
         } else {
-            if self.slots.len() >= (1 << self.key_len) {
+            if self.slots.len().checked_shr(self.key_len).unwrap_or(0) >= 1 {
                 // Out of keys
                 return None;
             }
@@ -163,7 +163,7 @@ impl<T: AnyItem> AnyContainer for VecContainer<T> {
 
     fn next(&self, key: AnySubKey) -> Option<AnySubKey> {
         if let Some(key) = key.downcast::<T>() {
-            self.first_from(key.as_usize(self.key_len))
+            self.first_from(key.as_usize(self.key_len) + 1)
                 .map(|key| key.into())
         } else {
             None
@@ -175,5 +175,123 @@ impl<T: AnyItem> AnyContainer for VecContainer<T> {
         let mut set = HashSet::new();
         set.insert(TypeId::of::<T>());
         set
+    }
+}
+
+impl<T: 'static> Default for VecContainer<T> {
+    fn default() -> Self {
+        Self::new(MAX_KEY_LEN)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::collection::owned::Owned;
+    use std::any::Any;
+
+    #[test]
+    fn add_items() {
+        let n = 20;
+        let mut container = Owned::new(VecContainer::<usize>::new(64));
+
+        let keys = (0..n)
+            .map(|i| container.add(i).unwrap())
+            .collect::<Vec<_>>();
+
+        for (i, key) in keys.iter().enumerate() {
+            assert_eq!(container.get(*key).unwrap().0, &i);
+        }
+    }
+
+    #[test]
+    fn reserve_cancel() {
+        let mut container = Owned::new(VecContainer::<usize>::new(1));
+
+        let item = 42;
+        let key = container.reserve(&item).unwrap();
+        assert!(container.reserve(&item).is_none());
+
+        container.cancel(key);
+        assert!(container.reserve(&item).is_some());
+    }
+
+    #[test]
+    fn add_unfill() {
+        let mut container = Owned::new(VecContainer::<usize>::new(10));
+
+        let item = 42;
+        let key = container.add(item).unwrap();
+
+        assert_eq!(container.items().get(key), Some(&item));
+        assert_eq!(container.unfill(key.into()), Some(item));
+        assert_eq!(container.items().get(key), None);
+    }
+
+    #[test]
+    fn iter() {
+        let n = 20;
+        let mut container = Owned::new(VecContainer::<usize>::new(10));
+
+        let mut keys = (0..n)
+            .map(|i| (container.add(i).unwrap(), i))
+            .collect::<Vec<_>>();
+
+        keys.sort();
+
+        assert_eq!(
+            keys,
+            container
+                .items()
+                .iter()
+                .map(|(key, &item)| (key, item))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn get_any() {
+        let mut container = Owned::new(VecContainer::<usize>::new(10));
+
+        let item = 42;
+        let key = container.add(item).unwrap();
+
+        assert_eq!(
+            (container.items_mut().get_any(key.into()).unwrap() as &dyn Any)
+                .downcast_ref::<usize>(),
+            Some(&item)
+        );
+    }
+
+    #[test]
+    fn unfill_any() {
+        let mut container = VecContainer::<usize>::new(10);
+
+        let item = 42;
+        let key = container.reserve(&item).unwrap();
+        let key = container.fulfill(key, item);
+
+        container.unfill_any(key.into());
+        assert!(container.get_slot(key.into()).is_none());
+    }
+
+    #[test]
+    fn iter_keys() {
+        let n = 20;
+        let mut container = Owned::new(VecContainer::<usize>::new(8));
+
+        let mut keys = (0..n)
+            .map(|i| container.add(i).unwrap().into())
+            .collect::<Vec<AnyKey>>();
+
+        keys.sort();
+
+        let any_keys = std::iter::successors(container.first(keys[0].type_id()), |key| {
+            container.next(*key)
+        })
+        .take(30)
+        .collect::<Vec<_>>();
+
+        assert_eq!(keys, any_keys);
     }
 }

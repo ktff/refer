@@ -35,6 +35,8 @@ type ArcRef<T> = Arc<RwLock<(usize, Vec<ArcRef<Any>>, Box<T>)>>;
 #![feature(type_alias_impl_trait)]
 #![feature(const_option)]
 #![feature(negative_impls)]
+// Currently this is not implemented safely for *dyn Trait.
+#![feature(trait_upcasting)]
 
 pub mod collection;
 pub mod container;

@@ -2,9 +2,9 @@ use super::{Access, AnyItem, AnyKey, AnyShell, AnyShells, ItemsMut, Key, ShellsM
 use std::fmt;
 
 #[derive(PartialEq, Eq)]
-pub struct Ref<T: ?Sized>(Key<T>);
+pub struct Ref<T: ?Sized + 'static>(Key<T>);
 
-impl<T: ?Sized> Ref<T> {
+impl<T: ?Sized + 'static> Ref<T> {
     pub fn new(key: Key<T>) -> Self {
         Ref(key)
     }
@@ -65,21 +65,21 @@ impl<T: AnyItem + ?Sized> Ref<T> {
     }
 }
 
-impl<T: ?Sized> Copy for Ref<T> {}
+impl<T: ?Sized + 'static> Copy for Ref<T> {}
 
-impl<T: ?Sized> Clone for Ref<T> {
+impl<T: ?Sized + 'static> Clone for Ref<T> {
     fn clone(&self) -> Self {
         Ref(self.0)
     }
 }
 
-impl<T: ?Sized> From<Ref<T>> for Key<T> {
+impl<T: ?Sized + 'static> From<Ref<T>> for Key<T> {
     fn from(ref_: Ref<T>) -> Self {
         ref_.0
     }
 }
 
-impl<T: ?Sized> fmt::Debug for Ref<T> {
+impl<T: ?Sized + 'static> fmt::Debug for Ref<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Ref({:?})", self.0)
     }

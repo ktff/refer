@@ -58,10 +58,10 @@ pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
     /// Some if item exists.
     fn get_mut(&mut self, key: Key<T>) -> Option<(&mut T, &Self::Shell)>;
 
-    /// Consistent ascending order.
+    /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;
 
-    /// Consistent ascending order.
+    /// Ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 
     fn shells(&self) -> Self::Shells<'_> {
