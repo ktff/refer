@@ -1,3 +1,5 @@
+use std::{any, fmt};
+
 use crate::core::*;
 
 pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
@@ -41,5 +43,17 @@ impl<T: ?Sized + 'static> AnyItem for Edge<T> {
     fn item_removed(&mut self, _: Index, key: AnyKey) -> bool {
         // Both references are crucial
         key != self.0[0].key().into() && key != self.0[1].key().into()
+    }
+}
+
+impl<T: ?Sized + 'static> fmt::Debug for Edge<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Edge<{}>({:?} -- {:?})",
+            any::type_name::<T>(),
+            self.0[0],
+            self.0[1]
+        )
     }
 }

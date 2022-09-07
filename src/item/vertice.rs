@@ -56,3 +56,9 @@ impl<T: AnyItem + ?Sized> AnyItem for Vertice<T> {
         true
     }
 }
+
+impl<T: AnyItem + ?Sized> Default for Vertice<T> {
+    fn default() -> Self {
+        Vertice(Vec::default())
+    }
+}
