@@ -1,8 +1,15 @@
 [package]
 name = "refer"
 version = "0.1.0"
+authors = ["Kruno Tomola Fabro"]
 edition = "2021"
 publish = false
+description = "A foundational library for building graphs out of structs"
+keywords = ["graph", "container", "reference", "management"]
+categories = ["data-structures", "memory-management"]
+readme = "README.md"
+license = "MIT"
+# repository = "https://github.com/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
