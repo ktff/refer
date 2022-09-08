@@ -41,7 +41,7 @@ Models aren't represented in any way by the library besides providing some examp
 ## Unsafe
 Internally the library uses unsafe code to allow type level separation of access to separate collections of
 objects that are intertwined in memory. With that it's possible to have mutable access to all items and all shells
-separately and at the same time even though in memory an item and its shell can be one by the other.
+separately and at the same time even though in memory an item and its shell can be one by the other in memory.
 
 
 ## Nightly
