@@ -20,20 +20,20 @@ impl<T: 'static> ReservedKey<T> {
     }
 
     /// Adds prefix of given len.
-    pub fn with_prefix(self, prefix_len: u32, prefix: usize) -> Self {
-        Self(self.0.with_prefix(prefix_len, prefix))
+    pub fn push(self, prefix_len: u32, prefix: usize) -> Self {
+        Self(self.0.push(prefix_len, prefix))
     }
 
     /// Splits of prefix of given len and suffix.
-    pub fn split_prefix(self, prefix_len: u32) -> (usize, Self) {
-        let (prefix, suffix) = self.0.split_prefix(prefix_len);
+    pub fn pop(self, prefix_len: u32) -> (usize, Self) {
+        let (prefix, suffix) = self.0.pop(prefix_len);
         (prefix, Self(suffix))
     }
 
     /// Splits of prefix of given len and suffix.
     /// Fails if there is no suffix.
-    pub fn split_prefix_try(self, prefix_len: u32) -> Result<(usize, Self), Index> {
-        match self.0.split_prefix_try(prefix_len) {
+    pub fn pop_try(self, prefix_len: u32) -> Result<(usize, Self), Index> {
+        match self.0.pop_try(prefix_len) {
             Ok((prefix, suffix)) => Ok((prefix, Self(suffix))),
             Err(index) => Err(index),
         }

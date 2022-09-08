@@ -21,7 +21,7 @@ pub trait Collection<T: Item>: Access<T> {
     /// Err if some of the references don't exist.
     fn set(&mut self, key: Key<T>, set: T) -> Result<T, T>;
 
-    /// Some if item exists.
+    /// Some if it exists.
     fn take(&mut self, key: Key<T>) -> Option<T>;
 }
 
@@ -52,10 +52,10 @@ pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
     where
         Self: 'a;
 
-    /// Some if item exists.
+    /// Some if it exists.
     fn get(&self, key: Key<T>) -> Option<(&T, &Self::Shell)>;
 
-    /// Some if item exists.
+    /// Some if it exists.
     fn get_mut(&mut self, key: Key<T>) -> Option<(&mut T, &Self::Shell)>;
 
     /// Ascending order.
@@ -80,6 +80,7 @@ pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
         self.split_mut().0
     }
 
+    /// Splits to views of items and shells
     fn split(&self) -> (Self::Items<'_>, Self::Shells<'_>);
 
     /// Splits to views of items and shells

@@ -4,7 +4,7 @@ use crate::core::*;
 
 pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
 
-/// Connects T <--F--> T.
+/// Connects T <--Edge--> T.
 pub struct Edge<T: ?Sized + 'static>([Ref<T>; 2]);
 
 impl<T: ?Sized + 'static> Edge<T> {
@@ -13,14 +13,14 @@ impl<T: ?Sized + 'static> Edge<T> {
     }
 
     /// Panics if a or b don't exist.
-    pub fn add(coll: &mut impl ShellsMut<T>, this: AnyKey, a: Key<T>, b: Key<T>) -> Self {
+    pub fn connect(coll: &mut impl ShellsMut<T>, this: AnyKey, a: Key<T>, b: Key<T>) -> Self {
         Self([
             Ref::connect(this.into(), a, coll),
             Ref::connect(this.into(), b, coll),
         ])
     }
 
-    pub fn remove(self, coll: &mut impl ShellsMut<T>, this: AnyKey) {
+    pub fn disconnect(self, coll: &mut impl ShellsMut<T>, this: AnyKey) {
         for rf in self.0 {
             rf.disconnect(this, coll);
         }

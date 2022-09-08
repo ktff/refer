@@ -1,8 +1,9 @@
 use super::{AnyKey, Key};
 use std::any::{Any, TypeId};
 
+/// A shell of an item. In which references are recorded.
 pub trait Shell: AnyShell {
-    /// This is mostly used for type checking/constraining.
+    // This is mostly used for type checking/constraining.
     type T: ?Sized + 'static;
     type Iter<'a, F: ?Sized + 'static>: Iterator<Item = Key<F>> + 'a
     where
@@ -16,8 +17,6 @@ pub trait Shell: AnyShell {
     fn iter(&self) -> Self::AnyIter<'_>;
 }
 
-/// A shell of an entity.
-/// Shells are connected to each other.
 pub trait AnyShell: Any {
     fn item_ty(&self) -> TypeId;
 
@@ -28,10 +27,10 @@ pub trait AnyShell: Any {
         self.from_any().count()
     }
 
-    /// Additive if called for same from multiple times.
+    /// Additive if called for same `from` multiple times.
     fn add_from(&mut self, from: AnyKey);
 
-    /// Subtracts if called for same from multiple times.
+    /// Subtracts if called for same `from` multiple times.
     fn remove_from(&mut self, from: AnyKey);
 }
 
@@ -40,7 +39,6 @@ pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {
     where
         Self: 'a;
 
-    /// Some if item exists.
     fn get_mut(&mut self, key: Key<T>) -> Option<&mut Self::Shell>;
 
     /// Ascending order.
@@ -54,7 +52,6 @@ pub trait Shells<T: ?Sized + 'static> {
     where
         Self: 'a;
 
-    /// Some if item exists.
     fn get(&self, key: Key<T>) -> Option<&Self::Shell>;
 
     /// Ascending order.

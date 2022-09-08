@@ -9,6 +9,7 @@ use crate::core::*;
 
 use super::vec::VecContainerFamily;
 
+/// A container of all types backed by container family F.
 pub struct AllContainer<F: ContainerFamily = VecContainerFamily> {
     /// T -> F::C<T>
     collections: HashMap<TypeId, Box<dyn AnyContainer>>,
@@ -56,22 +57,16 @@ impl<T: AnyItem, F: ContainerFamily> Allocator<T> for AllContainer<F>
 where
     F::C<T>: Allocator<T>,
 {
-    /// Reserves slot for item.
-    /// None if collection is out of keys.
     fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
         self.coll_or_insert::<T>().reserve(item)
     }
 
-    /// Cancels reservation for item.
-    /// Panics if there is no reservation.
     fn cancel(&mut self, key: ReservedKey<T>) {
         self.coll_mut::<T>()
             .expect("Invalid reserved key")
             .cancel(key);
     }
 
-    /// Fulfills reservation.
-    /// Panics if there is no reservation.
     fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T>
     where
         T: Sized,
@@ -81,7 +76,6 @@ where
             .fulfill(key, item)
     }
 
-    /// Frees and returns item if it exists
     fn unfill(&mut self, key: SubKey<T>) -> Option<T>
     where
         T: Sized,
@@ -122,7 +116,6 @@ impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
             .any_get_slot(key)
     }
 
-    /// Frees if it exists.
     fn unfill_any(&mut self, key: AnySubKey) {
         self.collections
             .get_mut(&key.type_id())

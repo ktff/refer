@@ -29,7 +29,7 @@ where
     fn assign(&mut self, chunks: &mut Vec<Self::C>, item: &T) -> Option<usize>;
 }
 
-/// A chunked container.
+/// A container that chunks items into separate containers according to ChunkingLogic.
 pub struct Chunked<L: Chunk> {
     logic: L,
     chunks: Vec<L::C>,
@@ -51,11 +51,11 @@ where
     fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
         let index = self.logic.assign(&mut self.chunks, item)?;
         let sub_key = self.chunks[index].reserve(item)?;
-        Some(sub_key.with_prefix(self.logic.key_len(), index))
+        Some(sub_key.push(self.logic.key_len(), index))
     }
 
     fn cancel(&mut self, key: ReservedKey<T>) {
-        let (index, sub_key) = key.split_prefix(self.logic.key_len());
+        let (index, sub_key) = key.pop(self.logic.key_len());
         self.chunks[index].cancel(sub_key);
     }
 
@@ -63,17 +63,17 @@ where
     where
         T: Sized,
     {
-        let (index, sub_key) = key.split_prefix(self.logic.key_len());
+        let (index, sub_key) = key.pop(self.logic.key_len());
         self.chunks[index]
             .fulfill(sub_key, item)
-            .with_prefix(self.logic.key_len(), index)
+            .push(self.logic.key_len(), index)
     }
 
     fn unfill(&mut self, key: SubKey<T>) -> Option<T>
     where
         T: Sized,
     {
-        let (index, sub_key) = key.split_prefix(self.logic.key_len());
+        let (index, sub_key) = key.pop(self.logic.key_len());
         self.chunks[index].unfill(sub_key)
     }
 }
@@ -91,7 +91,7 @@ where
         Self: 'a;
 
     fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
-        let (prefix, suffix) = key.split_prefix(self.logic.key_len());
+        let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.get_slot(suffix)
     }
 
@@ -103,7 +103,7 @@ where
                 .enumerate()
                 .flat_map(move |(prefix, chunk)| {
                     chunk.iter_slot().map(|iter| {
-                        iter.map(move |(suffix, v, s)| (suffix.with_prefix(key_len, prefix), v, s))
+                        iter.map(move |(suffix, v, s)| (suffix.push(key_len, prefix), v, s))
                     })
                 })
                 .flat_map(|iter| iter),
@@ -119,12 +119,12 @@ where
         &self,
         key: AnySubKey,
     ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)> {
-        let (prefix, suffix) = key.split_prefix(self.logic.key_len());
+        let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.any_get_slot(suffix)
     }
 
     fn unfill_any(&mut self, key: AnySubKey) {
-        let (prefix, suffix) = key.split_prefix(self.logic.key_len());
+        let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks
             .get_mut(prefix)
             .map(|chunk| chunk.unfill_any(suffix));
@@ -134,15 +134,15 @@ where
         self.chunks.iter().enumerate().find_map(|(prefix, chunk)| {
             chunk
                 .first(key)
-                .map(|suffix| suffix.with_prefix(self.logic.key_len(), prefix))
+                .map(|suffix| suffix.push(self.logic.key_len(), prefix))
         })
     }
 
     fn next(&self, key: AnySubKey) -> Option<AnySubKey> {
-        let (prefix, suffix) = key.split_prefix(self.logic.key_len());
+        let (prefix, suffix) = key.pop(self.logic.key_len());
         let chunk = self.chunks.get(prefix)?;
         if let Some(suffix) = chunk.next(suffix) {
-            Some(suffix.with_prefix(self.logic.key_len(), prefix))
+            Some(suffix.push(self.logic.key_len(), prefix))
         } else {
             self.chunks
                 .iter()
@@ -151,7 +151,7 @@ where
                 .find_map(|(prefix, chunk)| {
                     chunk
                         .first(key.type_id())
-                        .map(|suffix| suffix.with_prefix(self.logic.key_len(), prefix))
+                        .map(|suffix| suffix.push(self.logic.key_len(), prefix))
                 })
         }
     }

@@ -28,7 +28,7 @@ pub fn add_references<T: Item + ?Sized>(
     true
 }
 
-/// Updates diff of references between old and new items on key through shells.
+/// Updates diff of references between old and new item on key through shells.
 ///
 /// Fails if reference is not valid.
 pub fn update_diff<T: Item + ?Sized>(
@@ -44,7 +44,7 @@ pub fn update_diff<T: Item + ?Sized>(
     new.sort();
 
     // item --> others
-    for (i, cmp) in crate::util::merge(&old, &new).enumerate() {
+    for (i, cmp) in crate::util::pair_up(&old, &new).enumerate() {
         match cmp {
             (Some(_), Some(_)) | (None, None) => (),
             (Some(&rf), None) => {
@@ -60,7 +60,7 @@ pub fn update_diff<T: Item + ?Sized>(
                     // Reference doesn't exist
 
                     // Rollback and return error
-                    for cmp in crate::util::merge(&old, &new).take(i) {
+                    for cmp in crate::util::pair_up(&old, &new).take(i) {
                         match cmp {
                             (Some(_), Some(_)) | (None, None) => (),
                             (Some(rf), None) => {

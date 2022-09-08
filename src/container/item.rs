@@ -20,7 +20,7 @@ impl ContainerFamily for ItemContainerFamily {
     }
 }
 
-/// A collection of 1 sized item.
+/// A collection of 1 item.
 pub struct ItemContainer<T: 'static>(Slot<T>);
 
 impl<T: 'static> ItemContainer<T> {
@@ -44,17 +44,17 @@ impl<T: 'static> Allocator<T> for ItemContainer<T> {
         }
     }
 
-    fn cancel(&mut self, _: ReservedKey<T>) {
+    fn cancel(&mut self, key: ReservedKey<T>) {
         self.0.cancel();
+        key.take();
     }
 
-    fn fulfill(&mut self, _: ReservedKey<T>, item: T) -> SubKey<T> {
+    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T> {
         self.0.fulfill(item);
 
-        Self::key()
+        key.take()
     }
 
-    /// Frees and returns item if it exists
     fn unfill(&mut self, _: SubKey<T>) -> Option<T>
     where
         T: Sized,

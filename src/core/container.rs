@@ -1,3 +1,6 @@
+//! Containers can panic, if you try to use a key that was not produced at any
+//! point by that container.
+
 use std::{
     any::{Any, TypeId},
     cell::UnsafeCell,
@@ -6,10 +9,7 @@ use std::{
 
 use super::{AnyItem, AnyShell, AnySubKey, ReservedKey, Shell, SubKey};
 
-/// Note, containers can panic  if you try to access a key that was not produced at any
-/// point by that container.
-
-/// A family of containers for sized types.
+/// A family of containers.
 pub trait ContainerFamily: 'static {
     type C<T: AnyItem>: AnyContainer + 'static;
 
@@ -28,7 +28,6 @@ pub trait Container<T: AnyItem>: AnyContainer {
     fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)>;
 
     /// Iterates in ascending order of key.
-    /// Even if some it may be empty.
     /// UNSAFE: Guarantees no slot is returned twice in returned iterator.
     unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>>;
 }

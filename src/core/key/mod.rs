@@ -5,7 +5,7 @@ mod sub;
 
 use std::{
     any::{self, TypeId},
-    fmt::{self, Debug},
+    fmt::{self},
     hash::{Hash, Hasher},
     marker::PhantomData,
 };
@@ -18,9 +18,8 @@ pub use sub::*;
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
 // hence it needs to be able to know where something starts and ends which is not robustly possible for ref keys.
-// NOTE: That leaves us with numerical keys.
+// That leaves us with numerical keys.
 
-/// It's the responsibility/optimization of collections to issue keys in a way that close by indices have close by items.
 pub struct Key<T: ?Sized + 'static>(Index, PhantomData<T>);
 
 impl<T: ?Sized + 'static> Key<T> {
@@ -28,12 +27,12 @@ impl<T: ?Sized + 'static> Key<T> {
         Key(index, PhantomData)
     }
 
-    pub fn index(&self) -> Index {
-        self.0
+    pub fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 
-    pub fn as_usize(&self) -> usize {
-        (self.0).0.get().try_into().expect("Index is too large")
+    pub fn index(&self) -> Index {
+        self.0
     }
 
     pub fn upcast(self) -> AnyKey
@@ -41,14 +40,6 @@ impl<T: ?Sized + 'static> Key<T> {
         T: 'static,
     {
         self.into()
-    }
-
-    pub fn len(&self) -> u32 {
-        self.0.len_low_bits()
-    }
-
-    pub fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
     }
 }
 
@@ -86,9 +77,15 @@ impl<T: ?Sized + 'static> Clone for Key<T> {
     }
 }
 
-impl<T: ?Sized + 'static> Debug for Key<T> {
+impl<T: ?Sized + 'static> fmt::Debug for Key<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Key<{}>({:?})", any::type_name::<T>(), self.0)
+    }
+}
+
+impl<T: ?Sized + 'static> fmt::Display for Key<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}#{:?}", any::type_name::<T>(), self.0)
     }
 }
 
@@ -100,6 +97,14 @@ impl AnyKey {
         AnyKey(ty_id, index)
     }
 
+    pub fn type_id(&self) -> TypeId {
+        self.0
+    }
+
+    pub fn index(&self) -> Index {
+        self.1
+    }
+
     pub fn downcast<T: ?Sized + 'static>(self) -> Option<Key<T>> {
         if self.0 == TypeId::of::<T>() {
             Some(Key::new(self.1))
@@ -107,22 +112,10 @@ impl AnyKey {
             None
         }
     }
-
-    pub fn index(&self) -> Index {
-        self.1
-    }
-
-    pub fn len(&self) -> u32 {
-        self.1.len_low_bits()
-    }
-
-    pub fn type_id(&self) -> TypeId {
-        self.0
-    }
 }
 
-impl std::fmt::Debug for AnyKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for AnyKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "AnyKey<{:?}>({:?})", self.0, self.1)
     }
 }

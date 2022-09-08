@@ -76,12 +76,12 @@ impl<T: 'static> Allocator<T> for VecContainer<T> {
 
     fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T> {
         let key = key.take();
+        dbg!(key);
         self.slots[key.index(self.key_len).as_usize()].fulfill(item);
 
         key
     }
 
-    /// Frees and returns item if it exists
     fn unfill(&mut self, key: SubKey<T>) -> Option<T>
     where
         T: Sized,
@@ -103,7 +103,7 @@ impl<T: AnyItem> Container<T> for VecContainer<T> {
     type SlotIter<'a> = SlotIter<'a, T> where Self: 'a;
 
     fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
-        let i = key.as_usize(self.key_len);
+        let i = key.index(self.key_len).as_usize();
         let slot = self.slots.get(i)?;
         match slot {
             Slot::Free | Slot::Reserved => None,
@@ -138,7 +138,7 @@ impl<T: AnyItem> AnyContainer for VecContainer<T> {
         &self,
         key: AnySubKey,
     ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)> {
-        let i = key.downcast::<T>()?.as_usize(self.key_len);
+        let i = key.downcast::<T>()?.index(self.key_len).as_usize();
 
         let slot = self.slots.get(i)?;
         match slot {
@@ -163,14 +163,13 @@ impl<T: AnyItem> AnyContainer for VecContainer<T> {
 
     fn next(&self, key: AnySubKey) -> Option<AnySubKey> {
         if let Some(key) = key.downcast::<T>() {
-            self.first_from(key.as_usize(self.key_len) + 1)
+            self.first_from(key.index(self.key_len).as_usize() + 1)
                 .map(|key| key.into())
         } else {
             None
         }
     }
 
-    /// All types in the container.
     fn types(&self) -> HashSet<TypeId> {
         let mut set = HashSet::new();
         set.insert(TypeId::of::<T>());

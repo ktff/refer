@@ -4,7 +4,7 @@ use std::cmp::Ordering::*;
 /// Returns pair of slices that are one of:
 /// - eq => (Some(a),Some(a))
 /// - diff => (Some(a),None) or (None,Some(a))
-pub fn merge<'a, T: Ord + Eq>(
+pub fn pair_up<'a, T: Ord + Eq>(
     a: &'a [T],
     b: &'a [T],
 ) -> impl Iterator<Item = (Option<&'a T>, Option<&'a T>)> + 'a {

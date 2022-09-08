@@ -149,7 +149,6 @@ impl<C: Container<T> + 'static, T: AnyItem> Access<T> for Owned<C> {
         })
     }
 
-    /// Some if item exists.
     fn get_mut(&mut self, key: Key<T>) -> Option<(&mut T, &Self::Shell)> {
         self.0.get_slot(key.into()).map(|(item, slot)| {
             // This is safe because Self has total access to C and
@@ -247,7 +246,7 @@ impl<C: AnyContainer + 'static> AnyAccess for Owned<C> {
     }
 }
 
-/// This guarantees only Items will be fetched and mutably referenced.
+/// This guarantees that it will fetch and mutably reference only items.
 pub struct AccessItemsMut<'c, C: 'static>(AccessItems<'c, C>);
 
 impl<'c, C: 'static> AccessItemsMut<'c, C> {
@@ -314,7 +313,7 @@ impl<'c, C: AnyContainer + 'static> AnyItems for AccessItemsMut<'c, C> {
     }
 }
 
-/// This guarantees only Items will be fetched and referenced.
+/// This guarantees that it will fetch and reference only items.
 pub struct AccessItems<'c, C: 'static>(&'c C);
 
 impl<'c, C: 'static> AccessItems<'c, C> {
@@ -348,7 +347,7 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItems<'c, C> 
     }
 }
 
-/// This guarantees only Items will be fetched and mutably referenced.
+/// This guarantees that it will fetch and mutably reference only items.
 #[repr(transparent)]
 pub struct AccessItemsAny<C: 'static>(C);
 
@@ -377,7 +376,7 @@ impl<C: AnyContainer + 'static> AnyItems for AccessItemsAny<C> {
     }
 }
 
-/// This guarantees only Shells will be fetched and mutably referenced.
+/// This guarantees that it will fetch and mutably reference only shells.
 pub struct AccessShellsMut<'c, C: 'static>(AccessShells<'c, C>);
 
 impl<'c, C: 'static> AccessShellsMut<'c, C> {
@@ -446,7 +445,7 @@ impl<'c, C: AnyContainer + 'static> AnyShells for AccessShellsMut<'c, C> {
     }
 }
 
-/// This guarantees only Shells will be fetched and referenced.
+/// This guarantees that it will fetch and reference only shells.
 pub struct AccessShells<'c, C: 'static>(&'c C);
 
 impl<'c, C: 'static> AccessShells<'c, C> {
@@ -482,7 +481,7 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShells<'c, C
     }
 }
 
-/// This guarantees only Shells will be fetched and mutably referenced.
+/// This guarantees that it will fetch and mutably reference only shells.
 #[repr(transparent)]
 pub struct AccessShellsAny<C: 'static>(C);
 

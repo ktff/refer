@@ -1,9 +1,9 @@
 pub mod edge;
 pub mod vertice;
 
-// *************************** Default impl *********************** //
+// ***************************************** Default impl ********************************************* //
 
-/// Implements `Item` for `T` as if T doesn't have any reference.
+/// Implements `Item` for non generic `T` as if T doesn't have any reference.
 #[macro_export]
 macro_rules! impl_item {
     ($ty:ty) => {

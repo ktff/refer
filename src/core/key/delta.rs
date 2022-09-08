@@ -8,6 +8,7 @@ use std::{
 
 use super::{Index, Key};
 
+/// !WIP
 /// A delta constructed from Key<T> - Index = Delta<T>
 pub struct DeltaKey<T: ?Sized + 'static>(u64, PhantomData<T>);
 

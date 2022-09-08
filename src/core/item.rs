@@ -1,17 +1,16 @@
 use super::{AnyKey, AnyRef, Index, Key};
 use std::any::Any;
 
+/// An item of a model.
 pub trait Item: AnyItem {
     type I<'a>: Iterator<Item = AnyRef>;
 
-    /// All internal references. Must be stable.
+    /// All internal references.
     fn references(&self, this: Index) -> Self::I<'_>;
 }
 
-/// An item of entity.
 pub trait AnyItem: Any {
     /// All internal references.
-    /// Some can be empty.
     fn references_any(&self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
     /// Item of given key has/is been removed.
@@ -28,7 +27,7 @@ pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
     where
         Self: 'a;
 
-    /// Some if item exists.
+    /// Some if it exists.
     fn get_mut(&mut self, key: Key<T>) -> Option<&mut T>;
 
     /// Ascending order.
@@ -40,7 +39,7 @@ pub trait Items<T: ?Sized + 'static> {
     where
         Self: 'a;
 
-    /// Some if item exists.
+    /// Some if it exists.
     fn get(&self, key: Key<T>) -> Option<&T>;
 
     /// Ascending order.

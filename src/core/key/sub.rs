@@ -7,8 +7,8 @@ use std::{
 
 use super::{AnyKey, Index, Key, MAX_KEY_LEN};
 
-/// This is builded from top by pushing prefixes on top from bottom.
-/// And deconstructed from top by removing prefixes.
+/// This is builded by pushing prefixes on top.
+/// And deconstructed by popping prefixes from top.
 pub struct SubKey<T: ?Sized + 'static>(Index, PhantomData<T>);
 
 impl<T: ?Sized + 'static> SubKey<T> {
@@ -22,17 +22,13 @@ impl<T: ?Sized + 'static> SubKey<T> {
         TypeId::of::<T>()
     }
 
-    pub fn index(&self, len: u32) -> Index {
-        Index(NonZeroU64::new(self.as_u64(len)).expect("Invalid key"))
+    /// Assumes that whatever remains is one index.
+    pub fn index(&self, index_len: u32) -> Index {
+        Index(
+            NonZeroU64::new((self.0).0.get() >> (MAX_KEY_LEN - index_len)).expect("Invalid index"),
+        )
     }
 
-    pub fn as_usize(&self, len: u32) -> usize {
-        self.as_u64(len) as usize
-    }
-
-    fn as_u64(&self, len: u32) -> u64 {
-        (self.0).0.get() >> (MAX_KEY_LEN - len)
-    }
     /// Caller must ensure that the sub key is fully builded,
     /// otherwise any use has high chance of failing.
     ///
@@ -43,19 +39,19 @@ impl<T: ?Sized + 'static> SubKey<T> {
     }
 
     /// Adds prefix of given len.
-    pub fn with_prefix(self, prefix_len: u32, prefix: usize) -> Self {
+    pub fn push(self, prefix_len: u32, prefix: usize) -> Self {
         Self(self.0.with_prefix(prefix_len, prefix), PhantomData)
     }
 
     /// Splits of prefix of given len and suffix.
-    pub fn split_prefix(self, prefix_len: u32) -> (usize, Self) {
+    pub fn pop(self, prefix_len: u32) -> (usize, Self) {
         let (prefix, suffix) = self.0.split_prefix(prefix_len);
         (prefix, Self(suffix, PhantomData))
     }
 
     /// Splits of prefix of given len and suffix.
     /// Fails if there is no suffix.
-    pub fn split_prefix_try(self, prefix_len: u32) -> Result<(usize, Self), Index> {
+    pub fn pop_try(self, prefix_len: u32) -> Result<(usize, Self), Index> {
         match self.0.split_prefix_try(prefix_len) {
             Ok((prefix, suffix)) => Ok((prefix, Self(suffix, PhantomData))),
             Err(suffix) => Err(suffix),
@@ -106,6 +102,13 @@ impl AnySubKey {
         self.0
     }
 
+    /// Assumes that whatever remains is one index.
+    pub fn index(&self, index_len: u32) -> Index {
+        Index(
+            NonZeroU64::new((self.1).0.get() >> (MAX_KEY_LEN - index_len)).expect("Invalid index"),
+        )
+    }
+
     /// Caller must ensure that the sub key is fully builded,
     /// otherwise any use has high chance of failing.
     ///
@@ -115,18 +118,18 @@ impl AnySubKey {
         AnyKey::new(self.0, self.1)
     }
 
-    pub fn with_prefix(self, prefix_len: u32, prefix: usize) -> Self {
+    pub fn push(self, prefix_len: u32, prefix: usize) -> Self {
         Self(self.0, self.1.with_prefix(prefix_len, prefix))
     }
 
-    pub fn split_prefix(self, prefix_len: u32) -> (usize, Self) {
+    pub fn pop(self, prefix_len: u32) -> (usize, Self) {
         let (prefix, suffix) = self.1.split_prefix(prefix_len);
         (prefix, Self(self.0, suffix))
     }
 
     /// Splits of prefix of given len and suffix.
     /// Fails if there is no suffix.
-    pub fn split_prefix_try(self, prefix_len: u32) -> Result<(usize, Self), Index> {
+    pub fn pop_try(self, prefix_len: u32) -> Result<(usize, Self), Index> {
         match self.1.split_prefix_try(prefix_len) {
             Ok((prefix, suffix)) => Ok((prefix, Self(self.0, suffix))),
             Err(suffix) => Err(suffix),
@@ -177,11 +180,8 @@ mod tests {
         let index = Index(NonZeroU64::new(0x8f).unwrap());
         let sub_key = SubKey::new(8, index);
         let any_sub_key: AnySubKey = sub_key.into();
-        let any_sub_key = any_sub_key.with_prefix(4, 0x1);
-        assert_eq!(
-            any_sub_key.downcast::<u8>(),
-            Some(sub_key.with_prefix(4, 0x1))
-        );
+        let any_sub_key = any_sub_key.push(4, 0x1);
+        assert_eq!(any_sub_key.downcast::<u8>(), Some(sub_key.push(4, 0x1)));
         assert_eq!(any_sub_key.downcast::<u16>(), None);
     }
 }

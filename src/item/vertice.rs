@@ -12,12 +12,12 @@ impl<T: AnyItem + ?Sized> Vertice<T> {
         Vertice(refs)
     }
 
-    /// Connects this --with-> to in collection.
+    /// Connects this -> to in collection.
     pub fn connect(&mut self, collection: &mut impl ShellsMut<T>, this: AnyKey, to: Key<T>) {
         self.0.push(Ref::connect(this, to, collection));
     }
 
-    /// Disconnects this --with-> to in collection.
+    /// Disconnects this -> to in collection.
     /// Panics if index is out of bounds.
     pub fn disconnect(&mut self, collection: &mut impl ShellsMut<T>, this: AnyKey, to: usize) {
         self[to].disconnect(this, collection);

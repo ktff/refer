@@ -1,36 +1,3 @@
-/*
-! Main goal of this library is to make ArcRef<T> zero-cost abstraction.
-!
-! Other definition is to provide:
-! - Circular references
-! - Knowledge of what is referencing an item
-!
-! Additional goals are to provide:
-! - Memory locality
-! - Zero-cost memory overhead
-! - Zero-cost access to items
-! - Composability
-
-use std::{
-    any::Any,
-    sync::{Arc, RwLock},
-};
-
-
- Arc - 2 * usize
- RwLock - 12B
- usize - 8B
- Vec - 3 * usize
- ArcRef<Any> - 2 * usize
- Box - usize
- T - *
- ----------------
- 2 * 8 + 12 + 8 + 3 * 8 + 8 = 68B + T + N * [ArcRef<Any>]
-
-type ArcRef<T> = Arc<RwLock<(usize, Vec<ArcRef<Any>>, Box<T>)>>;
-
-*/
-
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(const_option)]
@@ -38,11 +5,50 @@ type ArcRef<T> = Arc<RwLock<(usize, Vec<ArcRef<Any>>, Box<T>)>>;
 // Currently this is not implemented safely for *dyn Trait.
 #![feature(trait_upcasting)]
 
+//! # Goal
+//! The main goal of this library is to provide foundation for programs
+//! that are modeling graph like problems.
+//!
+//! Primary attribute of the library is composability for achieving code reuse,
+//! flexibility, and zero-cost abstractions or at least zero-overhead principle.
+//!
+//! Secondary attribute is performance of memory and computation. This is achieved
+//! by enabling such optimizations, and then optionally providing implementations
+//! that exploit them.
+//!
+//! # Features
+//! - Reference management, through Item and Shell family of traits.
+//! - Memory management, through Container family of traits.
+//! - Access management, through Collection family of traits.
+//!
+//! # Architecture
+//! There are several pieces that interact/are composable with one another:
+//! - Model - the what's being build using the library.
+//! - Items - the building blocks of the model.
+//! - Shells - associated to each item and used to record references to its item.
+//! - Collections - provides access to contained items and shells of a model.
+//! - Containers - stores/contains items and shells.
+//! - Reference - a reference to an (item,shell) that is supposed to be tracked and valid.
+//! - Ids - provides identity management which ties all of the other pieces together.
+//!
+//! Ids and references are concrete types that are not intended to be extended and are provided
+//! by the library.
+//!
+//! Collections, containers, and shells, are trait families that are intended to be implemented
+//! for the model if some of the provided generic implementations are not sufficient.
+//!
+//! Items are trait families that are intended to be implemented for the model.
+//!
+//! Models aren't represented in any way by the library besides providing some examples/generic implementations.
+//!
+//! # Examples
+//! TODO
+
 pub mod collection;
 pub mod container;
 pub mod core;
 pub mod item;
 pub mod model;
 
-/// Generic things
+// Generic things
 mod util;
