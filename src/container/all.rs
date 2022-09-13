@@ -175,27 +175,30 @@ mod tests {
     fn allocate_multi_type_item() {
         let mut container = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let key_a = container.add(42).unwrap();
-        let key_b = container.add(true).unwrap();
-        let key_c = container.add("Hello").unwrap();
+        let key_a = container.add_with(42, ()).unwrap();
+        let key_b = container.add_with(true, ()).unwrap();
+        let key_c = container.add_with("Hello", ()).unwrap();
 
-        assert_eq!(container.get(key_a).map(|(item, _)| item), Some(&42));
-        assert_eq!(container.get(key_b).map(|(item, _)| item), Some(&true));
-        assert_eq!(container.get(key_c).map(|(item, _)| item), Some(&"Hello"));
+        assert_eq!(container.get(key_a).map(|((item, _), _)| item), Some(&42));
+        assert_eq!(container.get(key_b).map(|((item, _), _)| item), Some(&true));
+        assert_eq!(
+            container.get(key_c).map(|((item, _), _)| item),
+            Some(&"Hello")
+        );
     }
 
     #[test]
     fn get_any() {
         let mut container = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let key_a = container.add(42).unwrap();
-        let key_b = container.add(true).unwrap();
-        let key_c = container.add("Hello").unwrap();
+        let key_a = container.add_with(42, ()).unwrap();
+        let key_b = container.add_with(true, ()).unwrap();
+        let key_c = container.add_with("Hello", ()).unwrap();
 
         assert_eq!(
             (container
                 .split_item_any(key_a.into())
-                .map(|(item, _)| item)
+                .map(|(((item, _), _), _)| item)
                 .unwrap() as &dyn Any)
                 .downcast_ref(),
             Some(&42)
@@ -203,7 +206,7 @@ mod tests {
         assert_eq!(
             (container
                 .split_item_any(key_b.into())
-                .map(|(item, _)| item)
+                .map(|(((item, _), _), _)| item)
                 .unwrap() as &dyn Any)
                 .downcast_ref(),
             Some(&true)
@@ -211,7 +214,7 @@ mod tests {
         assert_eq!(
             (container
                 .split_item_any(key_c.into())
-                .map(|(item, _)| item)
+                .map(|(((item, _), _), _)| item)
                 .unwrap() as &dyn Any)
                 .downcast_ref(),
             Some(&"Hello")
@@ -222,14 +225,17 @@ mod tests {
     fn unfill_any() {
         let mut container = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let key_a = container.add(42).unwrap();
-        let key_b = container.add(true).unwrap();
-        let key_c = container.add("Hello").unwrap();
+        let key_a = container.add_with(42, ()).unwrap();
+        let key_b = container.add_with(true, ()).unwrap();
+        let key_c = container.add_with("Hello", ()).unwrap();
 
         assert_eq!(container.take(key_b), Some(true));
 
-        assert_eq!(container.get(key_a).map(|(item, _)| item), Some(&42));
+        assert_eq!(container.get(key_a).map(|((item, _), _)| item), Some(&42));
         assert!(container.get(key_b).is_none());
-        assert_eq!(container.get(key_c).map(|(item, _)| item), Some(&"Hello"));
+        assert_eq!(
+            container.get(key_c).map(|((item, _), _)| item),
+            Some(&"Hello")
+        );
     }
 }

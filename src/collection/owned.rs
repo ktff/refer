@@ -48,7 +48,7 @@ impl<C: 'static> Owned<C> {
 }
 
 impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collection<T> for Owned<C> {
-    fn add(&mut self, item: T, r: Self::R) -> Result<Key<T>, T> {
+    fn add_with(&mut self, item: T, r: Self::R) -> Result<Key<T>, T> {
         // Allocate slot
         let (key, _) = if let Some(key) = self.reserve(Some(&item), r) {
             key
@@ -621,11 +621,14 @@ mod tests {
         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
         let nodes = (0usize..n)
-            .map(|i| collection.add(i).unwrap())
+            .map(|i| collection.add_with(i, ()).unwrap())
             .collect::<Vec<_>>();
 
         let center = collection
-            .add(Vertice::new(nodes.iter().copied().map(Ref::new).collect()))
+            .add_with(
+                Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
+                (),
+            )
             .ok()
             .unwrap();
 
@@ -648,13 +651,16 @@ mod tests {
         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
         let nodes = (0usize..n)
-            .map(|i| collection.add(i).unwrap())
+            .map(|i| collection.add_with(i, ()).unwrap())
             .collect::<Vec<_>>();
 
         collection.take(nodes[n - 1]).unwrap();
 
         assert!(collection
-            .add(Vertice::new(nodes.iter().copied().map(Ref::new).collect()))
+            .add_with(
+                Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
+                ()
+            )
             .is_err());
 
         for &node in nodes.iter().take(n - 1) {
@@ -672,9 +678,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         let center = collection
-            .add(Vertice::new(
-                nodes.iter().take(5).copied().map(Ref::new).collect(),
-            ))
+            .add_with(
+                Vertice::new(nodes.iter().take(5).copied().map(Ref::new).collect()),
+                (),
+            )
             .ok()
             .unwrap();
 
@@ -715,16 +722,18 @@ mod tests {
         collection.take(nodes[n - 1]).unwrap();
 
         let center = collection
-            .add(Vertice::new(
-                nodes.iter().take(5).copied().map(Ref::new).collect(),
-            ))
+            .add_with(
+                Vertice::new(nodes.iter().take(5).copied().map(Ref::new).collect()),
+                (),
+            )
             .ok()
             .unwrap();
 
         assert!(collection
-            .add(Vertice::new(
-                nodes.iter().skip(5).copied().map(Ref::new).collect()
-            ))
+            .add_with(
+                Vertice::new(nodes.iter().skip(5).copied().map(Ref::new).collect()),
+                ()
+            )
             .is_err());
 
         for &node in nodes.iter().take(5) {
@@ -750,11 +759,14 @@ mod tests {
         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
         let nodes = (0usize..n)
-            .map(|i| collection.add(i).unwrap())
+            .map(|i| collection.add_with(i, ()).unwrap())
             .collect::<Vec<_>>();
 
         let center = collection
-            .add(Vertice::new(nodes.iter().copied().map(Ref::new).collect()))
+            .add_with(
+                Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
+                (),
+            )
             .ok()
             .unwrap();
 
@@ -769,10 +781,10 @@ mod tests {
     fn cascading_remove() {
         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let a = collection.add(0).unwrap();
-        let b = collection.add(1).unwrap();
+        let a = collection.add_with(0, ()).unwrap();
+        let b = collection.add_with(1, ()).unwrap();
         let edge = collection
-            .add(Edge::new([Ref::new(a), Ref::new(b)]))
+            .add_with(Edge::new([Ref::new(a), Ref::new(b)]), ())
             .unwrap();
 
         assert_eq!(collection.get(a).unwrap().1.from_count(), 1);
@@ -781,7 +793,7 @@ mod tests {
         let _ = collection.take(a).unwrap();
         assert!(collection.get(edge).is_none());
         assert!(collection.get(a).is_none());
-        assert!(collection.get(b).unwrap().0 == &1);
+        assert!(collection.get(b).unwrap().0 == (&1, &()));
         assert_eq!(collection.get(b).unwrap().1.from_count(), 0);
     }
 }

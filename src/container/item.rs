@@ -302,11 +302,11 @@ mod tests {
         let mut container = Owned::new(ItemContainer::<usize>::new());
 
         let item = 42;
-        let key = container.reserve(&item).unwrap();
+        let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item).into_key();
 
-        assert_eq!(container.items().get(key), Some(&item));
-        assert!(container.reserve(&item).is_none());
+        assert_eq!(container.items().get(key), Some((&item, &())));
+        assert!(container.reserve(Some(&item), ()).is_none());
     }
 
     #[test]
@@ -314,12 +314,12 @@ mod tests {
         let mut container = Owned::new(ItemContainer::<usize>::new());
 
         let item = 42;
-        let rkey = container.reserve(&item).unwrap();
+        let (rkey, _) = container.reserve(Some(&item), ()).unwrap();
         let key = rkey.key().into_key();
         container.cancel(rkey);
 
         assert_eq!(container.items().get(key), None);
-        assert!(container.reserve(&item).is_some());
+        assert!(container.reserve(Some(&item), ()).is_some());
     }
 
     #[test]
@@ -327,13 +327,13 @@ mod tests {
         let mut container = Owned::new(ItemContainer::<usize>::new());
 
         let item = 42;
-        let key = container.reserve(&item).unwrap();
+        let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item).into_key();
 
-        assert_eq!(container.items().get(key), Some(&item));
+        assert_eq!(container.items().get(key), Some((&item, &())));
         assert_eq!(container.unfill(key.into()), Some(item));
         assert_eq!(container.items().get(key), None);
-        assert!(container.reserve(&item).is_some());
+        assert!(container.reserve(Some(&item), ()).is_some());
     }
 
     #[test]
@@ -341,10 +341,13 @@ mod tests {
         let mut container = Owned::new(ItemContainer::<usize>::new());
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
         assert_eq!(container.items().iter().count(), 1);
-        assert_eq!(container.items().iter().next().unwrap(), (key, &item));
+        assert_eq!(
+            container.items().iter().next().unwrap(),
+            (key, (&item, &()))
+        );
     }
 
     #[test]
@@ -352,10 +355,10 @@ mod tests {
         let mut container = Owned::new(ItemContainer::<usize>::new());
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
         assert_eq!(
-            (container.items_mut().get_any(key.into()).unwrap() as &dyn Any)
+            (container.items_mut().get_any(key.into()).unwrap().0 as &dyn Any)
                 .downcast_ref::<usize>(),
             Some(&item)
         );
@@ -366,7 +369,7 @@ mod tests {
         let mut container = ItemContainer::<usize>::new();
 
         let item = 42;
-        let key = container.reserve(&item).unwrap();
+        let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item);
 
         container.unfill_any(key.into());
@@ -378,7 +381,7 @@ mod tests {
         let mut container = Owned::new(ItemContainer::<usize>::new());
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
         let k = container.first(key.type_id());
         assert_eq!(k, Some(key.into()));
@@ -390,11 +393,11 @@ mod tests {
         let mut container = Owned::new(ItemContainer::<usize>::new());
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
         let mut shells = container.shells_mut();
-        let shell = shells.get_mut(key).unwrap();
-        shell.add_from(key.into());
+        let (shell, alloc) = shells.get_mut(key).unwrap();
+        shell.add_from(key.into(), alloc);
 
         assert_eq!(shell.from_count(), 1);
         assert_eq!(shell.from::<usize>().collect::<Vec<_>>(), vec![key]);

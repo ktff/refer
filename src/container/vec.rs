@@ -255,11 +255,11 @@ mod tests {
         let mut container = Owned::new(VecContainer::<usize>::new(64));
 
         let keys = (0..n)
-            .map(|i| container.add(i).unwrap())
+            .map(|i| container.add_with(i, ()).unwrap())
             .collect::<Vec<_>>();
 
         for (i, key) in keys.iter().enumerate() {
-            assert_eq!(container.get(*key).unwrap().0, &i);
+            assert_eq!(container.get(*key).unwrap().0, (&i, &()));
         }
     }
 
@@ -268,11 +268,11 @@ mod tests {
         let mut container = Owned::new(VecContainer::<usize>::new(1));
 
         let item = 42;
-        let key = container.reserve(&item).unwrap();
-        assert!(container.reserve(&item).is_none());
+        let (key, _) = container.reserve(Some(&item), ()).unwrap();
+        assert!(container.reserve(Some(&item), ()).is_none());
 
         container.cancel(key);
-        assert!(container.reserve(&item).is_some());
+        assert!(container.reserve(Some(&item), ()).is_some());
     }
 
     #[test]
@@ -280,11 +280,11 @@ mod tests {
         let mut container = Owned::new(VecContainer::<usize>::new(10));
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
-        assert_eq!(container.items().get(key), Some(&item));
-        assert_eq!(container.unfill(key.into()), Some(item));
-        assert_eq!(container.items().get(key), None);
+        assert_eq!(container.items().get(key).unwrap().0, &item);
+        assert_eq!(container.unfill(key.into()).unwrap(), item);
+        assert!(container.items().get(key).is_none());
     }
 
     #[test]
@@ -293,7 +293,7 @@ mod tests {
         let mut container = Owned::new(VecContainer::<usize>::new(10));
 
         let mut keys = (0..n)
-            .map(|i| (container.add(i).unwrap(), i))
+            .map(|i| (container.add_with(i, ()).unwrap(), i))
             .collect::<Vec<_>>();
 
         keys.sort();
@@ -303,7 +303,7 @@ mod tests {
             container
                 .items()
                 .iter()
-                .map(|(key, &item)| (key, item))
+                .map(|(key, (&item, _))| (key, item))
                 .collect::<Vec<_>>()
         );
     }
@@ -313,10 +313,10 @@ mod tests {
         let mut container = Owned::new(VecContainer::<usize>::new(10));
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
         assert_eq!(
-            (container.items_mut().get_any(key.into()).unwrap() as &dyn Any)
+            (container.items_mut().get_any(key.into()).unwrap().0 as &dyn Any)
                 .downcast_ref::<usize>(),
             Some(&item)
         );
@@ -327,7 +327,7 @@ mod tests {
         let mut container = VecContainer::<usize>::new(10);
 
         let item = 42;
-        let key = container.reserve(&item).unwrap();
+        let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item);
 
         container.unfill_any(key.into());
@@ -340,7 +340,7 @@ mod tests {
         let mut container = Owned::new(VecContainer::<usize>::new(8));
 
         let mut keys = (0..n)
-            .map(|i| container.add(i).unwrap().into())
+            .map(|i| container.add_with(i, ()).unwrap().into())
             .collect::<Vec<AnyKey>>();
 
         keys.sort();

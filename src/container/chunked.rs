@@ -213,11 +213,18 @@ mod tests {
     }
 
     impl ChunkingLogic<usize> for Uniform {
-        fn assign(&mut self, chunks: &mut Vec<Self::C>, item: &usize) -> Option<usize> {
+        type R = ();
+
+        fn assign(
+            &mut self,
+            chunks: &mut Vec<Self::C>,
+            item: Option<&usize>,
+            _: (),
+        ) -> Option<(usize, ())> {
             while chunks.len() < 1 << self.key_len() {
                 chunks.push(VecContainer::new(MAX_KEY_LEN - self.key_len()));
             }
-            Some(item % (1 << self.key_len()))
+            Some(((*item.unwrap()) % (1 << self.key_len()), ()))
         }
     }
 
@@ -227,11 +234,11 @@ mod tests {
         let mut container = Owned::new(Chunked::new(Uniform));
 
         let keys = (0..n)
-            .map(|i| container.add(i).unwrap())
+            .map(|i| container.add_with(i, ()).unwrap())
             .collect::<Vec<_>>();
 
         for (i, key) in keys.iter().enumerate() {
-            assert_eq!(container.get(*key).unwrap().0, &i);
+            assert_eq!(container.get(*key).unwrap().0, (&i, &()));
         }
     }
 
@@ -241,7 +248,7 @@ mod tests {
         let mut container = Owned::new(Chunked::new(Uniform));
 
         let item = 42;
-        let key = container.reserve(&item).unwrap();
+        let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let copy = ReservedKey::new(key.key());
 
         container.cancel(key);
@@ -253,7 +260,7 @@ mod tests {
         let mut container = Owned::new(Chunked::new(Uniform));
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
         assert_eq!(container.take(key).unwrap(), item);
         assert!(container.get(key).is_none());
@@ -265,7 +272,7 @@ mod tests {
         let mut container = Owned::new(Chunked::new(Uniform));
 
         let mut keys = (0..n)
-            .map(|i| (container.add(i).unwrap(), i))
+            .map(|i| (container.add_with(i, ()).unwrap(), i))
             .collect::<Vec<_>>();
 
         keys.sort();
@@ -275,7 +282,7 @@ mod tests {
             container
                 .items()
                 .iter()
-                .map(|(key, &item)| (key, item))
+                .map(|(key, (&item, _))| (key, item))
                 .collect::<Vec<_>>()
         );
     }
@@ -285,10 +292,10 @@ mod tests {
         let mut container = Owned::new(Chunked::new(Uniform));
 
         let item = 42;
-        let key = container.add(item).unwrap();
+        let key = container.add_with(item, ()).unwrap();
 
         assert_eq!(
-            (container.items_mut().get_any(key.into()).unwrap() as &dyn Any)
+            (container.items_mut().get_any(key.into()).unwrap().0 as &dyn Any)
                 .downcast_ref::<usize>(),
             Some(&item)
         );
@@ -299,7 +306,7 @@ mod tests {
         let mut container = Chunked::new(Uniform);
 
         let item = 42;
-        let key = container.reserve(&item).unwrap();
+        let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item);
 
         container.unfill_any(key.into());
@@ -312,7 +319,7 @@ mod tests {
         let mut container = Owned::new(Chunked::new(Uniform));
 
         let mut keys = (0..n)
-            .map(|i| container.add(i).unwrap().into())
+            .map(|i| container.add_with(i, ()).unwrap().into())
             .collect::<Vec<AnyKey>>();
 
         keys.sort();
