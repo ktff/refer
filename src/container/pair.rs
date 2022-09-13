@@ -9,7 +9,7 @@ use crate::core::*;
 
 /// A pair of containers for type T and U.
 pub struct ContainerPair<T, CT, U, CU> {
-    ct: CT,
+    pub ct: CT,
     /// Needs to be implemented manually.
     pub cu: CU,
     _t: PhantomData<T>,
