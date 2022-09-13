@@ -3,6 +3,8 @@ use std::{
     collections::HashSet,
 };
 
+use crate::Allocator;
+
 use super::{
     AnyItem, AnyItems, AnyKey, AnyShell, AnyShells, Item, Items, ItemsMut, Key, Shell, Shells,
     ShellsMut,
@@ -16,7 +18,7 @@ use super::{
 /// Collection can be split into collections of items and shells.
 pub trait Collection<T: Item>: Access<T> {
     /// Err if collection is out of keys or if some of the references don't exist.
-    fn add(&mut self, item: T) -> Result<Key<T>, T>;
+    fn add(&mut self, item: T, r: Self::R) -> Result<Key<T>, T>;
 
     /// Err if some of the references don't exist.
     fn set(&mut self, key: Key<T>, set: T) -> Result<T, T>;
@@ -25,16 +27,16 @@ pub trait Collection<T: Item>: Access<T> {
     fn take(&mut self, key: Key<T>) -> Option<T>;
 }
 
-pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
+pub trait Access<T: AnyItem>: Allocator<T> + AnyAccess {
     type GroupItem: Any;
 
     type Shell: Shell<T = T>;
 
-    type ItemsMut<'a>: ItemsMut<T, GroupItem = Self::GroupItem> + 'a
+    type ItemsMut<'a>: ItemsMut<T, GroupItem = Self::GroupItem, Alloc = Self::Alloc> + 'a
     where
         Self: 'a;
 
-    type ShellsMut<'a>: ShellsMut<T, Shell = Self::Shell> + 'a
+    type ShellsMut<'a>: ShellsMut<T, Shell = Self::Shell, Alloc = Self::Alloc> + 'a
     where
         Self: 'a;
 
@@ -50,7 +52,14 @@ pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
     where
         Self: 'a;
 
-    type MutIter<'a>: Iterator<Item = (Key<T>, (&'a mut T, &'a Self::GroupItem), &'a Self::Shell)>
+    type MutIter<'a>: Iterator<
+        Item = (
+            Key<T>,
+            (&'a mut T, &'a Self::GroupItem),
+            &'a Self::Shell,
+            &'a Self::Alloc,
+        ),
+    >
     where
         Self: 'a;
 
@@ -58,7 +67,10 @@ pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
     fn get(&self, key: Key<T>) -> Option<((&T, &Self::GroupItem), &Self::Shell)>;
 
     /// Some if it exists.
-    fn get_mut(&mut self, key: Key<T>) -> Option<((&mut T, &Self::GroupItem), &Self::Shell)>;
+    fn get_mut(
+        &mut self,
+        key: Key<T>,
+    ) -> Option<((&mut T, &Self::GroupItem), &Self::Shell, &Self::Alloc)>;
 
     /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;
@@ -103,9 +115,18 @@ pub trait AnyAccess: Any {
     fn split_item_any(
         &mut self,
         key: AnyKey,
-    ) -> Option<((&mut dyn AnyItem, &dyn Any), &mut dyn AnyShells)>;
+    ) -> Option<(
+        ((&mut dyn AnyItem, &dyn Any), &dyn std::alloc::Allocator),
+        &mut dyn AnyShells,
+    )>;
 
-    fn split_shell_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItems, &mut dyn AnyShell)>;
+    fn split_shell_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<(
+        &mut dyn AnyItems,
+        (&mut dyn AnyShell, &dyn std::alloc::Allocator),
+    )>;
 
     /// Splits to views of items and shells
     fn split_any(&mut self) -> (Box<dyn AnyItems + '_>, Box<dyn AnyShells + '_>);

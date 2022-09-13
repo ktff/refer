@@ -6,13 +6,18 @@ use std::{
 
 pub type ItemIter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, (&'a T, &'a <C as Container<T>>::GroupItem))>;
-pub type ItemMutIter<'a, C: Container<T> + 'static, T: AnyItem> =
-    impl Iterator<Item = (Key<T>, (&'a mut T, &'a <C as Container<T>>::GroupItem))>;
+pub type ItemMutIter<'a, C: Container<T> + 'static, T: AnyItem> = impl Iterator<
+    Item = (
+        Key<T>,
+        (&'a mut T, &'a <C as Container<T>>::GroupItem),
+        &'a C::Alloc,
+    ),
+>;
 
 pub type ShellsIter<'a, C: Container<T> + 'static, T: AnyItem> =
     impl Iterator<Item = (Key<T>, &'a <C as Container<T>>::Shell)>;
 pub type ShellsMutIter<'a, C: Container<T> + 'static, T: AnyItem> =
-    impl Iterator<Item = (Key<T>, &'a mut <C as Container<T>>::Shell)>;
+    impl Iterator<Item = (Key<T>, &'a mut <C as Container<T>>::Shell, &'a C::Alloc)>;
 
 pub type Iter<'a, C: Container<T> + 'static, T: AnyItem> = impl Iterator<
     Item = (
@@ -26,6 +31,7 @@ pub type MutIter<'a, C: Container<T> + 'static, T: AnyItem> = impl Iterator<
         Key<T>,
         (&'a mut T, &'a <C as Container<T>>::GroupItem),
         &'a C::Shell,
+        &'a C::Alloc,
     ),
 >;
 
@@ -42,9 +48,9 @@ impl<C: 'static> Owned<C> {
 }
 
 impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collection<T> for Owned<C> {
-    fn add(&mut self, item: T) -> Result<Key<T>, T> {
+    fn add(&mut self, item: T, r: Self::R) -> Result<Key<T>, T> {
         // Allocate slot
-        let key = if let Some(key) = self.0.reserve(&item) {
+        let (key, _) = if let Some(key) = self.reserve(Some(&item), r) {
             key
         } else {
             return Err(item);
@@ -81,7 +87,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         }
 
         // TODO: Reuse previous ref fetch
-        let (old, _) = items.get_mut(key).expect("Should be there");
+        let ((old, _), _) = items.get_mut(key).expect("Should be there");
 
         // Replace item
         Ok(std::mem::replace(old, set))
@@ -109,8 +115,12 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
 }
 
 impl<C: Allocator<T> + 'static, T: 'static> Allocator<T> for Owned<C> {
-    fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
-        self.0.reserve(item)
+    type Alloc = C::Alloc;
+
+    type R = C::R;
+
+    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+        self.0.reserve(item, r)
     }
 
     fn cancel(&mut self, key: ReservedKey<T>) {
@@ -162,19 +172,24 @@ impl<C: Container<T> + 'static, T: AnyItem> Access<T> for Owned<C> {
         Self: 'a;
 
     fn get(&self, key: Key<T>) -> Option<((&T, &Self::GroupItem), &Self::Shell)> {
-        self.0.get_slot(key.into()).map(|((item, gi), slot)| {
+        self.0.get_slot(key.into()).map(|((item, gi), shell, _)| {
             // This is safe because Self has total access to C and
             // we borrow &self so we can't mutate any slot hence &slot is safe.
-            unsafe { ((&*item.get(), gi), &*slot.get()) }
+            unsafe { ((&*item.get(), gi), &*shell.get()) }
         })
     }
 
-    fn get_mut(&mut self, key: Key<T>) -> Option<((&mut T, &Self::GroupItem), &Self::Shell)> {
-        self.0.get_slot(key.into()).map(|((item, gi), slot)| {
-            // This is safe because Self has total access to C and
-            // we borrow &mut self so there is no other &mut slot hence &mut slot is safe.
-            unsafe { ((&mut *item.get(), gi), &*slot.get()) }
-        })
+    fn get_mut(
+        &mut self,
+        key: Key<T>,
+    ) -> Option<((&mut T, &Self::GroupItem), &Self::Shell, &Self::Alloc)> {
+        self.0
+            .get_slot(key.into())
+            .map(|((item, gi), shell, alloc)| {
+                // This is safe because Self has total access to C and
+                // we borrow &mut self so there is no other &mut slot hence &mut slot is safe.
+                unsafe { ((&mut *item.get(), gi), &*shell.get(), alloc) }
+            })
     }
 
     fn iter(&self) -> Self::Iter<'_> {
@@ -182,8 +197,8 @@ impl<C: Container<T> + 'static, T: AnyItem> Access<T> for Owned<C> {
         // we borrow &self so we can't mutate any slot hence all &slot is safe.
         unsafe {
             self.0.iter_slot().into_iter().flat_map(|iter| {
-                iter.map(|(key, (item, gi), slot)| {
-                    (key.into_key(), (&*item.get(), gi), &*slot.get())
+                iter.map(|(key, (item, gi), shell, _)| {
+                    (key.into_key(), (&*item.get(), gi), &*shell.get())
                 })
             })
         }
@@ -196,8 +211,8 @@ impl<C: Container<T> + 'static, T: AnyItem> Access<T> for Owned<C> {
         // iter_slot that no slot is returned twice.
         unsafe {
             self.0.iter_slot().into_iter().flat_map(|iter| {
-                iter.map(|(key, (item, gi), slot)| {
-                    (key.into_key(), (&mut *item.get(), gi), &*slot.get())
+                iter.map(|(key, (item, gi), shell, alloc)| {
+                    (key.into_key(), (&mut *item.get(), gi), &*shell.get(), alloc)
                 })
             })
         }
@@ -234,35 +249,52 @@ impl<C: AnyContainer + 'static> AnyAccess for Owned<C> {
     fn split_item_any(
         &mut self,
         key: AnyKey,
-    ) -> Option<((&mut dyn AnyItem, &dyn Any), &mut dyn AnyShells)> {
-        let item = self.0.any_get_slot(key.into()).map(|((item, gi), _)| {
-            // This is safe because Self has total access to slots and
-            // we borrow &mut self so we can't mutate any item hence &mut AnyItem is safe.
-            let item = unsafe { &mut *item.get() };
+    ) -> Option<(
+        ((&mut dyn AnyItem, &dyn Any), &dyn std::alloc::Allocator),
+        &mut dyn AnyShells,
+    )> {
+        // TODO: Can we do better?
+        // This is safe since we are just decoupling lifetimes of mut shells from the others.
+        // We later in the function dereference it back to the original lifetime.
+        let shells_ptr = &mut self.0 as *mut _;
+        let item = self
+            .0
+            .any_get_slot(key.into())
+            .map(|((item, gi), _, alloc)| {
+                // This is safe because Self has total access to slots and
+                // we borrow &mut self so we can't mutate any item hence &mut AnyItem is safe.
+                let item = unsafe { &mut *item.get() };
 
-            // TODO: Can we do better?
-            // This is safe since we are just decoupling lifetime of group item back to the
-            // same lifetime. This is to decouple ref of self.0 so it's available later for &mut
-            let gi = unsafe { &*(gi as *const dyn Any) };
-
-            (item, gi)
-        })?;
-        // This is safe since we are only referencing an item and group item at this point so it's safe to
+                ((item, gi), alloc)
+            })?;
+        // This is safe since we are only referencing an mut item and group item at this point so it's safe to
         // give mut access to shells.
-        let shells = AccessShellsAny::new(&mut self.0);
+        let shells = AccessShellsAny::new(unsafe { &mut *shells_ptr });
 
         Some((item, shells))
     }
 
-    fn split_shell_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItems, &mut dyn AnyShell)> {
-        let shell = self.0.any_get_slot(key.into()).map(|(_, shell)| {
+    fn split_shell_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<(
+        &mut dyn AnyItems,
+        (&mut dyn AnyShell, &dyn std::alloc::Allocator),
+    )> {
+        // TODO: Can we do better?
+        // This is safe since we are just decoupling lifetimes of mut items from the others.
+        // We later in the function dereference it back to the original lifetime.
+        let items_ptr = &mut self.0 as *mut _;
+        let shell = self.0.any_get_slot(key.into()).map(|(_, shell, alloc)| {
             // This is safe because Self has total access to slots and
             // we borrow &mut self so we can't mutate any shell hence &mut AnyShell is safe.
-            unsafe { &mut *shell.get() }
+            let shell = unsafe { &mut *shell.get() };
+
+            (shell, alloc)
         })?;
-        // This is safe since we are only referencing a shell at this point so it's safe to
+        // This is safe since we are only referencing a mut shell at this point so it's safe to
         // give mut access to items.
-        let items = AccessItemsAny::new(&mut self.0);
+        let items = AccessItemsAny::new(unsafe { &mut *items_ptr });
 
         Some((items, shell))
     }
@@ -292,14 +324,19 @@ impl<'c, C: 'static> AccessItemsMut<'c, C> {
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> ItemsMut<T> for AccessItemsMut<'c, C> {
+    type Alloc = C::Alloc;
+
     type MutIter<'a> = ItemMutIter<'a, C, T> where Self:'a;
 
-    fn get_mut(&mut self, key: Key<T>) -> Option<(&mut T, &Self::GroupItem)> {
-        (self.0).0.get_slot(key.into()).map(|((item, gi), _)| {
-            // This is safe because Self has total access to items and
-            // we borrow &mut self so we can't alias T twice.
-            (unsafe { &mut *item.get() }, gi)
-        })
+    fn get_mut(&mut self, key: Key<T>) -> Option<((&mut T, &Self::GroupItem), &Self::Alloc)> {
+        (self.0)
+            .0
+            .get_slot(key.into())
+            .map(|((item, gi), _, alloc)| {
+                // This is safe because Self has total access to items and
+                // we borrow &mut self so we can't alias T twice.
+                ((unsafe { &mut *item.get() }, gi), alloc)
+            })
     }
 
     fn iter_mut(&mut self) -> Self::MutIter<'_> {
@@ -309,7 +346,9 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> ItemsMut<T> for AccessItemsMut<'
         // iter_slot that no item is returned twice.
         unsafe {
             (self.0).0.iter_slot().into_iter().flat_map(|iter| {
-                iter.map(|(key, (item, gi), _)| (key.into_key(), (&mut *item.get(), gi)))
+                iter.map(|(key, (item, gi), _, alloc)| {
+                    (key.into_key(), (&mut *item.get(), gi), alloc)
+                })
             })
         }
     }
@@ -331,19 +370,28 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItemsMut<'c, 
 
 impl<'c, C: AnyContainer + 'static> AnyItems for AccessItemsMut<'c, C> {
     fn get_any(&self, key: AnyKey) -> Option<(&dyn AnyItem, &dyn Any)> {
-        (self.0).0.any_get_slot(key.into()).map(|((item, gi), _)| {
-            // This is safe because Self has total access to items and
-            // we borrow &self so we can't mutate any item hence &AnyItem is safe.
-            (unsafe { &*item.get() }, gi)
-        })
+        (self.0)
+            .0
+            .any_get_slot(key.into())
+            .map(|((item, gi), _, _)| {
+                // This is safe because Self has total access to items and
+                // we borrow &self so we can't mutate any item hence &AnyItem is safe.
+                (unsafe { &*item.get() }, gi)
+            })
     }
 
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItem, &dyn Any)> {
-        (self.0).0.any_get_slot(key.into()).map(|((item, gi), _)| {
-            // This is safe because Self has total access to items and
-            // we borrow &mut self so there is no other &mut AnyItem hence &mut AnyItem is safe.
-            (unsafe { &mut *item.get() }, gi)
-        })
+    fn get_mut_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<((&mut dyn AnyItem, &dyn Any), &dyn std::alloc::Allocator)> {
+        (self.0)
+            .0
+            .any_get_slot(key.into())
+            .map(|((item, gi), _, alloc)| {
+                // This is safe because Self has total access to items and
+                // we borrow &mut self so there is no other &mut AnyItem hence &mut AnyItem is safe.
+                ((unsafe { &mut *item.get() }, gi), alloc)
+            })
     }
 }
 
@@ -364,7 +412,7 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItems<'c, C> 
     type Iter<'a> = ItemIter<'a,C, T> where Self:'a;
 
     fn get(&self, key: Key<T>) -> Option<(&T, &Self::GroupItem)> {
-        self.0.get_slot(key.into()).map(|((item, gi), _)| {
+        self.0.get_slot(key.into()).map(|((item, gi), _, _)| {
             // This is safe because Self has total access to items and
             // we borrow &self so we can't mutate the T hence &T is safe.
             (unsafe { &*item.get() }, gi)
@@ -376,13 +424,13 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItems<'c, C> 
         // we borrow &self so we can't mutate any T hence all &T is safe.
         unsafe {
             self.0.iter_slot().into_iter().flat_map(|iter| {
-                iter.map(|(key, (item, gi), _)| (key.into_key(), (&*item.get(), gi)))
+                iter.map(|(key, (item, gi), _, _)| (key.into_key(), (&*item.get(), gi)))
             })
         }
     }
 }
 
-/// This guarantees that it will fetch and mutably reference only items.
+/// This guarantees that it will fetch and mutably reference only items and shells won't touch.
 #[repr(transparent)]
 pub struct AccessItemsAny<C: 'static>(C);
 
@@ -395,19 +443,24 @@ impl<C: 'static> AccessItemsAny<C> {
 
 impl<C: AnyContainer + 'static> AnyItems for AccessItemsAny<C> {
     fn get_any(&self, key: AnyKey) -> Option<(&dyn AnyItem, &dyn Any)> {
-        self.0.any_get_slot(key.into()).map(|((item, gi), _)| {
+        self.0.any_get_slot(key.into()).map(|((item, gi), _, _)| {
             // This is safe because Self has total access to items and
             // we borrow &self so we can't mutate any item hence &AnyItem is safe.
             (unsafe { &*item.get() }, gi)
         })
     }
 
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItem, &dyn Any)> {
-        self.0.any_get_slot(key.into()).map(|((item, gi), _)| {
-            // This is safe because Self has total access to items and
-            // we borrow &mut self so there is no other &mut AnyItem hence &mut AnyItem is safe.
-            (unsafe { &mut *item.get() }, gi)
-        })
+    fn get_mut_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<((&mut dyn AnyItem, &dyn Any), &dyn std::alloc::Allocator)> {
+        self.0
+            .any_get_slot(key.into())
+            .map(|((item, gi), _, alloc)| {
+                // This is safe because Self has total access to items and
+                // we borrow &mut self so there is no other &mut AnyItem hence &mut AnyItem is safe.
+                ((unsafe { &mut *item.get() }, gi), alloc)
+            })
     }
 }
 
@@ -423,13 +476,15 @@ impl<'c, C: 'static> AccessShellsMut<'c, C> {
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> ShellsMut<T> for AccessShellsMut<'c, C> {
+    type Alloc = <C as Allocator<T>>::Alloc;
+
     type MutIter<'a> = ShellsMutIter<'a,C, T> where Self:'a;
 
-    fn get_mut(&mut self, key: Key<T>) -> Option<&mut Self::Shell> {
-        (self.0).0.get_slot(key.into()).map(|(_, shell)| {
+    fn get_mut(&mut self, key: Key<T>) -> Option<(&mut Self::Shell, &Self::Alloc)> {
+        (self.0).0.get_slot(key.into()).map(|(_, shell, alloc)| {
             // This is safe because Self has total access to shells and
             // we borrow &mut self so we can't alias Shell twice.
-            unsafe { &mut *shell.get() }
+            (unsafe { &mut *shell.get() }, alloc)
         })
     }
 
@@ -439,11 +494,9 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> ShellsMut<T> for AccessShellsMut
         // iter_mut or get_mut twice. Additionally we have guarantee from
         // iter_slot that no shell is returned twice.
         unsafe {
-            (self.0)
-                .0
-                .iter_slot()
-                .into_iter()
-                .flat_map(|iter| iter.map(|(key, _, shell)| (key.into_key(), &mut *shell.get())))
+            (self.0).0.iter_slot().into_iter().flat_map(|iter| {
+                iter.map(|(key, _, shell, alloc)| (key.into_key(), &mut *shell.get(), alloc))
+            })
         }
     }
 }
@@ -464,19 +517,25 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShellsMut<'c
 
 impl<'c, C: AnyContainer + 'static> AnyShells for AccessShellsMut<'c, C> {
     fn get_any(&self, key: AnyKey) -> Option<&dyn AnyShell> {
-        (self.0).0.any_get_slot(key.into()).map(|(_, shell)| {
+        (self.0).0.any_get_slot(key.into()).map(|(_, shell, _)| {
             // This is safe because Self has total access to shells and
             // we borrow &self so we can't mutate the Shell hence &Shell is safe.
             unsafe { &*shell.get() }
         })
     }
 
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell> {
-        (self.0).0.any_get_slot(key.into()).map(|(_, shell)| {
-            // This is safe because Self has total access to shells and
-            // we borrow &mut self so there is no other &mut Shell hence &mut Shell is safe.
-            unsafe { &mut *shell.get() }
-        })
+    fn get_mut_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<(&mut dyn AnyShell, &dyn std::alloc::Allocator)> {
+        (self.0)
+            .0
+            .any_get_slot(key.into())
+            .map(|(_, shell, alloc)| {
+                // This is safe because Self has total access to shells and
+                // we borrow &mut self so there is no other &mut Shell hence &mut Shell is safe.
+                (unsafe { &mut *shell.get() }, alloc)
+            })
     }
 }
 
@@ -497,7 +556,7 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShells<'c, C
     type Iter<'a> = ShellsIter<'a,C, T> where Self:'a;
 
     fn get(&self, key: Key<T>) -> Option<&Self::Shell> {
-        self.0.get_slot(key.into()).map(|(_, shell)| {
+        self.0.get_slot(key.into()).map(|(_, shell, _)| {
             // This is safe because Self has total access to shells and
             // we borrow &self so we can't mutate the Shell hence &Shell is safe.
             unsafe { &*shell.get() }
@@ -511,7 +570,7 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShells<'c, C
             self.0
                 .iter_slot()
                 .into_iter()
-                .flat_map(|iter| iter.map(|(key, _, shell)| (key.into_key(), &*shell.get())))
+                .flat_map(|iter| iter.map(|(key, _, shell, _)| (key.into_key(), &*shell.get())))
         }
     }
 }
@@ -529,18 +588,21 @@ impl<C: 'static> AccessShellsAny<C> {
 
 impl<C: AnyContainer + 'static> AnyShells for AccessShellsAny<C> {
     fn get_any(&self, key: AnyKey) -> Option<&dyn AnyShell> {
-        self.0.any_get_slot(key.into()).map(|(_, shell)| {
+        self.0.any_get_slot(key.into()).map(|(_, shell, _)| {
             // This is safe because Self has total access to shells and
             // we borrow &self so we can't mutate the Shell hence &Shell is safe.
             unsafe { &*shell.get() }
         })
     }
 
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell> {
-        self.0.any_get_slot(key.into()).map(|(_, shell)| {
+    fn get_mut_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<(&mut dyn AnyShell, &dyn std::alloc::Allocator)> {
+        self.0.any_get_slot(key.into()).map(|(_, shell, alloc)| {
             // This is safe because Self has total access to shells and
             // we borrow &mut self so there is no other &mut Shell hence &mut Shell is safe.
-            unsafe { &mut *shell.get() }
+            (unsafe { &mut *shell.get() }, alloc)
         })
     }
 }

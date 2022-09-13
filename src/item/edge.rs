@@ -2,12 +2,12 @@ use std::{any, fmt};
 
 use crate::core::*;
 
-pub type RefIter<'a, T: ?Sized + 'static> = impl Iterator<Item = AnyRef> + 'a;
+pub type RefIter<'a, T: 'static> = impl Iterator<Item = AnyRef> + 'a;
 
 /// Connects T <--Edge--> T.
-pub struct Edge<T: ?Sized + 'static>([Ref<T>; 2]);
+pub struct Edge<T: 'static>([Ref<T>; 2]);
 
-impl<T: ?Sized + 'static> Edge<T> {
+impl<T: 'static> Edge<T> {
     pub fn new(refs: [Ref<T>; 2]) -> Self {
         Edge(refs)
     }
@@ -27,7 +27,7 @@ impl<T: ?Sized + 'static> Edge<T> {
     }
 }
 
-impl<T: ?Sized + 'static> Item for Edge<T> {
+impl<T: 'static> Item for Edge<T> {
     type I<'a> = RefIter<'a, T>;
 
     fn references<I: AnyItems + ?Sized>(&self, _: Index, _: &I) -> Self::I<'_> {
@@ -35,7 +35,7 @@ impl<T: ?Sized + 'static> Item for Edge<T> {
     }
 }
 
-impl<T: ?Sized + 'static> AnyItem for Edge<T> {
+impl<T: 'static> AnyItem for Edge<T> {
     fn references_any<'a>(
         &'a self,
         this: Index,
@@ -50,7 +50,7 @@ impl<T: ?Sized + 'static> AnyItem for Edge<T> {
     }
 }
 
-impl<T: ?Sized + 'static> fmt::Debug for Edge<T> {
+impl<T: 'static> fmt::Debug for Edge<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

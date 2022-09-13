@@ -10,7 +10,14 @@ use std::{
 use super::item::{SizedShell, Slot};
 
 pub type SlotIter<'a, T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> =
-    impl Iterator<Item = (SubKey<T>, (&'a UnsafeCell<T>, &'a ()), &'a UnsafeCell<S>)>;
+    impl Iterator<
+        Item = (
+            SubKey<T>,
+            (&'a UnsafeCell<T>, &'a ()),
+            &'a UnsafeCell<S>,
+            &'a A,
+        ),
+    >;
 
 pub struct VecContainerFamily;
 
@@ -30,6 +37,7 @@ pub struct VecContainer<
 > {
     slots: Vec<Slot<T, S>, A>,
     free: Vec<Index, A>,
+    alloc: A,
     key_len: u32,
 }
 
@@ -38,6 +46,7 @@ impl<T: 'static, S: Shell<T = T> + Default> VecContainer<T, S, alloc::Global> {
         Self {
             slots: vec![Slot::Free],
             free: Vec::new(),
+            alloc: alloc::Global,
             key_len: key_len,
         }
     }
@@ -46,10 +55,11 @@ impl<T: 'static, S: Shell<T = T> + Default> VecContainer<T, S, alloc::Global> {
 impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + Clone + 'static>
     VecContainer<T, S, A>
 {
-    pub fn new_in(key_len: u32, allocator: A) -> Self {
+    pub fn new_in(key_len: u32, alloc: A) -> Self {
         Self {
-            slots: Vec::new_in(allocator.clone()),
-            free: Vec::new_in(allocator),
+            slots: Vec::new_in(alloc.clone()),
+            free: Vec::new_in(alloc.clone()),
+            alloc,
             key_len: key_len,
         }
     }
@@ -75,7 +85,11 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> VecCo
 impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Allocator<T>
     for VecContainer<T, S, A>
 {
-    fn reserve(&mut self, _: &T) -> Option<ReservedKey<T>> {
+    type Alloc = A;
+
+    type R = ();
+
+    fn reserve(&mut self, _: Option<&T>, _: Self::R) -> Option<(ReservedKey<T>, &A)> {
         let index = if let Some(index) = self.free.pop() {
             debug_assert!(matches!(self.slots[index.as_usize()], Slot::Free));
             index
@@ -91,7 +105,10 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Alloc
         };
 
         self.slots[index.as_usize()].reserve();
-        Some(ReservedKey::new(SubKey::new(self.key_len, index)))
+        Some((
+            ReservedKey::new(SubKey::new(self.key_len, index)),
+            &self.alloc,
+        ))
     }
 
     fn cancel(&mut self, key: ReservedKey<T>) {
@@ -138,12 +155,12 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Conta
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<((&UnsafeCell<T>, &()), &UnsafeCell<Self::Shell>)> {
+    ) -> Option<((&UnsafeCell<T>, &()), &UnsafeCell<Self::Shell>, &A)> {
         let i = key.index(self.key_len).as_usize();
         let slot = self.slots.get(i)?;
         match slot {
             Slot::Free | Slot::Reserved => None,
-            Slot::Filled { item, shell } => Some(((item, &()), shell)),
+            Slot::Filled { item, shell } => Some(((item, &()), shell, &self.alloc)),
         }
     }
 
@@ -163,6 +180,7 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Conta
                         ),
                         (item, &()),
                         shell,
+                        &self.alloc,
                     )),
                 }),
         )
@@ -178,13 +196,14 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> AnyCo
     ) -> Option<(
         (&UnsafeCell<dyn AnyItem>, &dyn Any),
         &UnsafeCell<dyn AnyShell>,
+        &dyn std::alloc::Allocator,
     )> {
         let i = key.downcast::<T>()?.index(self.key_len).as_usize();
 
         let slot = self.slots.get(i)?;
         match slot {
             Slot::Free | Slot::Reserved => None,
-            Slot::Filled { item, shell } => Some(((item, &()), shell)),
+            Slot::Filled { item, shell } => Some(((item, &()), shell, &self.alloc)),
         }
     }
 

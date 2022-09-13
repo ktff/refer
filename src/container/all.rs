@@ -57,8 +57,12 @@ impl<T: AnyItem, F: ContainerFamily> Allocator<T> for AllContainer<F>
 where
     F::C<T>: Allocator<T>,
 {
-    fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
-        self.coll_or_insert::<T>().reserve(item)
+    type Alloc = <F::C<T> as Allocator<T>>::Alloc;
+
+    type R = <F::C<T> as Allocator<T>>::R;
+
+    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+        self.coll_or_insert::<T>().reserve(item, r)
     }
 
     fn cancel(&mut self, key: ReservedKey<T>) {
@@ -101,7 +105,11 @@ where
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<((&UnsafeCell<T>, &Self::GroupItem), &UnsafeCell<Self::Shell>)> {
+    ) -> Option<(
+        (&UnsafeCell<T>, &Self::GroupItem),
+        &UnsafeCell<Self::Shell>,
+        &Self::Alloc,
+    )> {
         self.coll::<T>()?.get_slot(key)
     }
 
@@ -117,6 +125,7 @@ impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
     ) -> Option<(
         (&UnsafeCell<dyn AnyItem>, &dyn Any),
         &UnsafeCell<dyn AnyShell>,
+        &dyn std::alloc::Allocator,
     )> {
         self.collections
             .get(&key.type_id())

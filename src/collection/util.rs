@@ -12,8 +12,8 @@ pub fn add_references<T: Item + ?Sized>(
 ) -> bool {
     // item --> others
     for (i, rf) in item.references(key.index(), items).enumerate() {
-        if let Some(shell) = shells.get_mut_any(rf.key()) {
-            shell.add_from(key.into());
+        if let Some((shell, alloc)) = shells.get_mut_any(rf.key()) {
+            shell.add_from_any(key.into(), alloc);
         } else {
             // Reference doesn't exist
 
@@ -53,11 +53,11 @@ pub fn update_diff<T: Item + ?Sized>(
                 // We don't care so much about this reference missing.
                 shells
                     .get_mut_any(rf.key())
-                    .map(|shell| shell.remove_from(key.into()));
+                    .map(|(shell, _)| shell.remove_from(key.into()));
             }
             (None, Some(rf)) => {
-                if let Some(shell) = shells.get_mut_any(rf.key()) {
-                    shell.add_from(key.into());
+                if let Some((shell, alloc)) = shells.get_mut_any(rf.key()) {
+                    shell.add_from_any(key.into(), alloc);
                 } else {
                     // Reference doesn't exist
 
@@ -102,17 +102,16 @@ pub fn notify_item_removed(
         for rf in references {
             shells
                 .get_mut_any(rf.key())
-                .map(|shell| shell.remove_from(key.into()));
+                .map(|(shell, _)| shell.remove_from(key.into()));
         }
     }
 
     // item <-- others
-    let shell = shells.get_mut_any(key).expect("Should exist");
+    let (shell, _) = shells.get_mut_any(key).expect("Should exist");
     for rf in shell.from_any() {
-        if !items
-            .get_mut_any(rf)
-            .map_or(true, |(item, _)| item.item_removed(rf.index(), key.into()))
-        {
+        if !items.get_mut_any(rf).map_or(true, |((item, _), _)| {
+            item.item_removed(rf.index(), key.into())
+        }) {
             remove.push(rf);
         }
     }

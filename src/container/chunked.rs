@@ -6,7 +6,7 @@ use std::{
 
 use crate::core::*;
 
-pub type SlotIter<'a, L: Chunk, T: AnyItem>
+pub type SlotIter<'a, L: ChunkingLogic<T>, T: AnyItem>
 where
     L::C: Container<T>,
 = impl Iterator<
@@ -17,6 +17,7 @@ where
             &'a <<L as Chunk>::C as Container<T>>::GroupItem,
         ),
         &'a UnsafeCell<<<L as Chunk>::C as Container<T>>::Shell>,
+        &'a <<L as Chunk>::C as Allocator<T>>::Alloc,
     ),
 >;
 
@@ -32,8 +33,16 @@ pub trait ChunkingLogic<T: AnyItem>: Chunk
 where
     Self::C: Allocator<T>,
 {
+    // TODO: Some descriptive name
+    type R: Copy;
+
     /// Assign item to some chunk.
-    fn assign(&mut self, chunks: &mut Vec<Self::C>, item: &T) -> Option<usize>;
+    fn assign(
+        &mut self,
+        chunks: &mut Vec<Self::C>,
+        item: Option<&T>,
+        r: Self::R,
+    ) -> Option<(usize, <Self::C as Allocator<T>>::R)>;
 }
 
 /// A container that chunks items into separate containers according to ChunkingLogic.
@@ -55,10 +64,14 @@ impl<L: ChunkingLogic<T>, T: AnyItem> Allocator<T> for Chunked<L>
 where
     L::C: Allocator<T>,
 {
-    fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
-        let index = self.logic.assign(&mut self.chunks, item)?;
-        let sub_key = self.chunks[index].reserve(item)?;
-        Some(sub_key.push(self.logic.key_len(), index))
+    type Alloc = <L::C as Allocator<T>>::Alloc;
+
+    type R = L::R;
+
+    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+        let (index, r) = self.logic.assign(&mut self.chunks, item, r)?;
+        let (sub_key, alloc) = self.chunks[index].reserve(item, r)?;
+        Some((sub_key.push(self.logic.key_len(), index), alloc))
     }
 
     fn cancel(&mut self, key: ReservedKey<T>) {
@@ -87,7 +100,7 @@ where
 
 impl<L: Chunk> !Sync for Chunked<L> {}
 
-impl<L: Chunk, T: AnyItem> Container<T> for Chunked<L>
+impl<L: ChunkingLogic<T>, T: AnyItem> Container<T> for Chunked<L>
 where
     L::C: Container<T>,
 {
@@ -102,7 +115,11 @@ where
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<((&UnsafeCell<T>, &Self::GroupItem), &UnsafeCell<Self::Shell>)> {
+    ) -> Option<(
+        (&UnsafeCell<T>, &Self::GroupItem),
+        &UnsafeCell<Self::Shell>,
+        &Self::Alloc,
+    )> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.get_slot(suffix)
     }
@@ -115,7 +132,9 @@ where
                 .enumerate()
                 .flat_map(move |(prefix, chunk)| {
                     chunk.iter_slot().map(|iter| {
-                        iter.map(move |(suffix, v, s)| (suffix.push(key_len, prefix), v, s))
+                        iter.map(move |(suffix, item, shell, alloc)| {
+                            (suffix.push(key_len, prefix), item, shell, alloc)
+                        })
                     })
                 })
                 .flat_map(|iter| iter),
@@ -133,6 +152,7 @@ where
     ) -> Option<(
         (&UnsafeCell<dyn AnyItem>, &dyn Any),
         &UnsafeCell<dyn AnyShell>,
+        &dyn std::alloc::Allocator,
     )> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.any_get_slot(suffix)

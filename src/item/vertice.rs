@@ -2,12 +2,12 @@ use std::ops::Deref;
 
 use crate::core::*;
 
-pub type RefIter<'a, T: AnyItem + ?Sized> = impl Iterator<Item = AnyRef> + 'a;
+pub type RefIter<'a, T: AnyItem> = impl Iterator<Item = AnyRef> + 'a;
 
 /// F --> T
-pub struct Vertice<T: AnyItem + ?Sized>(Vec<Ref<T>>);
+pub struct Vertice<T: AnyItem>(Vec<Ref<T>>);
 
-impl<T: AnyItem + ?Sized> Vertice<T> {
+impl<T: AnyItem> Vertice<T> {
     pub fn new(refs: Vec<Ref<T>>) -> Self {
         Vertice(refs)
     }
@@ -30,14 +30,14 @@ impl<T: AnyItem + ?Sized> Vertice<T> {
     }
 }
 
-impl<T: AnyItem + ?Sized> Deref for Vertice<T> {
+impl<T: AnyItem> Deref for Vertice<T> {
     type Target = [Ref<T>];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T: AnyItem + ?Sized> Item for Vertice<T> {
+impl<T: AnyItem> Item for Vertice<T> {
     type I<'a> = RefIter<'a, T>;
 
     fn references<I: AnyItems + ?Sized>(&self, _: Index, _: &I) -> Self::I<'_> {
@@ -45,7 +45,7 @@ impl<T: AnyItem + ?Sized> Item for Vertice<T> {
     }
 }
 
-impl<T: AnyItem + ?Sized> AnyItem for Vertice<T> {
+impl<T: AnyItem> AnyItem for Vertice<T> {
     fn references_any<'a>(
         &'a self,
         this: Index,
@@ -61,7 +61,7 @@ impl<T: AnyItem + ?Sized> AnyItem for Vertice<T> {
     }
 }
 
-impl<T: AnyItem + ?Sized> Default for Vertice<T> {
+impl<T: AnyItem> Default for Vertice<T> {
     fn default() -> Self {
         Vertice(Vec::default())
     }

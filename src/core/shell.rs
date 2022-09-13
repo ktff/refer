@@ -28,18 +28,26 @@ pub trait AnyShell: Any {
     }
 
     /// Additive if called for same `from` multiple times.
-    fn add_from(&mut self, from: AnyKey);
+    fn add_from(&mut self, from: AnyKey, alloc: &impl std::alloc::Allocator)
+    where
+        Self: Sized;
+
+    // TODO: Some better name
+    /// Additive if called for same `from` multiple times.
+    fn add_from_any(&mut self, from: AnyKey, alloc: &dyn std::alloc::Allocator);
 
     /// Subtracts if called for same `from` multiple times.
     fn remove_from(&mut self, from: AnyKey);
 }
 
 pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {
-    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut Self::Shell)>
+    type Alloc: std::alloc::Allocator;
+
+    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut Self::Shell, &'a Self::Alloc)>
     where
         Self: 'a;
 
-    fn get_mut(&mut self, key: Key<T>) -> Option<&mut Self::Shell>;
+    fn get_mut(&mut self, key: Key<T>) -> Option<(&mut Self::Shell, &Self::Alloc)>;
 
     /// Ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
@@ -61,5 +69,8 @@ pub trait Shells<T: ?Sized + 'static> {
 pub trait AnyShells {
     fn get_any(&self, key: AnyKey) -> Option<&dyn AnyShell>;
 
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyShell>;
+    fn get_mut_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<(&mut dyn AnyShell, &dyn std::alloc::Allocator)>;
 }

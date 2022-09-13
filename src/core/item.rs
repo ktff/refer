@@ -29,12 +29,14 @@ pub trait AnyItem: Any {
 }
 
 pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
-    type MutIter<'a>: Iterator<Item = (Key<T>, (&'a mut T, &'a Self::GroupItem))>
+    type Alloc: std::alloc::Allocator;
+
+    type MutIter<'a>: Iterator<Item = (Key<T>, (&'a mut T, &'a Self::GroupItem), &'a Self::Alloc)>
     where
         Self: 'a;
 
     /// Some if it exists.
-    fn get_mut(&mut self, key: Key<T>) -> Option<(&mut T, &Self::GroupItem)>;
+    fn get_mut(&mut self, key: Key<T>) -> Option<((&mut T, &Self::GroupItem), &Self::Alloc)>;
 
     /// Ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
@@ -57,5 +59,8 @@ pub trait Items<T: ?Sized + 'static> {
 pub trait AnyItems {
     fn get_any(&self, key: AnyKey) -> Option<(&dyn AnyItem, &dyn Any)>;
 
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItem, &dyn Any)>;
+    fn get_mut_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<((&mut dyn AnyItem, &dyn Any), &dyn std::alloc::Allocator)>;
 }

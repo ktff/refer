@@ -25,7 +25,6 @@ NOTES
 
 - Containers are not to be Items since that creates non trivial recursions on type and logic levels.
 
-
 TODO:
 
    * LocalBox<T>

@@ -13,8 +13,12 @@ pub struct ContainerData<D: Any, C> {
 }
 
 impl<D: Any, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
-    fn reserve(&mut self, item: &T) -> Option<ReservedKey<T>> {
-        self.container.reserve(item)
+    type Alloc = C::Alloc;
+
+    type R = C::R;
+
+    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+        self.container.reserve(item, r)
     }
 
     fn cancel(&mut self, key: ReservedKey<T>) {
@@ -40,10 +44,13 @@ impl<D: Any, C: Container<T, GroupItem = ()>, T: AnyItem> Container<T> for Conta
 
     type SlotIter<'a> = IterWithData<'a, T, D, C> where Self: 'a;
 
-    fn get_slot(&self, key: SubKey<T>) -> Option<((&UnsafeCell<T>, &D), &UnsafeCell<Self::Shell>)> {
+    fn get_slot(
+        &self,
+        key: SubKey<T>,
+    ) -> Option<((&UnsafeCell<T>, &D), &UnsafeCell<Self::Shell>, &Self::Alloc)> {
         self.container
             .get_slot(key)
-            .map(|((item, _), shell)| ((item, &self.data), shell))
+            .map(|((item, _), shell, alloc)| ((item, &self.data), shell, alloc))
     }
 
     unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
@@ -61,10 +68,11 @@ impl<D: Any, C: AnyContainer> AnyContainer for ContainerData<D, C> {
     ) -> Option<(
         (&UnsafeCell<dyn AnyItem>, &dyn Any),
         &UnsafeCell<dyn AnyShell>,
+        &dyn std::alloc::Allocator,
     )> {
         self.container
             .any_get_slot(key)
-            .map(|((item, _), shell)| ((item, &self.data as &dyn Any), shell))
+            .map(|((item, _), shell, alloc)| ((item, &self.data as &dyn Any), shell, alloc))
     }
 
     fn unfill_any(&mut self, key: AnySubKey) {
@@ -94,11 +102,12 @@ impl<'a, T: AnyItem, D, C: Container<T>> Iterator for IterWithData<'a, T, D, C> 
         SubKey<T>,
         (&'a UnsafeCell<T>, &'a D),
         &'a UnsafeCell<<C as Container<T>>::Shell>,
+        &'a <C as Allocator<T>>::Alloc,
     );
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|(key, (item, _), shell)| (key, (item, self.data), shell))
+            .map(|(key, (item, _), shell, alloc)| (key, (item, self.data), shell, alloc))
     }
 }
