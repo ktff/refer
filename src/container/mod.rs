@@ -2,6 +2,7 @@ pub mod all;
 pub mod chunked;
 pub mod data;
 pub mod item;
+#[macro_use]
 pub mod pair;
 pub mod vec;
 

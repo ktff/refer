@@ -28,57 +28,128 @@ impl<T, CT, U, CU> ContainerPair<T, CT, U, CU> {
     }
 }
 
-// TODO: How to enable default impl for U?
-impl<T: 'static, CT: Allocator<T>, U, CU: AnyContainer> Allocator<T>
-    for ContainerPair<T, CT, U, CU>
-{
-    type Alloc = CT::Alloc;
+/// Implements Allocator and Container for type T and U for any ContainerPair
+#[macro_export]
+macro_rules! impl_container_pair {
+    ($t:ty,$u:ty) => {
+        impl<CT: $crate::Allocator<$t>, CU: $crate::AnyContainer> $crate::Allocator<$t>
+            for $crate::container::ContainerPair<$t, CT, $u, CU>
+        {
+            type Alloc = CT::Alloc;
 
-    type R = CT::R;
+            type R = CT::R;
 
-    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
-        self.ct.reserve(item, r)
-    }
+            fn reserve(
+                &mut self,
+                item: Option<&$t>,
+                r: Self::R,
+            ) -> Option<($crate::ReservedKey<$t>, &Self::Alloc)> {
+                self.ct.reserve(item, r)
+            }
 
-    fn cancel(&mut self, key: ReservedKey<T>) {
-        self.ct.cancel(key)
-    }
+            fn cancel(&mut self, key: $crate::ReservedKey<$t>) {
+                self.ct.cancel(key)
+            }
 
-    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T> {
-        self.ct.fulfill(key, item)
-    }
+            fn fulfill(&mut self, key: $crate::ReservedKey<$t>, item: $t) -> $crate::SubKey<$t>
+            where
+                T: Sized,
+            {
+                self.ct.fulfill(key, item)
+            }
 
-    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
-    where
-        T: Sized,
-    {
-        self.ct.unfill(key)
-    }
-}
+            fn unfill(&mut self, key: $crate::SubKey<$t>) -> Option<$t>
+            where
+                T: Sized,
+            {
+                self.ct.unfill(key)
+            }
+        }
 
-impl<T: AnyItem, CT: Container<T>, U: AnyItem, CU: AnyContainer> Container<T>
-    for ContainerPair<T, CT, U, CU>
-{
-    type GroupItem = CT::GroupItem;
+        impl<CT: $crate::Container<$t>, CU: $crate::AnyContainer> $crate::Container<$t>
+            for $crate::container::ContainerPair<$t, CT, $u, CU>
+        {
+            type GroupItem = CT::GroupItem;
 
-    type Shell = CT::Shell;
+            type Shell = CT::Shell;
 
-    type SlotIter<'a> = CT::SlotIter<'a> where Self: 'a;
+            type SlotIter<'a> = CT::SlotIter<'a> where Self: 'a;
 
-    fn get_slot(
-        &self,
-        key: SubKey<T>,
-    ) -> Option<(
-        (&UnsafeCell<T>, &Self::GroupItem),
-        &UnsafeCell<Self::Shell>,
-        &Self::Alloc,
-    )> {
-        self.ct.get_slot(key)
-    }
+            fn get_slot(
+                &self,
+                key: $crate::SubKey<$t>,
+            ) -> Option<(
+                (&std::cell::UnsafeCell<$t>, &Self::GroupItem),
+                &std::cell::UnsafeCell<Self::Shell>,
+                &Self::Alloc,
+            )> {
+                self.ct.get_slot(key)
+            }
 
-    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
-        self.ct.iter_slot()
-    }
+            unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
+                self.ct.iter_slot()
+            }
+        }
+
+        impl<CT: $crate::AnyContainer, CU: $crate::Allocator<$u>> $crate::Allocator<$u>
+            for $crate::containers::ContainerPair<$t, CT, $u, CU>
+        {
+            type Alloc = CU::Alloc;
+
+            type R = CU::R;
+
+            fn reserve(
+                &mut self,
+                item: Option<&$u>,
+                r: Self::R,
+            ) -> Option<($crate::ReservedKey<$u>, &Self::Alloc)> {
+                self.cu.reserve(item, r)
+            }
+
+            fn cancel(&mut self, key: $crate::ReservedKey<$u>) {
+                self.cu.cancel(key)
+            }
+
+            fn fulfill(&mut self, key: $crate::ReservedKey<$u>, item: $u) -> $crate::SubKey<$u>
+            where
+                T: Sized,
+            {
+                self.cu.fulfill(key, item)
+            }
+
+            fn unfill(&mut self, key: $crate::SubKey<$u>) -> Option<$u>
+            where
+                T: Sized,
+            {
+                self.cu.unfill(key)
+            }
+        }
+
+        impl<CT: $crate::AnyContainer, CU: $crate::Container<$u>> $crate::Container<$u>
+            for $crate::container::ContainerPair<$t, CT, $u, CU>
+        {
+            type GroupItem = CU::GroupItem;
+
+            type Shell = CU::Shell;
+
+            type SlotIter<'a> = CU::SlotIter<'a> where Self: 'a;
+
+            fn get_slot(
+                &self,
+                key: $crate::SubKey<$u>,
+            ) -> Option<(
+                (&std::cell::UnsafeCell<$u>, &Self::GroupItem),
+                &std::cell::UnsafeCell<Self::Shell>,
+                &Self::Alloc,
+            )> {
+                self.cu.get_slot(key)
+            }
+
+            unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
+                self.cu.iter_slot()
+            }
+        }
+    };
 }
 
 impl<T: AnyItem, CT: AnyContainer, U: AnyItem, CU: AnyContainer> AnyContainer

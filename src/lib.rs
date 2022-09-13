@@ -46,6 +46,7 @@
 //! TODO
 
 pub mod collection;
+#[macro_use]
 pub mod container;
 pub mod core;
 #[macro_use]

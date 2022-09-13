@@ -1,8 +1,6 @@
 use super::{AnyKey, AnyRef, Index, Key};
 use std::any::Any;
 
-// TODO: To allow references and references_any to accept &Items so to be able to trace it's tree of references?
-
 /// An item of a model.
 pub trait Item: AnyItem {
     type I<'a>: Iterator<Item = AnyRef>;
