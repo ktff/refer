@@ -7,28 +7,28 @@ pub mod vertice;
 #[macro_export]
 macro_rules! impl_item {
     ($ty:ty) => {
-        impl crate::core::Item for $ty {
-            type I<'a> = std::iter::Empty<crate::core::AnyRef>;
+        impl $crate::core::Item for $ty {
+            type I<'a> = std::iter::Empty<$crate::core::AnyRef>;
 
-            fn references<I: crate::core::AnyItems + ?Sized>(
+            fn references<I: $crate::core::AnyItems + ?Sized>(
                 &self,
-                _: crate::core::Index,
+                _: $crate::core::Index,
                 _: &I,
             ) -> Self::I<'_> {
                 std::iter::empty()
             }
         }
 
-        impl crate::core::AnyItem for $ty {
+        impl $crate::core::AnyItem for $ty {
             fn references_any(
                 &self,
-                _: crate::core::Index,
-                _: &dyn crate::core::AnyItems,
-            ) -> Option<Box<dyn Iterator<Item = crate::core::AnyRef> + '_>> {
+                _: $crate::core::Index,
+                _: &dyn $crate::core::AnyItems,
+            ) -> Option<Box<dyn Iterator<Item = $crate::core::AnyRef> + '_>> {
                 None
             }
 
-            fn item_removed(&mut self, _: crate::core::Index, _: crate::core::AnyKey) -> bool {
+            fn item_removed(&mut self, _: $crate::core::Index, _: $crate::core::AnyKey) -> bool {
                 true
             }
         }
