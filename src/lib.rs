@@ -4,6 +4,7 @@
 #![feature(negative_impls)]
 // Currently this is not implemented safely for *dyn Trait.
 #![feature(trait_upcasting)]
+#![feature(allocator_api)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs
