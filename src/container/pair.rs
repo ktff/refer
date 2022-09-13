@@ -53,14 +53,14 @@ macro_rules! impl_container_pair {
 
             fn fulfill(&mut self, key: $crate::ReservedKey<$t>, item: $t) -> $crate::SubKey<$t>
             where
-                T: Sized,
+                $t: Sized,
             {
                 self.ct.fulfill(key, item)
             }
 
             fn unfill(&mut self, key: $crate::SubKey<$t>) -> Option<$t>
             where
-                T: Sized,
+                $t: Sized,
             {
                 self.ct.unfill(key)
             }
@@ -92,7 +92,7 @@ macro_rules! impl_container_pair {
         }
 
         impl<CT: $crate::AnyContainer, CU: $crate::Allocator<$u>> $crate::Allocator<$u>
-            for $crate::containers::ContainerPair<$t, CT, $u, CU>
+            for $crate::container::ContainerPair<$t, CT, $u, CU>
         {
             type Alloc = CU::Alloc;
 
@@ -112,14 +112,14 @@ macro_rules! impl_container_pair {
 
             fn fulfill(&mut self, key: $crate::ReservedKey<$u>, item: $u) -> $crate::SubKey<$u>
             where
-                T: Sized,
+                $u: Sized,
             {
                 self.cu.fulfill(key, item)
             }
 
             fn unfill(&mut self, key: $crate::SubKey<$u>) -> Option<$u>
             where
-                T: Sized,
+                $u: Sized,
             {
                 self.cu.unfill(key)
             }
