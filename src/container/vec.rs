@@ -1,10 +1,15 @@
 use crate::core::*;
-use std::{any::TypeId, cell::UnsafeCell, collections::HashSet, num::NonZeroU64};
+use std::{
+    any::{Any, TypeId},
+    cell::UnsafeCell,
+    collections::HashSet,
+    num::NonZeroU64,
+};
 
 use super::item::{SizedShell, Slot};
 
 pub type SlotIter<'a, T: AnyItem, S: Shell<T = T> + Default> =
-    impl Iterator<Item = (SubKey<T>, &'a UnsafeCell<T>, &'a UnsafeCell<S>)>;
+    impl Iterator<Item = (SubKey<T>, (&'a UnsafeCell<T>, &'a ()), &'a UnsafeCell<S>)>;
 
 pub struct VecContainerFamily;
 
@@ -98,16 +103,21 @@ impl<T: 'static, S: Shell<T = T> + Default> Allocator<T> for VecContainer<T, S> 
 impl<T: AnyItem, S: Shell<T = T> + Default> !Sync for VecContainer<T, S> {}
 
 impl<T: AnyItem, S: Shell<T = T> + Default> Container<T> for VecContainer<T, S> {
+    type GroupItem = ();
+
     type Shell = S;
 
     type SlotIter<'a> = SlotIter<'a, T, S> where Self: 'a;
 
-    fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
+    fn get_slot(
+        &self,
+        key: SubKey<T>,
+    ) -> Option<((&UnsafeCell<T>, &()), &UnsafeCell<Self::Shell>)> {
         let i = key.index(self.key_len).as_usize();
         let slot = self.slots.get(i)?;
         match slot {
             Slot::Free | Slot::Reserved => None,
-            Slot::Filled { item, shell } => Some((item, shell)),
+            Slot::Filled { item, shell } => Some(((item, &()), shell)),
         }
     }
 
@@ -125,7 +135,7 @@ impl<T: AnyItem, S: Shell<T = T> + Default> Container<T> for VecContainer<T, S> 
                             self.key_len,
                             Index(NonZeroU64::new(i as u64).expect("Zero index")),
                         ),
-                        item,
+                        (item, &()),
                         shell,
                     )),
                 }),
@@ -137,13 +147,16 @@ impl<T: AnyItem, S: Shell<T = T> + Default> AnyContainer for VecContainer<T, S> 
     fn any_get_slot(
         &self,
         key: AnySubKey,
-    ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)> {
+    ) -> Option<(
+        (&UnsafeCell<dyn AnyItem>, &dyn Any),
+        &UnsafeCell<dyn AnyShell>,
+    )> {
         let i = key.downcast::<T>()?.index(self.key_len).as_usize();
 
         let slot = self.slots.get(i)?;
         match slot {
             Slot::Free | Slot::Reserved => None,
-            Slot::Filled { item, shell } => Some((item, shell)),
+            Slot::Filled { item, shell } => Some(((item, &()), shell)),
         }
     }
 

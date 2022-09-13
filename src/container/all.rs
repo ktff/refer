@@ -90,13 +90,18 @@ impl<T: AnyItem, F: ContainerFamily> Container<T> for AllContainer<F>
 where
     F::C<T>: Container<T>,
 {
+    type GroupItem = <F::C<T> as Container<T>>::GroupItem;
+
     type Shell = <F::C<T> as Container<T>>::Shell;
 
     type SlotIter<'a>=<F::C<T> as Container<T>>::SlotIter<'a>
     where
         Self: 'a;
 
-    fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
+    fn get_slot(
+        &self,
+        key: SubKey<T>,
+    ) -> Option<((&UnsafeCell<T>, &Self::GroupItem), &UnsafeCell<Self::Shell>)> {
         self.coll::<T>()?.get_slot(key)
     }
 
@@ -109,7 +114,10 @@ impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
     fn any_get_slot(
         &self,
         key: AnySubKey,
-    ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)> {
+    ) -> Option<(
+        (&UnsafeCell<dyn AnyItem>, &dyn Any),
+        &UnsafeCell<dyn AnyShell>,
+    )> {
         self.collections
             .get(&key.type_id())
             .map(|c| &**c)?

@@ -29,31 +29,33 @@ pub trait AnyItem: Any {
 }
 
 pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
-    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut T)>
+    type MutIter<'a>: Iterator<Item = (Key<T>, (&'a mut T, &'a Self::GroupItem))>
     where
         Self: 'a;
 
     /// Some if it exists.
-    fn get_mut(&mut self, key: Key<T>) -> Option<&mut T>;
+    fn get_mut(&mut self, key: Key<T>) -> Option<(&mut T, &Self::GroupItem)>;
 
     /// Ascending order.
     fn iter_mut(&mut self) -> Self::MutIter<'_>;
 }
 
 pub trait Items<T: ?Sized + 'static> {
-    type Iter<'a>: Iterator<Item = (Key<T>, &'a T)>
+    type GroupItem: Any;
+
+    type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem))>
     where
         Self: 'a;
 
     /// Some if it exists.
-    fn get(&self, key: Key<T>) -> Option<&T>;
+    fn get(&self, key: Key<T>) -> Option<(&T, &Self::GroupItem)>;
 
     /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;
 }
 
 pub trait AnyItems {
-    fn get_any(&self, key: AnyKey) -> Option<&dyn AnyItem>;
+    fn get_any(&self, key: AnyKey) -> Option<(&dyn AnyItem, &dyn Any)>;
 
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<&mut dyn AnyItem>;
+    fn get_mut_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItem, &dyn Any)>;
 }

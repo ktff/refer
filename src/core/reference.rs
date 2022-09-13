@@ -34,22 +34,22 @@ impl<T: ?Sized + 'static> Ref<T> {
 }
 
 impl<T: AnyItem + ?Sized> Ref<T> {
-    pub fn get<C: Access<T>>(self, coll: &C) -> (&T, &C::Shell) {
+    pub fn get<C: Access<T>>(self, coll: &C) -> ((&T, &C::GroupItem), &C::Shell) {
         coll.get(self.key())
             .unwrap_or_else(|| self.panic_dangling())
     }
 
-    pub fn get_mut<C: Access<T>>(self, coll: &mut C) -> (&mut T, &C::Shell) {
+    pub fn get_mut<C: Access<T>>(self, coll: &mut C) -> ((&mut T, &C::GroupItem), &C::Shell) {
         coll.get_mut(self.key())
             .unwrap_or_else(|| self.panic_dangling())
     }
 
-    pub fn item<C: ItemsMut<T>>(self, coll: &C) -> &T {
+    pub fn item<C: ItemsMut<T>>(self, coll: &C) -> (&T, &C::GroupItem) {
         coll.get(self.key())
             .unwrap_or_else(|| self.panic_dangling())
     }
 
-    pub fn item_mut<C: ItemsMut<T>>(self, coll: &mut C) -> &mut T {
+    pub fn item_mut<C: ItemsMut<T>>(self, coll: &mut C) -> (&mut T, &C::GroupItem) {
         coll.get_mut(self.key())
             .unwrap_or_else(|| self.panic_dangling())
     }

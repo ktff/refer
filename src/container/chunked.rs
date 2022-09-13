@@ -1,4 +1,8 @@
-use std::{any::TypeId, cell::UnsafeCell, collections::HashSet};
+use std::{
+    any::{Any, TypeId},
+    cell::UnsafeCell,
+    collections::HashSet,
+};
 
 use crate::core::*;
 
@@ -8,7 +12,10 @@ where
 = impl Iterator<
     Item = (
         SubKey<T>,
-        &'a UnsafeCell<T>,
+        (
+            &'a UnsafeCell<T>,
+            &'a <<L as Chunk>::C as Container<T>>::GroupItem,
+        ),
         &'a UnsafeCell<<<L as Chunk>::C as Container<T>>::Shell>,
     ),
 >;
@@ -84,13 +91,18 @@ impl<L: Chunk, T: AnyItem> Container<T> for Chunked<L>
 where
     L::C: Container<T>,
 {
+    type GroupItem = <L::C as Container<T>>::GroupItem;
+
     type Shell = <L::C as Container<T>>::Shell;
 
     type SlotIter<'a> = SlotIter<'a, L, T>
     where
         Self: 'a;
 
-    fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
+    fn get_slot(
+        &self,
+        key: SubKey<T>,
+    ) -> Option<((&UnsafeCell<T>, &Self::GroupItem), &UnsafeCell<Self::Shell>)> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.get_slot(suffix)
     }
@@ -118,7 +130,10 @@ where
     fn any_get_slot(
         &self,
         key: AnySubKey,
-    ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)> {
+    ) -> Option<(
+        (&UnsafeCell<dyn AnyItem>, &dyn Any),
+        &UnsafeCell<dyn AnyShell>,
+    )> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.any_get_slot(suffix)
     }

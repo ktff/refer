@@ -97,7 +97,7 @@ pub fn notify_item_removed(
     // remove item --> others
     // TODO: Could this call to Box be avoided?
     let (mut items, mut shells) = coll.split_any();
-    let item = items.get_any(key)?;
+    let (item, _) = items.get_any(key)?;
     if let Some(references) = item.references_any(key.index(), &*items) {
         for rf in references {
             shells
@@ -111,7 +111,7 @@ pub fn notify_item_removed(
     for rf in shell.from_any() {
         if !items
             .get_mut_any(rf)
-            .map_or(true, |item| item.item_removed(rf.index(), key.into()))
+            .map_or(true, |(item, _)| item.item_removed(rf.index(), key.into()))
         {
             remove.push(rf);
         }

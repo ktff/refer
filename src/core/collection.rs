@@ -26,9 +26,11 @@ pub trait Collection<T: Item>: Access<T> {
 }
 
 pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
+    type GroupItem: Any;
+
     type Shell: Shell<T = T>;
 
-    type ItemsMut<'a>: ItemsMut<T> + 'a
+    type ItemsMut<'a>: ItemsMut<T, GroupItem = Self::GroupItem> + 'a
     where
         Self: 'a;
 
@@ -36,7 +38,7 @@ pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
     where
         Self: 'a;
 
-    type Items<'a>: Items<T> + 'a
+    type Items<'a>: Items<T, GroupItem = Self::GroupItem> + 'a
     where
         Self: 'a;
 
@@ -44,19 +46,19 @@ pub trait Access<T: AnyItem + ?Sized>: AnyAccess {
     where
         Self: 'a;
 
-    type Iter<'a>: Iterator<Item = (Key<T>, &'a T, &'a Self::Shell)>
+    type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem), &'a Self::Shell)>
     where
         Self: 'a;
 
-    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut T, &'a Self::Shell)>
+    type MutIter<'a>: Iterator<Item = (Key<T>, (&'a mut T, &'a Self::GroupItem), &'a Self::Shell)>
     where
         Self: 'a;
 
     /// Some if it exists.
-    fn get(&self, key: Key<T>) -> Option<(&T, &Self::Shell)>;
+    fn get(&self, key: Key<T>) -> Option<((&T, &Self::GroupItem), &Self::Shell)>;
 
     /// Some if it exists.
-    fn get_mut(&mut self, key: Key<T>) -> Option<(&mut T, &Self::Shell)>;
+    fn get_mut(&mut self, key: Key<T>) -> Option<((&mut T, &Self::GroupItem), &Self::Shell)>;
 
     /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;
@@ -98,7 +100,10 @@ pub trait AnyAccess: Any {
     /// All types in the collection.
     fn types(&self) -> HashSet<TypeId>;
 
-    fn split_item_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItem, &mut dyn AnyShells)>;
+    fn split_item_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Option<((&mut dyn AnyItem, &dyn Any), &mut dyn AnyShells)>;
 
     fn split_shell_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItems, &mut dyn AnyShell)>;
 

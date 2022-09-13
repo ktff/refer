@@ -19,13 +19,24 @@ pub trait ContainerFamily: 'static {
 /// It's responsibility is to contain items and shells, not to manage access to them.
 /// UNSAFE: It is unsafe for Containers to be Sync.
 pub trait Container<T: AnyItem>: AnyContainer {
+    type GroupItem: Any;
+
     type Shell: Shell<T = T>;
 
-    type SlotIter<'a>: Iterator<Item = (SubKey<T>, &'a UnsafeCell<T>, &'a UnsafeCell<Self::Shell>)>
+    type SlotIter<'a>: Iterator<
+        Item = (
+            SubKey<T>,
+            (&'a UnsafeCell<T>, &'a Self::GroupItem),
+            &'a UnsafeCell<Self::Shell>,
+        ),
+    >
     where
         Self: 'a;
 
-    fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)>;
+    fn get_slot(
+        &self,
+        key: SubKey<T>,
+    ) -> Option<((&UnsafeCell<T>, &Self::GroupItem), &UnsafeCell<Self::Shell>)>;
 
     /// Iterates in ascending order of key.
     /// UNSAFE: Guarantees no slot is returned twice in returned iterator.
@@ -37,7 +48,10 @@ pub trait AnyContainer: Any {
     fn any_get_slot(
         &self,
         key: AnySubKey,
-    ) -> Option<(&UnsafeCell<dyn AnyItem>, &UnsafeCell<dyn AnyShell>)>;
+    ) -> Option<(
+        (&UnsafeCell<dyn AnyItem>, &dyn Any),
+        &UnsafeCell<dyn AnyShell>,
+    )>;
 
     fn unfill_any(&mut self, key: AnySubKey);
 
