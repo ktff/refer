@@ -40,14 +40,18 @@ impl<T: AnyItem + ?Sized> Deref for Vertice<T> {
 impl<T: AnyItem + ?Sized> Item for Vertice<T> {
     type I<'a> = RefIter<'a, T>;
 
-    fn references(&self, _: Index) -> Self::I<'_> {
+    fn references<I: AnyItems + ?Sized>(&self, _: Index, _: &I) -> Self::I<'_> {
         self.0.iter().copied().map(Into::into)
     }
 }
 
 impl<T: AnyItem + ?Sized> AnyItem for Vertice<T> {
-    fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
-        Some(Box::new(self.references(this)))
+    fn references_any<'a>(
+        &'a self,
+        this: Index,
+        items: &dyn AnyItems,
+    ) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
+        Some(Box::new(self.references(this, items)))
     }
 
     fn item_removed(&mut self, _: Index, key: AnyKey) -> bool {

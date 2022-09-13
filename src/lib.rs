@@ -50,7 +50,7 @@ pub mod core;
 pub mod item;
 pub mod model;
 
-pub use core::*;
+pub use crate::core::*;
 
 // Generic things
 mod util;

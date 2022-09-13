@@ -5,19 +5,20 @@ use crate::core::*;
 ///
 /// Fails if any reference doesn't exist.
 pub fn add_references<T: Item + ?Sized>(
-    shells: &mut (impl AnyShells + ?Sized),
+    items: &impl AnyItems,
+    shells: &mut impl AnyShells,
     key: Key<T>,
     item: &T,
 ) -> bool {
     // item --> others
-    for (i, rf) in item.references(key.index()).enumerate() {
+    for (i, rf) in item.references(key.index(), items).enumerate() {
         if let Some(shell) = shells.get_mut_any(rf.key()) {
             shell.add_from(key.into());
         } else {
             // Reference doesn't exist
 
             // Rollback and return error
-            for rf in item.references(key.index()).take(i) {
+            for rf in item.references(key.index(), items).take(i) {
                 rf.disconnect(key.into(), shells);
             }
 
@@ -32,14 +33,15 @@ pub fn add_references<T: Item + ?Sized>(
 ///
 /// Fails if reference is not valid.
 pub fn update_diff<T: Item + ?Sized>(
-    shells: &mut (impl AnyShells + ?Sized),
+    items: &impl AnyItems,
+    shells: &mut impl AnyShells,
     key: Key<T>,
     old: &T,
     new: &T,
 ) -> bool {
     // Preparation for diff computation
-    let mut old = old.references(key.index()).collect::<Vec<_>>();
-    let mut new = new.references(key.index()).collect::<Vec<_>>();
+    let mut old = old.references(key.index(), items).collect::<Vec<_>>();
+    let mut new = new.references(key.index(), items).collect::<Vec<_>>();
     old.sort();
     new.sort();
 
@@ -88,13 +90,15 @@ pub fn update_diff<T: Item + ?Sized>(
 ///
 /// None if it doesn't exist
 pub fn notify_item_removed(
-    coll: &mut (impl AnyAccess + ?Sized),
+    coll: &mut impl AnyAccess,
     key: AnyKey,
     remove: &mut Vec<AnyKey>,
 ) -> Option<()> {
     // remove item --> others
-    let (item, shells) = coll.split_item_any(key)?;
-    if let Some(references) = item.references_any(key.index()) {
+    // TODO: Could this call to Box be avoided?
+    let (mut items, mut shells) = coll.split_any();
+    let item = items.get_any(key)?;
+    if let Some(references) = item.references_any(key.index(), &*items) {
         for rf in references {
             shells
                 .get_mut_any(rf.key())
@@ -103,7 +107,7 @@ pub fn notify_item_removed(
     }
 
     // item <-- others
-    let (items, shell) = coll.split_shell_any(key).expect("Should exist");
+    let shell = shells.get_mut_any(key).expect("Should exist");
     for rf in shell.from_any() {
         if !items
             .get_mut_any(rf)

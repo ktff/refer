@@ -207,20 +207,26 @@ impl<T: ?Sized + 'static> Shell for SizedShell<T> {
     }
 }
 
-pub enum Slot<T: 'static> {
+impl<T: ?Sized + 'static> Default for SizedShell<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub enum Slot<T: 'static, S: Default = SizedShell<T>> {
     Free,
     Reserved,
     Filled {
         item: UnsafeCell<T>,
-        shell: UnsafeCell<SizedShell<T>>,
+        shell: UnsafeCell<S>,
     },
 }
 
-impl<T: 'static> Slot<T> {
+impl<T: 'static, S: Default> Slot<T, S> {
     pub fn new(item: T) -> Self {
         Slot::Filled {
             item: UnsafeCell::new(item),
-            shell: UnsafeCell::new(SizedShell::new()),
+            shell: UnsafeCell::new(S::default()),
         }
     }
 

@@ -37,7 +37,8 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         };
 
         // Update connections
-        if !super::util::add_references(&mut self.shells_mut(), key.key().into_key(), &item) {
+        let (items, mut shells) = self.split_mut();
+        if !super::util::add_references(&items, &mut shells, key.key().into_key(), &item) {
             // Failed
 
             // Deallocate slot
@@ -52,7 +53,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
 
     fn set(&mut self, key: Key<T>, set: T) -> Result<T, T> {
         let (mut items, mut shells) = self.split_mut();
-        let old = if let Some(item) = items.get_mut(key) {
+        let old = if let Some(item) = items.get(key) {
             item
         } else {
             // No item
@@ -60,10 +61,13 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         };
 
         // Update connections
-        if !super::util::update_diff(&mut shells, key, old, &set) {
+        if !super::util::update_diff(&items, &mut shells, key, old, &set) {
             // Failed
             return Err(set);
         }
+
+        // TODO: Reuse previous ref fetch
+        let old = items.get_mut(key).expect("Should be there");
 
         // Replace item
         Ok(std::mem::replace(old, set))

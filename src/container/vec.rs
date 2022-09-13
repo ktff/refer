@@ -3,8 +3,8 @@ use std::{any::TypeId, cell::UnsafeCell, collections::HashSet, num::NonZeroU64};
 
 use super::item::{SizedShell, Slot};
 
-pub type SlotIter<'a, T: AnyItem> =
-    impl Iterator<Item = (SubKey<T>, &'a UnsafeCell<T>, &'a UnsafeCell<SizedShell<T>>)>;
+pub type SlotIter<'a, T: AnyItem, S: Shell<T = T> + Default> =
+    impl Iterator<Item = (SubKey<T>, &'a UnsafeCell<T>, &'a UnsafeCell<S>)>;
 
 pub struct VecContainerFamily;
 
@@ -17,13 +17,13 @@ impl ContainerFamily for VecContainerFamily {
 }
 
 /// A simple vec container of items of the same type.
-pub struct VecContainer<T: 'static> {
-    slots: Vec<Slot<T>>,
+pub struct VecContainer<T: 'static, S: Shell<T = T> + Default = SizedShell<T>> {
+    slots: Vec<Slot<T, S>>,
     free: Vec<Index>,
     key_len: u32,
 }
 
-impl<T: 'static> VecContainer<T> {
+impl<T: 'static, S: Shell<T = T> + Default> VecContainer<T, S> {
     pub fn new(key_len: u32) -> Self {
         Self {
             slots: vec![Slot::Free],
@@ -48,7 +48,7 @@ impl<T: 'static> VecContainer<T> {
     }
 }
 
-impl<T: 'static> Allocator<T> for VecContainer<T> {
+impl<T: 'static, S: Shell<T = T> + Default> Allocator<T> for VecContainer<T, S> {
     fn reserve(&mut self, _: &T) -> Option<ReservedKey<T>> {
         let index = if let Some(index) = self.free.pop() {
             debug_assert!(matches!(self.slots[index.as_usize()], Slot::Free));
@@ -95,12 +95,12 @@ impl<T: 'static> Allocator<T> for VecContainer<T> {
     }
 }
 
-impl<T: AnyItem> !Sync for VecContainer<T> {}
+impl<T: AnyItem, S: Shell<T = T> + Default> !Sync for VecContainer<T, S> {}
 
-impl<T: AnyItem> Container<T> for VecContainer<T> {
-    type Shell = SizedShell<T>;
+impl<T: AnyItem, S: Shell<T = T> + Default> Container<T> for VecContainer<T, S> {
+    type Shell = S;
 
-    type SlotIter<'a> = SlotIter<'a, T> where Self: 'a;
+    type SlotIter<'a> = SlotIter<'a, T, S> where Self: 'a;
 
     fn get_slot(&self, key: SubKey<T>) -> Option<(&UnsafeCell<T>, &UnsafeCell<Self::Shell>)> {
         let i = key.index(self.key_len).as_usize();
@@ -133,7 +133,7 @@ impl<T: AnyItem> Container<T> for VecContainer<T> {
     }
 }
 
-impl<T: AnyItem> AnyContainer for VecContainer<T> {
+impl<T: AnyItem, S: Shell<T = T> + Default> AnyContainer for VecContainer<T, S> {
     fn any_get_slot(
         &self,
         key: AnySubKey,
@@ -177,7 +177,7 @@ impl<T: AnyItem> AnyContainer for VecContainer<T> {
     }
 }
 
-impl<T: 'static> Default for VecContainer<T> {
+impl<T: 'static, S: Shell<T = T> + Default> Default for VecContainer<T, S> {
     fn default() -> Self {
         Self::new(MAX_KEY_LEN)
     }
