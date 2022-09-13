@@ -48,6 +48,7 @@
 pub mod collection;
 pub mod container;
 pub mod core;
+#[macro_use]
 pub mod item;
 pub mod model;
 
