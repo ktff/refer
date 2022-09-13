@@ -35,6 +35,38 @@ macro_rules! impl_item {
     };
 }
 
+/// Implements `Item` for non generic `T` as if T doesn't have any reference.
+#[macro_export]
+macro_rules! impl_item_outer {
+    ($ty:ty) => {
+        impl refer::core::Item for $ty {
+            type I<'a> = std::iter::Empty<refer::core::AnyRef>;
+
+            fn references<I: refer::core::AnyItems + ?Sized>(
+                &self,
+                _: refer::core::Index,
+                _: &I,
+            ) -> Self::I<'_> {
+                std::iter::empty()
+            }
+        }
+
+        impl refer::core::AnyItem for $ty {
+            fn references_any(
+                &self,
+                _: refer::core::Index,
+                _: &dyn refer::core::AnyItems,
+            ) -> Option<Box<dyn Iterator<Item = refer::core::AnyRef> + '_>> {
+                None
+            }
+
+            fn item_removed(&mut self, _: refer::core::Index, _: refer::core::AnyKey) -> bool {
+                true
+            }
+        }
+    };
+}
+
 impl_item!(());
 impl_item!(u8);
 impl_item!(u16);
