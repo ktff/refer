@@ -47,6 +47,9 @@ impl<C: 'static> Owned<C> {
     }
 }
 
+/// This is safe since Owned has full ownership of C.
+unsafe impl<C: 'static> Sync for Owned<C> {}
+
 impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collection<T> for Owned<C> {
     fn add_with(&mut self, item: T, r: Self::R) -> Result<Key<T>, T> {
         // Allocate slot
@@ -57,8 +60,8 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         };
 
         // Update connections
-        let (items, mut shells) = self.split_mut();
-        if !super::util::add_references(&items, &mut shells, key.key().into_key(), &item) {
+        let mut shells = self.shells_mut();
+        if !super::util::add_references(&mut shells, key.key().into_key(), &item) {
             // Failed
 
             // Deallocate slot
@@ -81,7 +84,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         };
 
         // Update connections
-        if !super::util::update_diff(&items, &mut shells, key, old, &set) {
+        if !super::util::update_diff(&mut shells, key, old, &set) {
             // Failed
             return Err(set);
         }

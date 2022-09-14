@@ -10,11 +10,7 @@ macro_rules! impl_item {
         impl $crate::core::Item for $ty {
             type I<'a> = std::iter::Empty<$crate::core::AnyRef>;
 
-            fn references<I: $crate::core::AnyItems + ?Sized>(
-                &self,
-                _: $crate::core::Index,
-                _: &I,
-            ) -> Self::I<'_> {
+            fn references(&self, _: $crate::core::Index) -> Self::I<'_> {
                 std::iter::empty()
             }
         }
@@ -23,7 +19,6 @@ macro_rules! impl_item {
             fn references_any(
                 &self,
                 _: $crate::core::Index,
-                _: &dyn $crate::core::AnyItems,
             ) -> Option<Box<dyn Iterator<Item = $crate::core::AnyRef> + '_>> {
                 None
             }

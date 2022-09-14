@@ -15,6 +15,8 @@ pub use index::*;
 pub use reserved::*;
 pub use sub::*;
 
+use crate::{core::collection::Access, AnyItem};
+
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
 // hence it needs to be able to know where something starts and ends which is not robustly possible for ref keys.
@@ -35,11 +37,21 @@ impl<T: ?Sized + 'static> Key<T> {
         self.0
     }
 
+    pub fn as_u64(&self) -> u64 {
+        self.index().0.get()
+    }
+
     pub fn upcast(self) -> AnyKey
     where
         T: 'static,
     {
         self.into()
+    }
+}
+
+impl<T: AnyItem> Key<T> {
+    pub fn get<A: Access<T>>(self, access: &A) -> Option<((&T, &A::GroupItem), &A::Shell)> {
+        access.get(self)
     }
 }
 

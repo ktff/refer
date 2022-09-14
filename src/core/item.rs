@@ -6,16 +6,13 @@ pub trait Item: AnyItem {
     type I<'a>: Iterator<Item = AnyRef>;
 
     /// All internal references.
-    fn references<I: AnyItems + ?Sized>(&self, this: Index, items: &I) -> Self::I<'_>;
+    fn references(&self, this: Index) -> Self::I<'_>;
 }
 
 pub trait AnyItem: Any {
+    // TODO: Remove this items: &I,
     /// All internal references.
-    fn references_any(
-        &self,
-        this: Index,
-        items: &dyn AnyItems,
-    ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
+    fn references_any(&self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
     /// Item of given key has/is been removed.
     ///
