@@ -12,6 +12,20 @@ pub struct ContainerData<D: Any, C> {
     container: C,
 }
 
+impl<D: Any, C> ContainerData<D, C> {
+    pub fn new(data: D, container: C) -> Self {
+        Self { data, container }
+    }
+
+    pub fn inner(&self) -> &C {
+        &self.container
+    }
+
+    pub fn inner_data(&self) -> &D {
+        &self.data
+    }
+}
+
 impl<D: Any, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
     type Alloc = C::Alloc;
 

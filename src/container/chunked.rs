@@ -58,6 +58,14 @@ impl<L: Chunk> Chunked<L> {
             chunks: Vec::new(),
         }
     }
+
+    pub fn inner(&self) -> &[L::C] {
+        &self.chunks
+    }
+
+    pub fn inner_logic(&self) -> &L {
+        &self.logic
+    }
 }
 
 impl<L: ChunkingLogic<T>, T: AnyItem> Allocator<T> for Chunked<L>

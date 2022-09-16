@@ -26,6 +26,10 @@ impl<T, CT, U, CU> ContainerPair<T, CT, U, CU> {
             _u: PhantomData,
         }
     }
+
+    pub fn inner(&self) -> (&CT, &CU) {
+        (&self.ct, &self.cu)
+    }
 }
 
 /// Implements Allocator and Container for type T and U for any ContainerPair

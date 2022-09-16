@@ -45,6 +45,10 @@ impl<C: 'static> Owned<C> {
     pub fn new(c: C) -> Self {
         Self(c)
     }
+
+    pub fn inner(&self) -> &C {
+        &self.0
+    }
 }
 
 /// This is safe since Owned has full ownership of C.

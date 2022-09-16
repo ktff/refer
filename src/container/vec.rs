@@ -39,6 +39,7 @@ pub struct VecContainer<
     free: Vec<Index, A>,
     alloc: A,
     key_len: u32,
+    count: usize,
 }
 
 impl<T: 'static, S: Shell<T = T> + Default> VecContainer<T, S, alloc::Global> {
@@ -48,6 +49,7 @@ impl<T: 'static, S: Shell<T = T> + Default> VecContainer<T, S, alloc::Global> {
             free: Vec::new(),
             alloc: alloc::Global,
             key_len: key_len,
+            count: 0,
         }
     }
 }
@@ -56,12 +58,30 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + Clone + 'stati
     VecContainer<T, S, A>
 {
     pub fn new_in(key_len: u32, alloc: A) -> Self {
+        let mut slots = Vec::new_in(alloc.clone());
+        slots.push(Slot::Free);
         Self {
-            slots: Vec::new_in(alloc.clone()),
+            slots,
             free: Vec::new_in(alloc.clone()),
             alloc,
             key_len: key_len,
+            count: 0,
         }
+    }
+
+    /// Number items in this collection
+    pub fn len(&self) -> usize {
+        self.count
+    }
+
+    /// Memory used directly by this container.
+    pub fn used_memory(&self) -> usize {
+        self.slots.capacity() * std::mem::size_of::<Slot<T, S>>()
+            + self.free.capacity() * std::mem::size_of::<Index>()
+    }
+
+    pub fn alloc(&self) -> &A {
+        &self.alloc
     }
 }
 
@@ -119,8 +139,8 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Alloc
 
     fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T> {
         let key = key.take();
-        dbg!(key);
         self.slots[key.index(self.key_len).as_usize()].fulfill(item);
+        self.count += 1;
 
         key
     }
@@ -133,6 +153,7 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Alloc
 
         self.slots[index.as_usize()].unfill().map(|item| {
             self.free.push(index);
+            self.count -= 1;
             item
         })
     }
