@@ -96,7 +96,7 @@ pub trait Allocator<T: 'static> {
         T: Sized;
 
     /// Frees and returns item if it exists
-    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
+    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
     where
         T: Sized;
 }

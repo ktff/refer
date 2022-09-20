@@ -69,11 +69,11 @@ impl<T: 'static> Allocator<T> for ItemContainer<T> {
         key.take()
     }
 
-    fn unfill(&mut self, _: SubKey<T>) -> Option<T>
+    fn unfill(&mut self, _: SubKey<T>) -> Option<(T, &Self::Alloc)>
     where
         T: Sized,
     {
-        self.0.unfill()
+        self.0.unfill().map(|item| (item, &std::alloc::Global))
     }
 }
 

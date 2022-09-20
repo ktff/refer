@@ -43,7 +43,7 @@ impl<D: Any, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
         self.container.fulfill(key, item)
     }
 
-    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
+    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
     where
         T: Sized,
     {

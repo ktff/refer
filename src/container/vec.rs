@@ -145,7 +145,7 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Alloc
         key
     }
 
-    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
+    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
     where
         T: Sized,
     {
@@ -154,7 +154,7 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> Alloc
         self.slots[index.as_usize()].unfill().map(|item| {
             self.free.push(index);
             self.count -= 1;
-            item
+            (item, &self.alloc)
         })
     }
 }

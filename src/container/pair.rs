@@ -62,7 +62,7 @@ macro_rules! impl_container_pair {
                 self.ct.fulfill(key, item)
             }
 
-            fn unfill(&mut self, key: $crate::SubKey<$t>) -> Option<$t>
+            fn unfill(&mut self, key: $crate::SubKey<$t>) -> Option<($t, &Self::Alloc)>
             where
                 $t: Sized,
             {
@@ -121,7 +121,7 @@ macro_rules! impl_container_pair {
                 self.cu.fulfill(key, item)
             }
 
-            fn unfill(&mut self, key: $crate::SubKey<$u>) -> Option<$u>
+            fn unfill(&mut self, key: $crate::SubKey<$u>) -> Option<($u, &Self::Alloc)>
             where
                 $u: Sized,
             {

@@ -14,6 +14,7 @@ pub trait AnyItem: Any {
     /// All internal references.
     fn references_any(&self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
+    // TODO: To be able to say that some other item also needs to be updated.
     /// Item of given key has/is been removed.
     ///
     /// This item should return true if it's ok with it.

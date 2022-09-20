@@ -106,7 +106,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         // Update connections
         super::util::notify_item_removed(self, key.into(), &mut remove)?;
         // Deallocate
-        let item = self.0.unfill(key.into())?;
+        let (item, _) = self.0.unfill(key.into())?;
 
         // Recursive remove
         while let Some(rf) = remove.pop() {
@@ -141,7 +141,7 @@ impl<C: Allocator<T> + 'static, T: 'static> Allocator<T> for Owned<C> {
         self.0.fulfill(key, item)
     }
 
-    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
+    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
     where
         T: Sized,
     {

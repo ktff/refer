@@ -97,7 +97,7 @@ where
             .push(self.logic.key_len(), index)
     }
 
-    fn unfill(&mut self, key: SubKey<T>) -> Option<T>
+    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
     where
         T: Sized,
     {
