@@ -130,6 +130,10 @@ impl AnyKey {
         self.1
     }
 
+    pub fn as_u64(&self) -> u64 {
+        self.index().0.get()
+    }
+
     pub fn downcast<T: ?Sized + 'static>(self) -> Option<Key<T>> {
         if self.0 == TypeId::of::<T>() {
             Some(Key::new(self.1))

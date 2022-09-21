@@ -15,3 +15,5 @@ repository = "https://github.com/ktff/refer"
 
 [dependencies]
 log = "0.4.17"
+bitvec = "1.0.1"
+static_assertions = "1.1.0"

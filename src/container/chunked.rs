@@ -59,8 +59,13 @@ impl<L: Chunk> Chunked<L> {
         }
     }
 
+    // TODO: Think through correctness of such inner methods and can they be replaced.
     pub fn inner(&self) -> &[L::C] {
         &self.chunks
+    }
+
+    pub fn inner_mut(&mut self) -> &mut [L::C] {
+        &mut self.chunks
     }
 
     pub fn inner_logic(&self) -> &L {

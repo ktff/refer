@@ -5,6 +5,10 @@
 // Currently this is not implemented safely for *dyn Trait.
 #![feature(trait_upcasting)]
 #![feature(allocator_api)]
+#![feature(generic_const_exprs)]
+#![feature(int_roundings)]
+#![feature(maybe_uninit_uninit_array)]
+#![feature(new_uninit)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs

@@ -331,7 +331,10 @@ mod tests {
         let key = container.fulfill(key, item).into_key();
 
         assert_eq!(container.items().get(key), Some((&item, &())));
-        assert_eq!(container.unfill(key.into()), Some(item));
+        assert_eq!(
+            container.unfill(key.into()).map(|(item, _)| item),
+            Some(item)
+        );
         assert_eq!(container.items().get(key), None);
         assert!(container.reserve(Some(&item), ()).is_some());
     }

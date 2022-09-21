@@ -49,6 +49,10 @@ impl<C: 'static> Owned<C> {
     pub fn inner(&self) -> &C {
         &self.0
     }
+
+    pub fn inner_mut(&mut self) -> &mut C {
+        &mut self.0
+    }
 }
 
 /// This is safe since Owned has full ownership of C.

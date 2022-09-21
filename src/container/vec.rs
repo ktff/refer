@@ -81,7 +81,13 @@ impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + Clone + 'stati
     }
 
     pub fn alloc(&self) -> &A {
-        &self.alloc
+        &self.slots.allocator()
+    }
+
+    pub fn shrink_to_fit(&mut self) {
+        self.slots.shrink_to_fit();
+        self.free.retain(|i| i.as_usize() < self.slots.len());
+        self.free.shrink_to_fit();
     }
 }
 
@@ -304,7 +310,7 @@ mod tests {
         let key = container.add_with(item, ()).unwrap();
 
         assert_eq!(container.items().get(key).unwrap().0, &item);
-        assert_eq!(container.unfill(key.into()).unwrap(), item);
+        assert_eq!(container.unfill(key.into()).unwrap().0, item);
         assert!(container.items().get(key).is_none());
     }
 

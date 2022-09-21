@@ -21,6 +21,10 @@ impl<D: Any, C> ContainerData<D, C> {
         &self.container
     }
 
+    pub fn inner_mut(&mut self) -> &mut C {
+        &mut self.container
+    }
+
     pub fn inner_data(&self) -> &D {
         &self.data
     }
