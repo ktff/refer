@@ -10,8 +10,6 @@ use std::{
     ptr::addr_of_mut,
 };
 
-use super::item::{SizedShell, Slot};
-
 const MAX_TABLE_SIZE: usize = 4096;
 
 /// A simple table container of items of the same type.
@@ -163,11 +161,7 @@ where
 
         // Check key range
         let max_key = table_index * slots_len::<T, S>();
-        if (table_index * slots_len::<T, S>())
-            .checked_shr(self.key_len)
-            .unwrap_or(0)
-            >= 1
-        {
+        if max_key.checked_shr(self.key_len).unwrap_or(0) >= 1 {
             // Out of keys
             return None;
         }
@@ -289,7 +283,7 @@ where
             self.tables
                 .iter()
                 .enumerate()
-                .filter(|(i, table)| table.taken.some())
+                .filter(|(_, table)| table.taken.some())
                 .flat_map(move |(table_index, table)| {
                     table.taken.iter_ones().map(move |slot_index| {
                         // This is safe since we've checked that this slot is taken
@@ -394,13 +388,6 @@ where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
 {
-    fn new() -> Self {
-        Self {
-            taken: BitArray::ZERO,
-            slots: MaybeUninit::uninit_array(),
-        }
-    }
-
     fn new_in<A: std::alloc::Allocator>(alloc: A) -> Box<Self, A> {
         unsafe {
             let mut table = Box::<Self, A>::new_uninit_in(alloc);
