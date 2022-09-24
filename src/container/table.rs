@@ -3,7 +3,7 @@ use bitvec::prelude::*;
 use std::{
     alloc,
     any::{Any, TypeId},
-    cell::UnsafeCell,
+    cell::SyncUnsafeCell,
     collections::HashSet,
     mem::MaybeUninit,
     num::NonZeroU64,
@@ -15,9 +15,9 @@ const MAX_TABLE_SIZE: usize = 4096;
 /// A simple table container of items of the same type.
 /// Optimized to reduce memory overhead.
 pub struct TableContainer<
-    T: 'static,
+    T: Send + Sync + 'static,
     S: Shell<T = T> + Default = super::item::SizedShell<T>,
-    A: alloc::Allocator + 'static = alloc::Global,
+    A: alloc::Allocator + Sync + Send + 'static = alloc::Global,
 > where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
@@ -31,7 +31,7 @@ pub struct TableContainer<
     count: usize,
 }
 
-impl<T: 'static, S: Shell<T = T> + Default> TableContainer<T, S, alloc::Global>
+impl<T: Send + Sync + 'static, S: Shell<T = T> + Default> TableContainer<T, S, alloc::Global>
 where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
@@ -49,8 +49,11 @@ where
     }
 }
 
-impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + Clone + 'static>
-    TableContainer<T, S, A>
+impl<
+        T: Send + Sync + 'static,
+        S: Shell<T = T> + Default,
+        A: alloc::Allocator + Sync + Send + Clone + 'static,
+    > TableContainer<T, S, A>
 where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
@@ -60,7 +63,7 @@ where
         // println!(
         //     "Table size: {}, slot size: {}, slot count: {}, bitarray size: {}",
         //     std::mem::size_of::<Table<T, S>>(),
-        //     std::mem::size_of::<MaybeUninit<(UnsafeCell<T>, UnsafeCell<S>)>>(),
+        //     std::mem::size_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>(),
         //     slots_len::<T, S>(),
         //     std::mem::size_of::<BitArray<[u64; taken_len::<T, S>()], Lsb0>>()
         // );
@@ -92,7 +95,11 @@ where
     }
 }
 
-impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> TableContainer<T, S, A>
+impl<
+        T: Send + Sync + 'static,
+        S: Shell<T = T> + Default,
+        A: alloc::Allocator + Sync + Send + 'static,
+    > TableContainer<T, S, A>
 where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
@@ -120,8 +127,11 @@ where
     }
 }
 
-impl<T: 'static, S: Shell<T = T> + Default, A: alloc::Allocator + Clone + 'static> Allocator<T>
-    for TableContainer<T, S, A>
+impl<
+        T: Send + Sync + 'static,
+        S: Shell<T = T> + Default,
+        A: alloc::Allocator + Sync + Send + Clone + 'static,
+    > Allocator<T> for TableContainer<T, S, A>
 where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
@@ -202,7 +212,7 @@ where
             .taken
             .get(slot_index)
             .expect("Slot index out of bounds"));
-        table.slots[slot_index].write((UnsafeCell::new(item), Default::default()));
+        table.slots[slot_index].write((SyncUnsafeCell::new(item), Default::default()));
         table.taken.set(slot_index, true);
 
         self.count += 1;
@@ -233,16 +243,11 @@ where
     }
 }
 
-impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + 'static> !Sync
-    for TableContainer<T, S, A>
-where
-    [(); taken_len::<T, S>()]: Sized,
-    [(); slots_len::<T, S>()]: Sized,
-{
-}
-
-impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Clone + 'static> Container<T>
-    for TableContainer<T, S, A>
+impl<
+        T: AnyItem,
+        S: Shell<T = T> + Default,
+        A: alloc::Allocator + Sync + Send + Clone + 'static,
+    > Container<T> for TableContainer<T, S, A>
 where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
@@ -254,15 +259,15 @@ where
     type SlotIter<'a> = impl Iterator<
         Item = (
             SubKey<T>,
-            (&'a UnsafeCell<T>, &'a ()),
-            &'a UnsafeCell<S>,
+            (&'a SyncUnsafeCell<T>, &'a ()),
+            &'a SyncUnsafeCell<S>,
             &'a A,
         )> where Self: 'a;
 
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<((&UnsafeCell<T>, &()), &UnsafeCell<Self::Shell>, &A)> {
+    ) -> Option<((&SyncUnsafeCell<T>, &()), &SyncUnsafeCell<Self::Shell>, &A)> {
         let (table_index, slot_index) = self.split_key(key);
         let table = self.tables.get(table_index)?;
         // Check that the slot is taken/initialized
@@ -300,8 +305,11 @@ where
     }
 }
 
-impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Clone + 'static> AnyContainer
-    for TableContainer<T, S, A>
+impl<
+        T: AnyItem,
+        S: Shell<T = T> + Default,
+        A: alloc::Allocator + Sync + Send + Clone + 'static,
+    > AnyContainer for TableContainer<T, S, A>
 where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
@@ -310,14 +318,14 @@ where
         &self,
         key: AnySubKey,
     ) -> Option<(
-        (&UnsafeCell<dyn AnyItem>, &dyn Any),
-        &UnsafeCell<dyn AnyShell>,
+        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
+        &SyncUnsafeCell<dyn AnyShell>,
         &dyn std::alloc::Allocator,
     )> {
         let ((item, group_data), shell, alloc) = self.get_slot(key.downcast::<T>()?)?;
         Some((
-            (item as &UnsafeCell<dyn AnyItem>, group_data as &dyn Any),
-            shell as &UnsafeCell<dyn AnyShell>,
+            (item as &SyncUnsafeCell<dyn AnyItem>, group_data as &dyn Any),
+            shell as &SyncUnsafeCell<dyn AnyShell>,
             alloc as &dyn std::alloc::Allocator,
         ))
     }
@@ -380,7 +388,7 @@ where
     // Bitfield
     taken: BitArray<[u64; taken_len::<T, S>()], Lsb0>,
     // Slots
-    slots: [MaybeUninit<(UnsafeCell<T>, UnsafeCell<S>)>; slots_len::<T, S>()],
+    slots: [MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>; slots_len::<T, S>()],
 }
 
 impl<T: 'static, S: Shell<T = T> + Default> Table<T, S>
@@ -403,7 +411,7 @@ where
     }
 
     /// UNSAFETY: The caller must ensure that the slots are initialized
-    unsafe fn get(&self, index: usize) -> (&UnsafeCell<T>, &UnsafeCell<S>) {
+    unsafe fn get(&self, index: usize) -> (&SyncUnsafeCell<T>, &SyncUnsafeCell<S>) {
         let (ref item, ref shell) = *self.slots[index].assume_init_ref();
         (item, shell)
     }
@@ -438,7 +446,7 @@ where
 }
 
 pub const fn slots_len<T, S>() -> usize {
-    let slot_size = std::mem::size_of::<MaybeUninit<(UnsafeCell<T>, UnsafeCell<S>)>>();
+    let slot_size = std::mem::size_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>();
 
     // const fn taken_len<T, S>() -> usize {
     // TODO: This can be computed accurately
@@ -449,8 +457,9 @@ pub const fn slots_len<T, S>() -> usize {
     let taken_size = std::mem::size_of::<u64>() * taken_len;
     // TODO: This can be computed accurately
     // Assume worst case
-    let max_padding_size = std::mem::align_of::<MaybeUninit<(UnsafeCell<T>, UnsafeCell<S>)>>()
-        .saturating_sub(std::mem::align_of::<u64>());
+    let max_padding_size =
+        std::mem::align_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>()
+            .saturating_sub(std::mem::align_of::<u64>());
     // Box is storing allocator on heap.
     let allocator_size = std::mem::size_of::<usize>();
     let max_slots = (MAX_TABLE_SIZE - taken_size - max_padding_size - allocator_size) / slot_size;
@@ -460,7 +469,7 @@ pub const fn slots_len<T, S>() -> usize {
 pub const fn taken_len<T, S>() -> usize {
     // TODO: This can be computed accurately
     // Assume worst case
-    let slot_size = std::mem::size_of::<MaybeUninit<(UnsafeCell<T>, UnsafeCell<S>)>>();
+    let slot_size = std::mem::size_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>();
     let max_slots = MAX_TABLE_SIZE / slot_size;
     max_slots.div_ceil(64)
 }

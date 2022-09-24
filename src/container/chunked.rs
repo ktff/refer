@@ -1,6 +1,6 @@
 use std::{
     any::{Any, TypeId},
-    cell::UnsafeCell,
+    cell::SyncUnsafeCell,
     collections::HashSet,
 };
 
@@ -13,15 +13,15 @@ where
     Item = (
         SubKey<T>,
         (
-            &'a UnsafeCell<T>,
+            &'a SyncUnsafeCell<T>,
             &'a <<L as Chunk>::C as Container<T>>::GroupItem,
         ),
-        &'a UnsafeCell<<<L as Chunk>::C as Container<T>>::Shell>,
+        &'a SyncUnsafeCell<<<L as Chunk>::C as Container<T>>::Shell>,
         &'a <<L as Chunk>::C as Allocator<T>>::Alloc,
     ),
 >;
 
-pub trait Chunk: 'static {
+pub trait Chunk: Sync + Send + 'static {
     /// Chunk container type
     type C: 'static;
 
@@ -111,8 +111,6 @@ where
     }
 }
 
-impl<L: Chunk> !Sync for Chunked<L> {}
-
 impl<L: ChunkingLogic<T>, T: AnyItem> Container<T> for Chunked<L>
 where
     L::C: Container<T>,
@@ -129,8 +127,8 @@ where
         &self,
         key: SubKey<T>,
     ) -> Option<(
-        (&UnsafeCell<T>, &Self::GroupItem),
-        &UnsafeCell<Self::Shell>,
+        (&SyncUnsafeCell<T>, &Self::GroupItem),
+        &SyncUnsafeCell<Self::Shell>,
         &Self::Alloc,
     )> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
@@ -163,8 +161,8 @@ where
         &self,
         key: AnySubKey,
     ) -> Option<(
-        (&UnsafeCell<dyn AnyItem>, &dyn Any),
-        &UnsafeCell<dyn AnyShell>,
+        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
+        &SyncUnsafeCell<dyn AnyShell>,
         &dyn std::alloc::Allocator,
     )> {
         let (prefix, suffix) = key.pop(self.logic.key_len());

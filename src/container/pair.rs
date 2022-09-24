@@ -1,6 +1,6 @@
 use std::{
     any::{Any, TypeId},
-    cell::UnsafeCell,
+    cell::SyncUnsafeCell,
     collections::HashSet,
     marker::PhantomData,
 };
@@ -32,6 +32,7 @@ impl<T, CT, U, CU> ContainerPair<T, CT, U, CU> {
     }
 }
 
+// TODO: A more generic macro can be build like this to support impl for many types.
 /// Implements Allocator and Container for type T and U for any ContainerPair
 #[macro_export]
 macro_rules! impl_container_pair {
@@ -83,8 +84,8 @@ macro_rules! impl_container_pair {
                 &self,
                 key: $crate::SubKey<$t>,
             ) -> Option<(
-                (&std::cell::UnsafeCell<$t>, &Self::GroupItem),
-                &std::cell::UnsafeCell<Self::Shell>,
+                (&std::cell::SyncUnsafeCell<$t>, &Self::GroupItem),
+                &std::cell::SyncUnsafeCell<Self::Shell>,
                 &Self::Alloc,
             )> {
                 self.ct.get_slot(key)
@@ -142,8 +143,8 @@ macro_rules! impl_container_pair {
                 &self,
                 key: $crate::SubKey<$u>,
             ) -> Option<(
-                (&std::cell::UnsafeCell<$u>, &Self::GroupItem),
-                &std::cell::UnsafeCell<Self::Shell>,
+                (&std::cell::SyncUnsafeCell<$u>, &Self::GroupItem),
+                &std::cell::SyncUnsafeCell<Self::Shell>,
                 &Self::Alloc,
             )> {
                 self.cu.get_slot(key)
@@ -163,8 +164,8 @@ impl<T: AnyItem, CT: AnyContainer, U: AnyItem, CU: AnyContainer> AnyContainer
         &self,
         key: AnySubKey,
     ) -> Option<(
-        (&UnsafeCell<dyn AnyItem>, &dyn Any),
-        &UnsafeCell<dyn AnyShell>,
+        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
+        &SyncUnsafeCell<dyn AnyShell>,
         &dyn std::alloc::Allocator,
     )> {
         if TypeId::of::<T>() == key.type_id() {

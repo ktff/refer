@@ -3,34 +3,33 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::UnsafeCell,
+    cell::SyncUnsafeCell,
     collections::HashSet,
 };
 
 use super::{AnyItem, AnyShell, AnySubKey, ReservedKey, Shell, SubKey};
 
 /// A family of containers.
-pub trait ContainerFamily: 'static {
+pub trait ContainerFamily: Send + Sync + 'static {
     type C<T: AnyItem>: AnyContainer + 'static;
 
     fn new<T: AnyItem>(key_len: u32) -> Self::C<T>;
 }
 
 /// It's responsibility is to contain items and shells, not to manage access to them.
-/// UNSAFE: It is unsafe for Containers to be Sync.
 pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
     type GroupItem: Any;
 
     type Shell: Shell<T = T>;
 
     type SlotIter<'a>: Iterator<
-        Item = (
-            SubKey<T>,
-            (&'a UnsafeCell<T>, &'a Self::GroupItem),
-            &'a UnsafeCell<Self::Shell>,
-            &'a Self::Alloc,
-        ),
-    >
+            Item = (
+                SubKey<T>,
+                (&'a SyncUnsafeCell<T>, &'a Self::GroupItem),
+                &'a SyncUnsafeCell<Self::Shell>,
+                &'a Self::Alloc,
+            ),
+        > + Send
     where
         Self: 'a;
 
@@ -38,8 +37,8 @@ pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
         &self,
         key: SubKey<T>,
     ) -> Option<(
-        (&UnsafeCell<T>, &Self::GroupItem),
-        &UnsafeCell<Self::Shell>,
+        (&SyncUnsafeCell<T>, &Self::GroupItem),
+        &SyncUnsafeCell<Self::Shell>,
         &Self::Alloc,
     )>;
 
@@ -48,14 +47,13 @@ pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
     unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>>;
 }
 
-/// UNSAFE: It is unsafe for Containers to be Sync.
-pub trait AnyContainer: Any {
+pub trait AnyContainer: Any + Sync + Send {
     fn any_get_slot(
         &self,
         key: AnySubKey,
     ) -> Option<(
-        (&UnsafeCell<dyn AnyItem>, &dyn Any),
-        &UnsafeCell<dyn AnyShell>,
+        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
+        &SyncUnsafeCell<dyn AnyShell>,
         &dyn std::alloc::Allocator,
     )>;
 
@@ -73,7 +71,7 @@ pub trait AnyContainer: Any {
 }
 
 /// It's responsibility is to manage allocation/placement/deallocation of item
-pub trait Allocator<T: 'static> {
+pub trait Allocator<T: 'static>: Send + Sync {
     /// Allocator used for items and shells.
     type Alloc: std::alloc::Allocator;
 

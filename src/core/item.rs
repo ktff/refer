@@ -9,7 +9,7 @@ pub trait Item: AnyItem {
     fn references(&self, this: Index) -> Self::I<'_>;
 }
 
-pub trait AnyItem: Any {
+pub trait AnyItem: Any + Sync + Send {
     // TODO: Remove this items: &I,
     /// All internal references.
     fn references_any(&self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
@@ -28,6 +28,7 @@ pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
     type Alloc: std::alloc::Allocator;
 
     type MutIter<'a>: Iterator<Item = (Key<T>, (&'a mut T, &'a Self::GroupItem), &'a Self::Alloc)>
+        + Send
     where
         Self: 'a;
 
@@ -41,7 +42,7 @@ pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
 pub trait Items<T: ?Sized + 'static> {
     type GroupItem: Any;
 
-    type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem))>
+    type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem))> + Send
     where
         Self: 'a;
 

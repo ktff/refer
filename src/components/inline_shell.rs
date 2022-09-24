@@ -6,7 +6,7 @@ use std::{any::TypeId, marker::PhantomData, num::NonZeroU64};
 
 /// If an Item knows which Types can reference it, it can implement
 /// this to enable compressing references.
-pub trait Referable {
+pub trait Referable: Send + Sync {
     fn from_type(ty: TypeId) -> Option<u8>;
 
     fn from_type_index(index: u8) -> Option<TypeId>;

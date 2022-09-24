@@ -17,7 +17,7 @@ pub trait Shell: AnyShell {
     fn iter(&self) -> Self::AnyIter<'_>;
 }
 
-pub trait AnyShell: Any {
+pub trait AnyShell: Any + Sync + Send {
     fn item_ty(&self) -> TypeId;
 
     fn from_any(&self) -> Box<dyn Iterator<Item = AnyKey> + '_>;
@@ -43,7 +43,7 @@ pub trait AnyShell: Any {
 pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {
     type Alloc: std::alloc::Allocator;
 
-    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut Self::Shell, &'a Self::Alloc)>
+    type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut Self::Shell, &'a Self::Alloc)> + Send
     where
         Self: 'a;
 
@@ -56,7 +56,7 @@ pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {
 pub trait Shells<T: ?Sized + 'static> {
     type Shell: Shell<T = T>;
 
-    type Iter<'a>: Iterator<Item = (Key<T>, &'a Self::Shell)>
+    type Iter<'a>: Iterator<Item = (Key<T>, &'a Self::Shell)> + Send
     where
         Self: 'a;
 

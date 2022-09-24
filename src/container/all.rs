@@ -1,6 +1,6 @@
 use std::{
     any::{Any, TypeId},
-    cell::UnsafeCell,
+    cell::SyncUnsafeCell,
     collections::{HashMap, HashSet},
     marker::PhantomData,
 };
@@ -88,8 +88,6 @@ where
     }
 }
 
-impl<F: ContainerFamily> !Sync for AllContainer<F> {}
-
 impl<T: AnyItem, F: ContainerFamily> Container<T> for AllContainer<F>
 where
     F::C<T>: Container<T>,
@@ -106,8 +104,8 @@ where
         &self,
         key: SubKey<T>,
     ) -> Option<(
-        (&UnsafeCell<T>, &Self::GroupItem),
-        &UnsafeCell<Self::Shell>,
+        (&SyncUnsafeCell<T>, &Self::GroupItem),
+        &SyncUnsafeCell<Self::Shell>,
         &Self::Alloc,
     )> {
         self.coll::<T>()?.get_slot(key)
@@ -123,8 +121,8 @@ impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
         &self,
         key: AnySubKey,
     ) -> Option<(
-        (&UnsafeCell<dyn AnyItem>, &dyn Any),
-        &UnsafeCell<dyn AnyShell>,
+        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
+        &SyncUnsafeCell<dyn AnyShell>,
         &dyn std::alloc::Allocator,
     )> {
         self.collections

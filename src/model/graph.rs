@@ -13,23 +13,23 @@ pub type Id<T> = Key<Vertice<T>>;
 /// Graph contains vertices and edges between them.
 ///
 /// Vertice can carry data T.
-pub struct Graph<T: 'static, C: Collection<Vertice<T>>>(C, PhantomData<T>);
+pub struct Graph<T: Sync + Send + 'static, C: Collection<Vertice<T>>>(C, PhantomData<T>);
 
-impl<T: 'static, C: Collection<Vertice<T>>> Graph<T, C> {
+impl<T: Sync + Send + 'static, C: Collection<Vertice<T>>> Graph<T, C> {
     pub fn new(coll: C) -> Self {
         Graph(coll, PhantomData)
     }
 }
 
-impl<T: 'static, C: Collection<Vertice<T>> + Default> Default for Graph<T, C> {
+impl<T: Sync + Send + 'static, C: Collection<Vertice<T>> + Default> Default for Graph<T, C> {
     fn default() -> Self {
         Graph::new(Default::default())
     }
 }
 
-pub struct Vertice<T: 'static>(T, Node<Self>);
+pub struct Vertice<T: Sync + Send + 'static>(T, Node<Self>);
 
-impl<T: 'static> Item for Vertice<T> {
+impl<T: Sync + Send + 'static> Item for Vertice<T> {
     type I<'a> = <Node<Self> as Item>::I<'a>;
 
     fn references(&self, this: Index) -> Self::I<'_> {
@@ -37,7 +37,7 @@ impl<T: 'static> Item for Vertice<T> {
     }
 }
 
-impl<T: 'static> AnyItem for Vertice<T> {
+impl<T: Sync + Send + 'static> AnyItem for Vertice<T> {
     fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
         self.1.references_any(this)
     }
@@ -47,7 +47,7 @@ impl<T: 'static> AnyItem for Vertice<T> {
     }
 }
 
-impl<T: 'static> Deref for Vertice<T> {
+impl<T: Sync + Send + 'static> Deref for Vertice<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -55,7 +55,7 @@ impl<T: 'static> Deref for Vertice<T> {
     }
 }
 
-impl<T: 'static> DerefMut for Vertice<T> {
+impl<T: Sync + Send + 'static> DerefMut for Vertice<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

@@ -2,7 +2,7 @@ use crate::core::*;
 use log::*;
 use std::{
     any::{Any, TypeId},
-    cell::UnsafeCell,
+    cell::SyncUnsafeCell,
     collections::HashSet,
     marker::PhantomData,
     num::NonZeroU64,
@@ -11,11 +11,11 @@ use std::{
 pub type RefShellIter<'a, F: ?Sized + 'static> = impl Iterator<Item = Key<F>> + 'a;
 pub type RefShellAnyIter<'a> = impl Iterator<Item = AnyKey> + 'a;
 
-pub type SlotIter<'a, T: 'static> = impl Iterator<
+pub type SlotIter<'a, T: Sync + Send + 'static> = impl Iterator<
     Item = (
         SubKey<T>,
-        (&'a UnsafeCell<T>, &'a ()),
-        &'a UnsafeCell<SizedShell<T>>,
+        (&'a SyncUnsafeCell<T>, &'a ()),
+        &'a SyncUnsafeCell<SizedShell<T>>,
         &'a std::alloc::Global,
     ),
 >;
@@ -31,9 +31,9 @@ impl ContainerFamily for ItemContainerFamily {
 }
 
 /// A collection of 1 item.
-pub struct ItemContainer<T: 'static>(Slot<T>);
+pub struct ItemContainer<T: Sync + Send + 'static>(Slot<T>);
 
-impl<T: 'static> ItemContainer<T> {
+impl<T: Sync + Send + 'static> ItemContainer<T> {
     pub fn new() -> Self {
         Self(Slot::Free)
     }
@@ -43,7 +43,7 @@ impl<T: 'static> ItemContainer<T> {
     }
 }
 
-impl<T: 'static> Allocator<T> for ItemContainer<T> {
+impl<T: Sync + Send + 'static> Allocator<T> for ItemContainer<T> {
     type Alloc = std::alloc::Global;
 
     type R = ();
@@ -77,8 +77,6 @@ impl<T: 'static> Allocator<T> for ItemContainer<T> {
     }
 }
 
-impl<T: AnyItem> !Sync for ItemContainer<T> {}
-
 impl<T: AnyItem> Container<T> for ItemContainer<T> {
     type GroupItem = ();
 
@@ -90,8 +88,8 @@ impl<T: AnyItem> Container<T> for ItemContainer<T> {
         &self,
         _: SubKey<T>,
     ) -> Option<(
-        (&UnsafeCell<T>, &()),
-        &UnsafeCell<Self::Shell>,
+        (&SyncUnsafeCell<T>, &()),
+        &SyncUnsafeCell<Self::Shell>,
         &Self::Alloc,
     )> {
         match &self.0 {
@@ -124,8 +122,8 @@ impl<T: AnyItem> AnyContainer for ItemContainer<T> {
         &self,
         key: AnySubKey,
     ) -> Option<(
-        (&UnsafeCell<dyn AnyItem>, &dyn Any),
-        &UnsafeCell<dyn AnyShell>,
+        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
+        &SyncUnsafeCell<dyn AnyShell>,
         &dyn std::alloc::Allocator,
     )> {
         key.downcast::<T>()?;
@@ -171,18 +169,18 @@ impl<T: AnyItem> AnyContainer for ItemContainer<T> {
     }
 }
 
-impl<T: 'static> Default for ItemContainer<T> {
+impl<T: Sync + Send + 'static> Default for ItemContainer<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub struct SizedShell<T: ?Sized + 'static> {
+pub struct SizedShell<T: Sync + Send + ?Sized + 'static> {
     from: Vec<AnyKey>,
     _data: PhantomData<T>,
 }
 
-impl<T: ?Sized + 'static> SizedShell<T> {
+impl<T: Sync + Send + ?Sized + 'static> SizedShell<T> {
     pub fn new() -> Self {
         Self {
             from: Vec::new(),
@@ -191,7 +189,7 @@ impl<T: ?Sized + 'static> SizedShell<T> {
     }
 }
 
-impl<T: ?Sized + 'static> AnyShell for SizedShell<T> {
+impl<T: Sync + Send + ?Sized + 'static> AnyShell for SizedShell<T> {
     fn item_ty(&self) -> TypeId {
         TypeId::of::<T>()
     }
@@ -226,7 +224,7 @@ impl<T: ?Sized + 'static> AnyShell for SizedShell<T> {
     }
 }
 
-impl<T: ?Sized + 'static> Shell for SizedShell<T> {
+impl<T: Sync + Send + ?Sized + 'static> Shell for SizedShell<T> {
     type T = T;
     type Iter<'a, F: ?Sized + 'static> = RefShellIter<'a, F>;
     type AnyIter<'a> = RefShellAnyIter<'a>;
@@ -240,26 +238,26 @@ impl<T: ?Sized + 'static> Shell for SizedShell<T> {
     }
 }
 
-impl<T: ?Sized + 'static> Default for SizedShell<T> {
+impl<T: Sync + Send + ?Sized + 'static> Default for SizedShell<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub enum Slot<T: 'static, S: Default = SizedShell<T>> {
+pub enum Slot<T: Sync + Send + 'static, S: Default = SizedShell<T>> {
     Free,
     Reserved,
     Filled {
-        item: UnsafeCell<T>,
-        shell: UnsafeCell<S>,
+        item: SyncUnsafeCell<T>,
+        shell: SyncUnsafeCell<S>,
     },
 }
 
-impl<T: 'static, S: Default> Slot<T, S> {
+impl<T: Sync + Send + 'static, S: Default> Slot<T, S> {
     pub fn new(item: T) -> Self {
         Slot::Filled {
-            item: UnsafeCell::new(item),
-            shell: UnsafeCell::new(S::default()),
+            item: SyncUnsafeCell::new(item),
+            shell: SyncUnsafeCell::new(S::default()),
         }
     }
 

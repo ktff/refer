@@ -5,9 +5,9 @@ use crate::core::*;
 pub type RefIter<'a, T: 'static> = impl Iterator<Item = AnyRef> + 'a;
 
 /// Connects T <--Edge--> T.
-pub struct Edge<T: 'static>([Ref<T>; 2]);
+pub struct Edge<T: Sync + Send + 'static>([Ref<T>; 2]);
 
-impl<T: 'static> Edge<T> {
+impl<T: Sync + Send + 'static> Edge<T> {
     pub fn new(refs: [Ref<T>; 2]) -> Self {
         Edge(refs)
     }
@@ -27,7 +27,7 @@ impl<T: 'static> Edge<T> {
     }
 }
 
-impl<T: 'static> Item for Edge<T> {
+impl<T: Sync + Send + 'static> Item for Edge<T> {
     type I<'a> = RefIter<'a, T>;
 
     fn references(&self, _: Index) -> Self::I<'_> {
@@ -35,7 +35,7 @@ impl<T: 'static> Item for Edge<T> {
     }
 }
 
-impl<T: 'static> AnyItem for Edge<T> {
+impl<T: Sync + Send + 'static> AnyItem for Edge<T> {
     fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
         Some(Box::new(self.references(this)))
     }
@@ -46,7 +46,7 @@ impl<T: 'static> AnyItem for Edge<T> {
     }
 }
 
-impl<T: 'static> fmt::Debug for Edge<T> {
+impl<T: Sync + Send + 'static> fmt::Debug for Edge<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

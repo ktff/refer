@@ -16,30 +16,36 @@ pub type EdgeId<T, D> = Key<Edge<T, D>>;
 /// Vertice can carry data T.
 /// Edge can carry data D.
 pub struct TaggedGraph<
-    T: 'static,
-    D: 'static,
+    T: Sync + Send + 'static,
+    D: Sync + Send + 'static,
     C: Collection<Vertice<T, D>> + Collection<Edge<T, D>>,
 >(C, PhantomData<(T, D)>);
 
-impl<T: 'static, D: 'static, C: Collection<Vertice<T, D>> + Collection<Edge<T, D>>>
-    TaggedGraph<T, D, C>
+impl<
+        T: Sync + Send + 'static,
+        D: Sync + Send + 'static,
+        C: Collection<Vertice<T, D>> + Collection<Edge<T, D>>,
+    > TaggedGraph<T, D, C>
 {
     pub fn new(coll: C) -> Self {
         TaggedGraph(coll, PhantomData)
     }
 }
 
-impl<T: 'static, D: 'static, C: Collection<Vertice<T, D>> + Collection<Edge<T, D>> + Default>
-    Default for TaggedGraph<T, D, C>
+impl<
+        T: Sync + Send + 'static,
+        D: Sync + Send + 'static,
+        C: Collection<Vertice<T, D>> + Collection<Edge<T, D>> + Default,
+    > Default for TaggedGraph<T, D, C>
 {
     fn default() -> Self {
         TaggedGraph::new(Default::default())
     }
 }
 
-pub struct Vertice<T: 'static, D: 'static>(T, PhantomData<Edge<T, D>>);
+pub struct Vertice<T: Sync + Send + 'static, D: Sync + Send + 'static>(T, PhantomData<Edge<T, D>>);
 
-impl<T: 'static, D: 'static> Item for Vertice<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> Item for Vertice<T, D> {
     type I<'a> = std::iter::Empty<AnyRef>;
 
     fn references(&self, _: Index) -> Self::I<'_> {
@@ -47,7 +53,7 @@ impl<T: 'static, D: 'static> Item for Vertice<T, D> {
     }
 }
 
-impl<T: 'static, D: 'static> AnyItem for Vertice<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> AnyItem for Vertice<T, D> {
     fn references_any<'a>(&'a self, _: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
         None
     }
@@ -57,7 +63,7 @@ impl<T: 'static, D: 'static> AnyItem for Vertice<T, D> {
     }
 }
 
-impl<T: 'static, D: 'static> Deref for Vertice<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> Deref for Vertice<T, D> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -65,15 +71,15 @@ impl<T: 'static, D: 'static> Deref for Vertice<T, D> {
     }
 }
 
-impl<T: 'static, D: 'static> DerefMut for Vertice<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> DerefMut for Vertice<T, D> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-pub struct Edge<T: 'static, D: 'static>(D, edge::Edge<Vertice<T, D>>);
+pub struct Edge<T: Sync + Send + 'static, D: Sync + Send + 'static>(D, edge::Edge<Vertice<T, D>>);
 
-impl<T: 'static, D: 'static> Item for Edge<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> Item for Edge<T, D> {
     type I<'a> = <edge::Edge<Vertice<T, D>> as Item>::I<'a>;
 
     fn references(&self, this: Index) -> Self::I<'_> {
@@ -81,7 +87,7 @@ impl<T: 'static, D: 'static> Item for Edge<T, D> {
     }
 }
 
-impl<T: 'static, D: 'static> AnyItem for Edge<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> AnyItem for Edge<T, D> {
     fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
         self.1.references_any(this)
     }
@@ -91,7 +97,7 @@ impl<T: 'static, D: 'static> AnyItem for Edge<T, D> {
     }
 }
 
-impl<T: 'static, D: 'static> Deref for Edge<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> Deref for Edge<T, D> {
     type Target = D;
 
     fn deref(&self) -> &Self::Target {
@@ -99,7 +105,7 @@ impl<T: 'static, D: 'static> Deref for Edge<T, D> {
     }
 }
 
-impl<T: 'static, D: 'static> DerefMut for Edge<T, D> {
+impl<T: Sync + Send + 'static, D: Sync + Send + 'static> DerefMut for Edge<T, D> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

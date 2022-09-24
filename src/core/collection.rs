@@ -56,18 +56,18 @@ pub trait Access<T: AnyItem>: Allocator<T> + AnyAccess {
     where
         Self: 'a;
 
-    type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem), &'a Self::Shell)>
+    type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem), &'a Self::Shell)> + Send
     where
         Self: 'a;
 
     type MutIter<'a>: Iterator<
-        Item = (
-            Key<T>,
-            (&'a mut T, &'a Self::GroupItem),
-            &'a Self::Shell,
-            &'a Self::Alloc,
-        ),
-    >
+            Item = (
+                Key<T>,
+                (&'a mut T, &'a Self::GroupItem),
+                &'a Self::Shell,
+                &'a Self::Alloc,
+            ),
+        > + Send
     where
         Self: 'a;
 

@@ -1,18 +1,18 @@
 use std::{
     any::{Any, TypeId},
-    cell::UnsafeCell,
+    cell::SyncUnsafeCell,
     collections::HashSet,
 };
 
 use crate::core::*;
 
 /// Wraps a `Container` with empty GroupData and passes additional data when fetching items.
-pub struct ContainerData<D: Any, C> {
+pub struct ContainerData<D: Any, C: Send + Sync> {
     data: D,
     container: C,
 }
 
-impl<D: Any, C> ContainerData<D, C> {
+impl<D: Any, C: Send + Sync> ContainerData<D, C> {
     pub fn new(data: D, container: C) -> Self {
         Self { data, container }
     }
@@ -30,7 +30,7 @@ impl<D: Any, C> ContainerData<D, C> {
     }
 }
 
-impl<D: Any, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
+impl<D: Any + Send + Sync, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
     type Alloc = C::Alloc;
 
     type R = C::R;
@@ -55,7 +55,9 @@ impl<D: Any, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
     }
 }
 
-impl<D: Any, C: Container<T, GroupItem = ()>, T: AnyItem> Container<T> for ContainerData<D, C> {
+impl<D: Any + Send + Sync, C: Container<T, GroupItem = ()>, T: AnyItem> Container<T>
+    for ContainerData<D, C>
+{
     type GroupItem = D;
 
     type Shell = <C as Container<T>>::Shell;
@@ -65,7 +67,11 @@ impl<D: Any, C: Container<T, GroupItem = ()>, T: AnyItem> Container<T> for Conta
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<((&UnsafeCell<T>, &D), &UnsafeCell<Self::Shell>, &Self::Alloc)> {
+    ) -> Option<(
+        (&SyncUnsafeCell<T>, &D),
+        &SyncUnsafeCell<Self::Shell>,
+        &Self::Alloc,
+    )> {
         self.container
             .get_slot(key)
             .map(|((item, _), shell, alloc)| ((item, &self.data), shell, alloc))
@@ -79,13 +85,13 @@ impl<D: Any, C: Container<T, GroupItem = ()>, T: AnyItem> Container<T> for Conta
     }
 }
 
-impl<D: Any, C: AnyContainer> AnyContainer for ContainerData<D, C> {
+impl<D: Any + Send + Sync, C: AnyContainer> AnyContainer for ContainerData<D, C> {
     fn any_get_slot(
         &self,
         key: AnySubKey,
     ) -> Option<(
-        (&UnsafeCell<dyn AnyItem>, &dyn Any),
-        &UnsafeCell<dyn AnyShell>,
+        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
+        &SyncUnsafeCell<dyn AnyShell>,
         &dyn std::alloc::Allocator,
     )> {
         self.container
@@ -110,16 +116,16 @@ impl<D: Any, C: AnyContainer> AnyContainer for ContainerData<D, C> {
     }
 }
 
-pub struct IterWithData<'a, T: AnyItem, D, C: Container<T>> {
+pub struct IterWithData<'a, T: AnyItem, D: Send + Sync, C: Container<T>> {
     iter: <C as Container<T>>::SlotIter<'a>,
     data: &'a D,
 }
 
-impl<'a, T: AnyItem, D, C: Container<T>> Iterator for IterWithData<'a, T, D, C> {
+impl<'a, T: AnyItem, D: Send + Sync, C: Container<T>> Iterator for IterWithData<'a, T, D, C> {
     type Item = (
         SubKey<T>,
-        (&'a UnsafeCell<T>, &'a D),
-        &'a UnsafeCell<<C as Container<T>>::Shell>,
+        (&'a SyncUnsafeCell<T>, &'a D),
+        &'a SyncUnsafeCell<<C as Container<T>>::Shell>,
         &'a <C as Allocator<T>>::Alloc,
     );
 
