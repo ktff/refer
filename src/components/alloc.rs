@@ -49,6 +49,7 @@ use std::{
 */
 
 const BLOCK_SIZE: usize = 4096;
+const START_SIZE: usize = 512;
 // This is safe since 4096 is not zero, is of power two, and will not overflow isize.
 const PAGE_LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE) };
 
@@ -112,15 +113,9 @@ impl MiniAllocator {
 
     /// Returns index of block to use for layout.
     #[inline(always)]
-    fn index(layout: Layout) -> usize {
-        // dbg!(layout.size(), layout.align());
-        let size = layout.size().max(layout.align());
+    const fn index(size: usize, align: usize) -> usize {
+        let size = if size <= align { align } else { size };
         // Max pow2 len
-        // dbg!(
-        //     std::mem::size_of::<usize>() * 8,
-        //     size.next_power_of_two(),
-        //     size.next_power_of_two().leading_zeros()
-        // );
         let i =
             std::mem::size_of::<usize>() * 8 - size.next_power_of_two().leading_zeros() as usize;
         // Divide by slot size, which is 16, or 4 in pow2. -1 to start from 0.
@@ -220,7 +215,7 @@ impl MiniAllocator {
 unsafe impl Allocator for MiniAllocator {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        let i = Self::index(layout);
+        let i = Self::index(layout.size(), layout.align());
         if i >= self.lists.len() {
             // This is safe since layout is not zero sized, and alloc guarantees that the memory
             // is allocated.
@@ -236,15 +231,29 @@ unsafe impl Allocator for MiniAllocator {
             Some((block, block_level)) => (block, block_level),
             None => {
                 // Allocate new block
+                let allocated = self.allocated.load(Ordering::Relaxed);
+                let (level, layout) = if allocated < BLOCK_SIZE {
+                    // Allocate smaller block for now
+                    let size = allocated.min(START_SIZE);
+                    let j = Self::index(size, 1).max(i);
+                    let size = BLOCK_SIZE >> (self.lists.len() - j);
+                    (
+                        j,
+                        Layout::from_size_align(size, size).expect("Shouldn't fail"),
+                    )
+                } else {
+                    (self.lists.len(), PAGE_LAYOUT)
+                };
+
                 // This is safe since layout is not zero sized, and alloc guarantees that the memory
                 // is allocated.
-                let block = NonNull::new(unsafe { alloc::alloc(PAGE_LAYOUT) })
+                let block = NonNull::new(unsafe { alloc::alloc(layout) })
                     .ok_or(AllocError)?
                     .cast::<[u64; 2]>();
 
-                self.allocated.fetch_add(BLOCK_SIZE, Ordering::Relaxed);
+                self.allocated.fetch_add(layout.size(), Ordering::Relaxed);
 
-                (block, self.lists.len())
+                (block, level)
             }
         };
 
@@ -253,7 +262,7 @@ unsafe impl Allocator for MiniAllocator {
 
     #[inline(always)]
     unsafe fn deallocate(&self, mut ptr: NonNull<u8>, layout: Layout) {
-        let i = Self::index(layout);
+        let i = Self::index(layout.size(), layout.align());
         if i < self.lists.len() {
             let block = ptr.cast::<[u64; 2]>();
             // This is safe since caller guarantees that.
