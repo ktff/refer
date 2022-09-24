@@ -1,15 +1,18 @@
 use crate::core::*;
 use bitvec::prelude::*;
 use std::{
-    alloc,
+    alloc::{self, Layout},
     any::{Any, TypeId},
     cell::SyncUnsafeCell,
     collections::HashSet,
+    marker::PhantomData,
     mem::MaybeUninit,
     num::NonZeroU64,
-    ptr::addr_of_mut,
+    ops::{Deref, DerefMut},
+    ptr::{addr_of_mut, NonNull},
 };
 
+const STARTING_SIZE: usize = 256;
 const MAX_TABLE_SIZE: usize = 4096;
 
 /// A simple table container of items of the same type.
@@ -22,7 +25,7 @@ pub struct TableContainer<
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
 {
-    tables: Vec<Box<Table<T, S>, A>, A>,
+    tables: Vec<TableBox<T, S>, A>,
     reserved: Vec<SubKey<T>, A>,
     /// Tables with possibly free slot.
     /// Descending order
@@ -37,7 +40,7 @@ where
     [(); slots_len::<T, S>()]: Sized,
 {
     pub fn new(key_len: u32) -> Self {
-        assert!(std::mem::size_of::<Table<T, S>>() <= MAX_TABLE_SIZE);
+        // assert!(std::mem::size_of::<Table<T, S>>() <= MAX_TABLE_SIZE);
 
         Self {
             tables: Vec::new(),
@@ -59,14 +62,7 @@ where
     [(); slots_len::<T, S>()]: Sized,
 {
     pub fn new_in(key_len: u32, alloc: A) -> Self {
-        assert!(std::mem::size_of::<Table<T, S>>() <= MAX_TABLE_SIZE);
-        // println!(
-        //     "Table size: {}, slot size: {}, slot count: {}, bitarray size: {}",
-        //     std::mem::size_of::<Table<T, S>>(),
-        //     std::mem::size_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>(),
-        //     slots_len::<T, S>(),
-        //     std::mem::size_of::<BitArray<[u64; taken_len::<T, S>()], Lsb0>>()
-        // );
+        // assert!(std::mem::size_of::<Table<T, S>>() <= MAX_TABLE_SIZE);
 
         Self {
             tables: Vec::new_in(alloc.clone()),
@@ -84,8 +80,12 @@ where
 
     /// Memory used directly by this container.
     pub fn used_memory(&self) -> usize {
-        self.tables.capacity() * std::mem::size_of::<Box<Table<T, S>, A>>()
-            + self.tables.len() * std::mem::size_of::<Table<T, S>>()
+        self.tables.capacity() * std::mem::size_of::<TableBox<T, S>>()
+            + self
+                .tables
+                .iter()
+                .map(|t| std::mem::size_of_val::<Table<T, S>>(t))
+                .sum::<usize>()
             + self.reserved.capacity() * std::mem::size_of::<Key<T>>()
             + self.free_tables.capacity() * std::mem::size_of::<usize>()
     }
@@ -143,8 +143,9 @@ where
     fn reserve(&mut self, _: Option<&T>, _: Self::R) -> Option<(ReservedKey<T>, &A)> {
         // Check free tables
         while let Some(&table_index) = self.free_tables.last() {
-            for slot_index in self.tables[table_index].taken.iter_zeros() {
-                if slot_index < slots_len::<T, S>() {
+            let table = &self.tables[table_index];
+            for slot_index in table.taken.iter_zeros() {
+                if slot_index < table.slots.len() {
                     // Avoid allocating zero index
                     if table_index + slot_index > 0 {
                         let key = self.join_key(table_index, slot_index);
@@ -177,14 +178,26 @@ where
         }
 
         // New table
-        let table = Table::new_in(self.alloc().clone());
-        self.tables.push(table);
-
-        // Check for zero index
-        let slot_index = if table_index == 0 { 1 } else { 0 };
+        let key = if let Some(table) = self.tables.get_mut(0) {
+            let len = table.slots.len();
+            if len < slots_len::<T, S>() {
+                let new_len = (len * 2).min(slots_len::<T, S>());
+                table.grow(self.free_tables.allocator(), new_len);
+                debug_assert!(self.tables[0].slots.len() >= new_len);
+                debug_assert!(len < new_len);
+                self.join_key(0, len)
+            } else {
+                self.tables
+                    .push(TableBox::new_in(self.alloc(), MAX_TABLE_SIZE));
+                self.join_key(table_index, 0)
+            }
+        } else {
+            self.tables
+                .push(TableBox::new_in(self.alloc(), STARTING_SIZE));
+            self.join_key(0, 1)
+        };
 
         // New key
-        let key = self.join_key(table_index, slot_index);
         self.reserved.push(key);
         Some((ReservedKey::new(key), self.alloc()))
     }
@@ -380,6 +393,157 @@ where
     }
 }
 
+// Drop for TableContainer
+impl<
+        T: Send + Sync + 'static,
+        S: Shell<T = T> + Default,
+        A: alloc::Allocator + Sync + Send + 'static,
+    > Drop for TableContainer<T, S, A>
+where
+    [(); taken_len::<T, S>()]: Sized,
+    [(); slots_len::<T, S>()]: Sized,
+{
+    fn drop(&mut self) {
+        // Drop all items
+        for table in self.tables.drain(..) {
+            table.drop(self.free_tables.allocator());
+        }
+    }
+}
+
+struct TableBox<T: 'static, S: Shell<T = T> + Default>
+where
+    [(); taken_len::<T, S>()]: Sized,
+    [(); slots_len::<T, S>()]: Sized,
+{
+    pointer: NonNull<Table<T, S>>,
+    _marker: PhantomData<(T, S)>,
+}
+
+unsafe impl<T: 'static, S: Shell<T = T> + Default> Sync for TableBox<T, S>
+where
+    [(); taken_len::<T, S>()]: Sized,
+    [(); slots_len::<T, S>()]: Sized,
+{
+}
+
+unsafe impl<T: 'static, S: Shell<T = T> + Default> Send for TableBox<T, S>
+where
+    [(); taken_len::<T, S>()]: Sized,
+    [(); slots_len::<T, S>()]: Sized,
+{
+}
+
+impl<T: 'static, S: Shell<T = T> + Default> TableBox<T, S>
+where
+    [(); taken_len::<T, S>()]: Sized,
+    [(); slots_len::<T, S>()]: Sized,
+{
+    fn new_in<A: std::alloc::Allocator>(allocator: &A, size: usize) -> Self {
+        let len = if size < MAX_TABLE_SIZE {
+            size / std::mem::size_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>()
+        } else {
+            slots_len::<T, S>()
+        };
+        let table = unsafe {
+            // This is safe since we are constructing a Unsized with a slice.
+            let new_layout = {
+                let ptr: *const Table<T, S> = std::ptr::from_raw_parts(std::ptr::null(), len);
+                Layout::for_value_raw(ptr)
+            };
+            let ptr = allocator.allocate(new_layout).expect("Failed to allocate");
+
+            // Init table
+            let extra_capacity = (ptr.len() - new_layout.size())
+                / std::mem::size_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>();
+            let final_len = len + extra_capacity;
+
+            // Safe since Table is freshly allocated
+            // NOTE: This should be wrapped in MaybeUninit but it doesn't support unsized types.
+            //        But having uninit bit array should be fine.
+            let table: *mut Table<T, S> =
+                std::ptr::from_raw_parts_mut(ptr.as_ptr() as *mut (), final_len);
+            (&mut *table).taken = BitArray::ZERO;
+            // Initializing the `slots` field is not necessary since they are MaybeUninit
+
+            table
+        };
+        Self {
+            pointer: NonNull::new(table).expect("Null pointer allocated"),
+            _marker: PhantomData,
+        }
+    }
+
+    fn grow<A: std::alloc::Allocator>(&mut self, allocator: &A, len: usize) {
+        unsafe {
+            // This is safe since we are constructing a Unsized with a slice.
+            let new_layout = {
+                let ptr: *const Table<T, S> = std::ptr::from_raw_parts(std::ptr::null(), len);
+                Layout::for_value_raw(ptr)
+            };
+            let layout = Layout::for_value::<Table<T, S>>(self.pointer.as_ref());
+            let ptr = allocator
+                .grow(
+                    NonNull::new_unchecked(self.pointer.as_ptr() as *mut u8),
+                    layout,
+                    new_layout,
+                )
+                .expect("Failed to grow");
+            // Init table
+            let extra_capacity = (ptr.len() - new_layout.size())
+                / std::mem::size_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>();
+            let final_len = len + extra_capacity;
+
+            // Safe since Table is freshly allocated
+            // NOTE: This should be wrapped in MaybeUninit but it doesn't support unsized types.
+            //        But having uninit bit array should be fine.
+            let table: *mut Table<T, S> =
+                std::ptr::from_raw_parts_mut(ptr.as_ptr() as *mut (), final_len);
+
+            *self = Self {
+                pointer: NonNull::new(table).expect("Null pointer allocated"),
+                _marker: PhantomData,
+            };
+        }
+    }
+
+    fn drop<A: std::alloc::Allocator>(mut self, allocator: &A) {
+        let table: &mut Table<T, S> = &mut self;
+        for i in table.taken.iter_ones() {
+            // SAFETY: We've checked that this slot is taken
+            unsafe {
+                table.slots.get_mut(i).map(|slot| slot.assume_init_drop());
+            }
+        }
+
+        let ptr: NonNull<u8> = self.pointer.cast();
+        let layout = Layout::for_value::<Table<T, S>>(&self);
+        unsafe { allocator.deallocate(ptr, layout) }
+    }
+}
+
+impl<T: 'static, S: Shell<T = T> + Default> Deref for TableBox<T, S>
+where
+    [(); taken_len::<T, S>()]: Sized,
+    [(); slots_len::<T, S>()]: Sized,
+{
+    type Target = Table<T, S>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.pointer.as_ref() }
+    }
+}
+
+impl<T: 'static, S: Shell<T = T> + Default> DerefMut for TableBox<T, S>
+where
+    [(); taken_len::<T, S>()]: Sized,
+    [(); slots_len::<T, S>()]: Sized,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { self.pointer.as_mut() }
+    }
+}
+
 struct Table<T: 'static, S: Shell<T = T> + Default>
 where
     [(); taken_len::<T, S>()]: Sized,
@@ -388,7 +552,7 @@ where
     // Bitfield
     taken: BitArray<[u64; taken_len::<T, S>()], Lsb0>,
     // Slots
-    slots: [MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>; slots_len::<T, S>()],
+    slots: [MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>],
 }
 
 impl<T: 'static, S: Shell<T = T> + Default> Table<T, S>
@@ -396,20 +560,6 @@ where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
 {
-    fn new_in<A: std::alloc::Allocator>(alloc: A) -> Box<Self, A> {
-        unsafe {
-            let mut table = Box::<Self, A>::new_uninit_in(alloc);
-            let ptr = table.as_mut_ptr();
-            // Initializing the `taken` field
-            addr_of_mut!((*ptr).taken).write(BitArray::ZERO);
-
-            // Initializing the `slots` field is not necessary since they are MaybeUninit
-
-            // All the fields are initialized, so we call `assume_init`
-            table.assume_init()
-        }
-    }
-
     /// UNSAFETY: The caller must ensure that the slots are initialized
     unsafe fn get(&self, index: usize) -> (&SyncUnsafeCell<T>, &SyncUnsafeCell<S>) {
         let (ref item, ref shell) = *self.slots[index].assume_init_ref();
@@ -460,8 +610,8 @@ pub const fn slots_len<T, S>() -> usize {
     let max_padding_size =
         std::mem::align_of::<MaybeUninit<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>>()
             .saturating_sub(std::mem::align_of::<u64>());
-    // Box is storing allocator on heap.
-    let allocator_size = std::mem::size_of::<usize>();
+    // //Box is storing allocator on heap.
+    let allocator_size = 0; //std::mem::size_of::<usize>();
     let max_slots = (MAX_TABLE_SIZE - taken_size - max_padding_size - allocator_size) / slot_size;
     max_slots
 }
