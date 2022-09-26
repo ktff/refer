@@ -22,6 +22,9 @@ pub trait AnyItem: Any + Sync + Send {
     ///
     /// Should be called for its references.
     fn item_removed(&mut self, this: Index, key: AnyKey) -> bool;
+
+    /// Old and new must be of same type.
+    fn item_moved(&mut self, old: AnyKey, new: AnyKey);
 }
 
 pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {

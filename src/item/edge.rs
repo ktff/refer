@@ -44,6 +44,16 @@ impl<T: Sync + Send + 'static> AnyItem for Edge<T> {
         // Both references are crucial
         key != self.0[0].key().into() && key != self.0[1].key().into()
     }
+
+    fn item_moved(&mut self, old: AnyKey, new: AnyKey) {
+        if let Some(old) = old.downcast::<T>() {
+            for rf in &mut self.0 {
+                if rf.key() == old {
+                    *rf = Ref::new(new.downcast().expect("New key is not T"));
+                }
+            }
+        }
+    }
 }
 
 impl<T: Sync + Send + 'static> fmt::Debug for Edge<T> {

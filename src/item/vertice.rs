@@ -55,6 +55,16 @@ impl<T: AnyItem> AnyItem for Vertice<T> {
 
         true
     }
+
+    fn item_moved(&mut self, old: AnyKey, new: AnyKey) {
+        if let Some(old) = old.downcast::<T>() {
+            for rf in &mut self.0 {
+                if rf.key() == old {
+                    *rf = Ref::new(new.downcast().expect("New key is not T"));
+                }
+            }
+        }
+    }
 }
 
 impl<T: AnyItem> Default for Vertice<T> {

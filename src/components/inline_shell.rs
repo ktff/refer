@@ -25,6 +25,10 @@ impl<T: Referable + ?Sized + 'static> InlineShell<T> {
         }
     }
 
+    pub fn clear(&mut self, allocator: &impl std::alloc::Allocator) {
+        self.from.clear(allocator);
+    }
+
     fn to_ref(from: AnyKey) -> AnyRef {
         if let Some(ty_index) = T::from_type(from.type_id()) {
             assert!(

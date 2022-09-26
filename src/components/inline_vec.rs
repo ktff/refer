@@ -220,13 +220,9 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
         self.len() == 0
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self, allocator: &(impl std::alloc::Allocator + ?Sized)) {
         // T is copy so they don't have Drop.
         self.set_len(0);
-    }
-
-    pub fn clear_dealloc(&mut self, allocator: &(impl std::alloc::Allocator + ?Sized)) {
-        self.clear();
         // Dealloc
         if let Some(heap) = self.heap_payload_mut() {
             // Safe since we know that this is a valid ptr since it came from ref.

@@ -78,7 +78,7 @@ pub trait Access<T: AnyItem>: Allocator<T> + AnyAccess {
     fn get_mut(
         &mut self,
         key: Key<T>,
-    ) -> Option<((&mut T, &Self::GroupItem), &Self::Shell, &Self::Alloc)>;
+    ) -> Option<((&mut T, &Self::GroupItem), &mut Self::Shell, &Self::Alloc)>;
 
     /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;

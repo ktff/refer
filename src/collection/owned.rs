@@ -193,13 +193,13 @@ impl<C: Container<T> + 'static, T: AnyItem> Access<T> for Owned<C> {
     fn get_mut(
         &mut self,
         key: Key<T>,
-    ) -> Option<((&mut T, &Self::GroupItem), &Self::Shell, &Self::Alloc)> {
+    ) -> Option<((&mut T, &Self::GroupItem), &mut Self::Shell, &Self::Alloc)> {
         self.0
             .get_slot(key.into())
             .map(|((item, gi), shell, alloc)| {
                 // This is safe because Self has total access to C and
                 // we borrow &mut self so there is no other &mut slot hence &mut slot is safe.
-                unsafe { ((&mut *item.get(), gi), &*shell.get(), alloc) }
+                unsafe { ((&mut *item.get(), gi), &mut *shell.get(), alloc) }
             })
     }
 

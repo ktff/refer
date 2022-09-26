@@ -26,6 +26,8 @@ macro_rules! impl_item {
             fn item_removed(&mut self, _: $crate::core::Index, _: $crate::core::AnyKey) -> bool {
                 true
             }
+
+            fn item_moved(&mut self, _: $crate::core::AnyKey, _: $crate::core::AnyKey) {}
         }
     };
 }

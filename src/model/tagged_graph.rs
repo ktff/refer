@@ -61,6 +61,8 @@ impl<T: Sync + Send + 'static, D: Sync + Send + 'static> AnyItem for Vertice<T, 
     fn item_removed(&mut self, _: Index, _: AnyKey) -> bool {
         true
     }
+
+    fn item_moved(&mut self, _: AnyKey, _: AnyKey) {}
 }
 
 impl<T: Sync + Send + 'static, D: Sync + Send + 'static> Deref for Vertice<T, D> {
@@ -94,6 +96,10 @@ impl<T: Sync + Send + 'static, D: Sync + Send + 'static> AnyItem for Edge<T, D> 
 
     fn item_removed(&mut self, this: Index, key: AnyKey) -> bool {
         self.1.item_removed(this, key)
+    }
+
+    fn item_moved(&mut self, from: AnyKey, to: AnyKey) {
+        self.1.item_moved(from, to)
     }
 }
 

@@ -1,5 +1,5 @@
 use super::{Access, AnyItem, AnyKey, AnyShell, AnyShells, ItemsMut, Key, ShellsMut};
-use std::fmt;
+use std::{any::Any, fmt};
 
 #[derive(PartialEq, Eq)]
 pub struct Ref<T: 'static>(Key<T>);
@@ -42,7 +42,7 @@ impl<T: AnyItem> Ref<T> {
     pub fn get_mut<C: Access<T>>(
         self,
         coll: &mut C,
-    ) -> ((&mut T, &C::GroupItem), &C::Shell, &C::Alloc) {
+    ) -> ((&mut T, &C::GroupItem), &mut C::Shell, &C::Alloc) {
         coll.get_mut(self.key())
             .unwrap_or_else(|| self.panic_dangling())
     }
@@ -85,6 +85,12 @@ impl<T: 'static> From<Ref<T>> for Key<T> {
 impl<T: 'static> fmt::Debug for Ref<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Ref({:?})", self.0)
+    }
+}
+
+impl<T: Any> PartialEq<AnyKey> for Ref<T> {
+    fn eq(&self, other: &AnyKey) -> bool {
+        AnyKey::from(self.0) == *other
     }
 }
 

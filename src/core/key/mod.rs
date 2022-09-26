@@ -57,7 +57,7 @@ impl<T: AnyItem> Key<T> {
     pub fn get_mut<A: Access<T>>(
         self,
         access: &mut A,
-    ) -> Option<((&mut T, &A::GroupItem), &A::Shell, &A::Alloc)> {
+    ) -> Option<((&mut T, &A::GroupItem), &mut A::Shell, &A::Alloc)> {
         access.get_mut(self)
     }
 }
