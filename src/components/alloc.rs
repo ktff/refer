@@ -300,6 +300,8 @@ unsafe impl Allocator for MiniAllocator {
     // ) -> Result<NonNull<[u8]>, AllocError> { ... }
 }
 
+// TODO: Impl Drop for MiniAllocator by reconstructing pages and then deallocating them. Logging any leaked unconstructed pages.
+
 #[derive(Clone)]
 pub struct SharedMiniAllocator(Arc<MiniAllocator>);
 

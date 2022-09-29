@@ -102,7 +102,7 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
         let slot = if let Some(slot) = self.get_mut().get_mut(len) {
             slot
         } else {
-            self.grow(allocator);
+            self.grow(len + 1, allocator);
             self.get_mut()
                 .get_mut(len)
                 .expect("Grow should have increased capacity")
@@ -125,7 +125,7 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
             self.push(element, allocator);
             return;
         } else if len == self.capacity() {
-            self.grow(allocator);
+            self.grow(len + 1, allocator);
             assert!(
                 self.len() < self.capacity(),
                 "Grow should have increased capacity"
@@ -328,6 +328,14 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
         self.set_len(new_len);
     }
 
+    /// Moves all the elements of other into self, leaving other cleared.
+    pub fn append(&mut self, other: &mut Self, allocator: &(impl std::alloc::Allocator + ?Sized)) {
+        for &item in other.iter() {
+            self.push(item, allocator);
+        }
+        other.clear(allocator);
+    }
+
     // Panics if out of range
     pub fn remove_range(&mut self, range: impl RangeBounds<usize>) {
         let len = self.len();
@@ -357,10 +365,10 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
         }
     }
 
-    fn grow(&mut self, allocator: &(impl std::alloc::Allocator + ?Sized)) {
+    fn grow(&mut self, min_capacity: usize, allocator: &(impl std::alloc::Allocator + ?Sized)) {
         let capacity = self.capacity();
         let len = self.len();
-        let new_capacity = capacity.max(1) * 2;
+        let new_capacity = (capacity.max(1) * 2).max(min_capacity);
 
         // This is safe since we are constructing a UnSized with a slice.
         let new_layout = unsafe {
@@ -525,6 +533,14 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
     }
 }
 
+impl<T: Eq + Copy, const N: usize> Eq for InlineVec<T, N> {}
+
+impl<T: PartialEq + Copy, const N: usize> PartialEq for InlineVec<T, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
 // Indexing
 impl<T: Copy, const N: usize> std::ops::Index<usize> for InlineVec<T, N> {
     type Output = T;
@@ -592,6 +608,7 @@ struct HeapPayload<T: Copy> {
 
 #[cfg(test)]
 mod tests {
+    use crate::components::alloc::MiniAllocator;
     use core::panic;
 
     use super::*;

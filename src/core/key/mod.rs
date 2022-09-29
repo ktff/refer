@@ -47,6 +47,14 @@ impl<T: ?Sized + 'static> Key<T> {
     {
         self.into()
     }
+
+    pub fn order(array: [Self; 2]) -> [Self; 2] {
+        if array[0].as_u64() <= array[1].as_u64() {
+            array
+        } else {
+            [array[1], array[0]]
+        }
+    }
 }
 
 impl<T: AnyItem> Key<T> {

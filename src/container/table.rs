@@ -9,7 +9,7 @@ use std::{
     mem::MaybeUninit,
     num::NonZeroU64,
     ops::{Deref, DerefMut},
-    ptr::{addr_of_mut, NonNull},
+    ptr::NonNull,
 };
 
 const STARTING_SIZE: usize = 256;

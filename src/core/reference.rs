@@ -1,6 +1,8 @@
 use super::{Access, AnyItem, AnyKey, AnyShell, AnyShells, ItemsMut, Key, ShellsMut};
 use std::{any::Any, fmt};
 
+// TODO: Pinned outer references
+
 #[derive(PartialEq, Eq)]
 pub struct Ref<T: 'static>(Key<T>);
 
