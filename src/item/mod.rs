@@ -1,5 +1,41 @@
+pub mod data;
 pub mod edge;
+pub mod tagged_edge;
 pub mod vertice;
+
+#[macro_export]
+macro_rules! delegate_item {
+    (impl for $t:ty => $d:ty = $e:tt) => {
+        impl $crate::core::Item for $t {
+            type I<'a> = <$d as $crate::core::Item>::I<'a>;
+
+            fn references(&self, this: $crate::core::Index) -> Self::I<'_> {
+                self.$e.references(this)
+            }
+        }
+
+        impl $crate::core::AnyItem for $t {
+            fn references_any<'a>(
+                &'a self,
+                this: $crate::core::Index,
+            ) -> Option<Box<dyn Iterator<Item = $crate::core::AnyRef> + 'a>> {
+                self.$e.references_any(this)
+            }
+
+            fn item_removed(
+                &mut self,
+                this: $crate::core::Index,
+                key: $crate::core::AnyKey,
+            ) -> bool {
+                self.$e.item_removed(this, key)
+            }
+
+            fn item_moved(&mut self, from: $crate::core::AnyKey, to: $crate::core::AnyKey) {
+                self.$e.item_moved(from, to)
+            }
+        }
+    };
+}
 
 // ***************************************** Default impl ********************************************* //
 

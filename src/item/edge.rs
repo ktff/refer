@@ -25,6 +25,10 @@ impl<T: Sync + Send + 'static> Edge<T> {
             rf.disconnect(this, coll);
         }
     }
+
+    pub fn refs(&self) -> &[Ref<T>; 2] {
+        &self.0
+    }
 }
 
 impl<T: Sync + Send + 'static> Item for Edge<T> {
