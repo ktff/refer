@@ -62,6 +62,7 @@ pub mod core;
 pub mod item;
 pub mod components;
 pub mod model;
+pub mod shell;
 
 pub use crate::core::*;
 
