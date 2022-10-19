@@ -171,7 +171,7 @@ where
         let table_index = self.tables.len();
 
         // Check key range
-        let max_key = table_index * slots_len::<T, S>();
+        let max_key = (table_index + 1) * slots_len::<T, S>();
         if max_key.checked_shr(self.key_len).unwrap_or(0) >= 1 {
             // Out of keys
             return None;
