@@ -1,4 +1,5 @@
 pub mod alloc;
+pub mod alloc_box;
 pub mod inline_shell;
 pub mod inline_vec;
 

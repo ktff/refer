@@ -14,6 +14,7 @@
 #![feature(nonnull_slice_from_raw_parts)]
 #![feature(layout_for_ptr)]
 #![feature(sync_unsafe_cell)]
+#![feature(ptr_as_uninit)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs
