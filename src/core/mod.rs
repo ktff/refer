@@ -4,6 +4,7 @@ mod item;
 mod key;
 mod reference;
 mod shell;
+mod slot;
 
 pub use collection::*;
 pub use container::*;
@@ -11,6 +12,7 @@ pub use item::*;
 pub use key::*;
 pub use reference::*;
 pub use shell::*;
+pub use slot::*;
 
 /*
 NOTES

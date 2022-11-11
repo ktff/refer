@@ -28,8 +28,6 @@ pub trait AnyItem: Any + Sync + Send {
 }
 
 pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
-    type Alloc: std::alloc::Allocator;
-
     type MutIter<'a>: Iterator<Item = (Key<T>, (&'a mut T, &'a Self::GroupItem), &'a Self::Alloc)>
         + Send
     where
@@ -43,6 +41,8 @@ pub trait ItemsMut<T: ?Sized + 'static>: Items<T> {
 }
 
 pub trait Items<T: ?Sized + 'static> {
+    type Alloc: std::alloc::Allocator + 'static;
+
     type GroupItem: Any;
 
     type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem))> + Send

@@ -41,8 +41,6 @@ pub trait AnyShell: Any + Sync + Send {
 }
 
 pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {
-    type Alloc: std::alloc::Allocator;
-
     type MutIter<'a>: Iterator<Item = (Key<T>, &'a mut Self::Shell, &'a Self::Alloc)> + Send
     where
         Self: 'a;
@@ -54,6 +52,8 @@ pub trait ShellsMut<T: ?Sized + 'static>: Shells<T> + AnyShells {
 }
 
 pub trait Shells<T: ?Sized + 'static> {
+    type Alloc: std::alloc::Allocator + 'static;
+
     type Shell: Shell<T = T>;
 
     type Iter<'a>: Iterator<Item = (Key<T>, &'a Self::Shell)> + Send

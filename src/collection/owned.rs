@@ -335,8 +335,6 @@ impl<'c, C: 'static> AccessItemsMut<'c, C> {
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> ItemsMut<T> for AccessItemsMut<'c, C> {
-    type Alloc = C::Alloc;
-
     type MutIter<'a> = ItemMutIter<'a, C, T> where Self:'a;
 
     fn get_mut(&mut self, key: Key<T>) -> Option<((&mut T, &Self::GroupItem), &Self::Alloc)> {
@@ -366,6 +364,8 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> ItemsMut<T> for AccessItemsMut<'
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItemsMut<'c, C> {
+    type Alloc = C::Alloc;
+
     type GroupItem = <C as Container<T>>::GroupItem;
 
     type Iter<'a> = ItemIter<'a,C, T> where Self:'a;
@@ -418,6 +418,8 @@ impl<'c, C: 'static> AccessItems<'c, C> {
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItems<'c, C> {
+    type Alloc = <C as Allocator<T>>::Alloc;
+
     type GroupItem = <C as Container<T>>::GroupItem;
 
     type Iter<'a> = ItemIter<'a,C, T> where Self:'a;
@@ -487,8 +489,6 @@ impl<'c, C: 'static> AccessShellsMut<'c, C> {
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> ShellsMut<T> for AccessShellsMut<'c, C> {
-    type Alloc = <C as Allocator<T>>::Alloc;
-
     type MutIter<'a> = ShellsMutIter<'a,C, T> where Self:'a;
 
     fn get_mut(&mut self, key: Key<T>) -> Option<(&mut Self::Shell, &Self::Alloc)> {
@@ -513,6 +513,8 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> ShellsMut<T> for AccessShellsMut
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShellsMut<'c, C> {
+    type Alloc = <C as Allocator<T>>::Alloc;
+
     type Shell = <C as Container<T>>::Shell;
 
     type Iter<'a> = ShellsIter<'a,C, T> where Self:'a;
@@ -562,6 +564,8 @@ impl<'c, C: 'static> AccessShells<'c, C> {
 }
 
 impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShells<'c, C> {
+    type Alloc = <C as Allocator<T>>::Alloc;
+
     type Shell = <C as Container<T>>::Shell;
 
     type Iter<'a> = ShellsIter<'a,C, T> where Self:'a;

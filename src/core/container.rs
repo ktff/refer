@@ -73,7 +73,7 @@ pub trait AnyContainer: Any + Sync + Send {
 /// It's responsibility is to manage allocation/placement/deallocation of item
 pub trait Allocator<T: 'static>: Send + Sync {
     /// Allocator used for items and shells.
-    type Alloc: std::alloc::Allocator;
+    type Alloc: std::alloc::Allocator + 'static;
 
     // TODO: Some descriptive name
     /// Allocator can select placement for item based on this.
