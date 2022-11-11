@@ -1,27 +1,13 @@
-use crate::core::*;
-use std::{
-    alloc,
-    any::{Any, TypeId},
-    cell::SyncUnsafeCell,
-    collections::HashSet,
-    num::NonZeroU64,
-};
-
 use super::item::{SizedShell, Slot};
+use crate::core::*;
+use std::{alloc, any::TypeId, collections::HashSet, num::NonZeroU64};
 
 pub type SlotIter<
     'a,
     T: AnyItem,
     S: Shell<T = T> + Default,
     A: alloc::Allocator + Send + Sync + 'static,
-> = impl Iterator<
-    Item = (
-        SubKey<T>,
-        (&'a SyncUnsafeCell<T>, &'a ()),
-        &'a SyncUnsafeCell<S>,
-        &'a A,
-    ),
->;
+> = impl Iterator<Item = (SubKey<T>, UnsafeSlot<'a, T, (), S, A>)>;
 
 pub struct VecContainerFamily;
 
@@ -189,15 +175,12 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 
 
     type SlotIter<'a> = SlotIter<'a, T, S, A> where Self: 'a;
 
-    fn get_slot(
-        &self,
-        key: SubKey<T>,
-    ) -> Option<((&SyncUnsafeCell<T>, &()), &SyncUnsafeCell<Self::Shell>, &A)> {
+    fn get_slot(&self, key: SubKey<T>) -> Option<UnsafeSlot<T, (), Self::Shell, A>> {
         let i = key.index(self.key_len).as_usize();
         let slot = self.slots.get(i)?;
         match slot {
             Slot::Free | Slot::Reserved => None,
-            Slot::Filled { item, shell } => Some(((item, &()), shell, &self.alloc)),
+            Slot::Filled { item, shell } => Some(UnsafeSlot::new(item, &(), shell, &self.alloc)),
         }
     }
 
@@ -215,9 +198,7 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 
                             self.key_len,
                             Index(NonZeroU64::new(i as u64).expect("Zero index")),
                         ),
-                        (item, &()),
-                        shell,
-                        &self.alloc,
+                        UnsafeSlot::new(item, &(), shell, &self.alloc),
                     )),
                 }),
         )
@@ -227,20 +208,19 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 
 impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 'static>
     AnyContainer for VecContainer<T, S, A>
 {
-    fn any_get_slot(
-        &self,
-        key: AnySubKey,
-    ) -> Option<(
-        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
-        &SyncUnsafeCell<dyn AnyShell>,
-        &dyn std::alloc::Allocator,
-    )> {
+    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         let i = key.downcast::<T>()?.index(self.key_len).as_usize();
 
         let slot = self.slots.get(i)?;
         match slot {
             Slot::Free | Slot::Reserved => None,
-            Slot::Filled { item, shell } => Some(((item, &()), shell, &self.alloc)),
+            Slot::Filled { item, shell } => Some(AnyUnsafeSlot::new(
+                item,
+                &(),
+                shell,
+                &self.alloc,
+                &self.alloc,
+            )),
         }
     }
 

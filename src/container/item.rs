@@ -1,22 +1,16 @@
 use crate::core::*;
 use log::*;
 use std::{
-    any::{Any, TypeId},
-    cell::SyncUnsafeCell,
-    collections::HashSet,
-    marker::PhantomData,
-    num::NonZeroU64,
+    any::TypeId, cell::SyncUnsafeCell, collections::HashSet, marker::PhantomData, num::NonZeroU64,
 };
 
 pub type RefShellIter<'a, F: ?Sized + 'static> = impl Iterator<Item = Key<F>> + 'a;
 pub type RefShellAnyIter<'a> = impl Iterator<Item = AnyKey> + 'a;
 
-pub type SlotIter<'a, T: Sync + Send + 'static> = impl Iterator<
+pub type SlotIter<'a, T: AnyItem> = impl Iterator<
     Item = (
         SubKey<T>,
-        (&'a SyncUnsafeCell<T>, &'a ()),
-        &'a SyncUnsafeCell<SizedShell<T>>,
-        &'a std::alloc::Global,
+        UnsafeSlot<'a, T, (), SizedShell<T>, std::alloc::Global>,
     ),
 >;
 
@@ -84,21 +78,16 @@ impl<T: AnyItem> Container<T> for ItemContainer<T> {
 
     type SlotIter<'a> = SlotIter<'a, T> where Self: 'a;
 
-    fn get_slot(
-        &self,
-        _: SubKey<T>,
-    ) -> Option<(
-        (&SyncUnsafeCell<T>, &()),
-        &SyncUnsafeCell<Self::Shell>,
-        &Self::Alloc,
-    )> {
+    fn get_slot(&self, _: SubKey<T>) -> Option<UnsafeSlot<T, (), Self::Shell, Self::Alloc>> {
         match &self.0 {
             Slot::Free => None,
             Slot::Reserved => {
                 warn!("Reserved slot {:?} was accessed", Self::key());
                 None
             }
-            Slot::Filled { item, shell } => Some(((item, &()), shell, &std::alloc::Global)),
+            Slot::Filled { item, shell } => {
+                Some(UnsafeSlot::new(item, &(), shell, &std::alloc::Global))
+            }
         }
     }
 
@@ -110,22 +99,19 @@ impl<T: AnyItem> Container<T> for ItemContainer<T> {
                 warn!("Reserved slot {:?} was accessed", Self::key());
                 None
             }
-            Slot::Filled { item, shell } => {
-                Some(Some((Self::key(), (item, &()), shell, &std::alloc::Global)).into_iter())
-            }
+            Slot::Filled { item, shell } => Some(
+                Some((
+                    Self::key(),
+                    UnsafeSlot::new(item, &(), shell, &std::alloc::Global),
+                ))
+                .into_iter(),
+            ),
         }
     }
 }
 
 impl<T: AnyItem> AnyContainer for ItemContainer<T> {
-    fn any_get_slot(
-        &self,
-        key: AnySubKey,
-    ) -> Option<(
-        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
-        &SyncUnsafeCell<dyn AnyShell>,
-        &dyn std::alloc::Allocator,
-    )> {
+    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         key.downcast::<T>()?;
         match &self.0 {
             Slot::Free => None,
@@ -133,7 +119,13 @@ impl<T: AnyItem> AnyContainer for ItemContainer<T> {
                 warn!("Reserved slot {:?} was accessed", Self::key());
                 None
             }
-            Slot::Filled { item, shell } => Some(((item, &()), shell, &std::alloc::Global)),
+            Slot::Filled { item, shell } => Some(AnyUnsafeSlot::new(
+                item,
+                &(),
+                shell,
+                &std::alloc::Global,
+                &std::alloc::Global,
+            )),
         }
     }
 

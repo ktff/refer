@@ -1,12 +1,11 @@
 use super::{RefAnyItemSlot, RefAnyShellSlot, RefSlot};
-use crate::core::{Access, AnyAccess, AnyItem, AnyItems, AnyKey, AnyShell, AnyShells};
+use crate::core::{Access, AnyItem, AnyKey, AnyShell};
 use getset::CopyGetters;
 use std::any::Any;
 
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct RefAnySlot<'a, C: AnyAccess> {
-    pub(super) container: &'a C,
+pub struct RefAnySlot<'a> {
     pub(super) key: AnyKey,
     pub(super) item: &'a dyn AnyItem,
     pub(super) group_item: &'a dyn Any,
@@ -17,14 +16,10 @@ pub struct RefAnySlot<'a, C: AnyAccess> {
     pub(super) alloc_any: &'a dyn Any,
 }
 
-impl<'a, C: AnyAccess> RefAnySlot<'a, C> {
-    pub fn split(self) -> (RefAnyItemSlot<'a, C>, RefAnyShellSlot<'a, C>)
-    where
-        C: AnyItems + AnyShells,
-    {
+impl<'a> RefAnySlot<'a> {
+    pub fn split(self) -> (RefAnyItemSlot<'a>, RefAnyShellSlot<'a>) {
         (
             RefAnyItemSlot {
-                container: self.container,
                 key: self.key,
                 item: self.item,
                 group_item: self.group_item,
@@ -32,7 +27,6 @@ impl<'a, C: AnyAccess> RefAnySlot<'a, C> {
                 alloc_any: self.alloc_any,
             },
             RefAnyShellSlot {
-                container: self.container,
                 key: self.key,
                 shell: self.shell,
                 alloc: self.alloc,
@@ -41,28 +35,16 @@ impl<'a, C: AnyAccess> RefAnySlot<'a, C> {
         )
     }
 
-    pub fn downcast<T: AnyItem>(&self) -> Option<RefSlot<'a, T, C>>
-    where
-        C: Access<T>,
-    {
+    pub fn downcast<T: AnyItem, C: Access<T>>(
+        &self,
+    ) -> Option<RefSlot<'a, T, C::GroupItem, C::Shell, C::Alloc>> {
         let key = self.key.downcast()?;
         Some(RefSlot {
-            container: self.container,
             key,
-            item: (self.item as &'a dyn Any)
-                .downcast_ref::<T>()
-                .expect("Item of wrong type"),
-            group_item: self
-                .group_item
-                .downcast_ref()
-                .expect("Group item of wrong type"),
-            shell: (self.shell as &'a dyn Any)
-                .downcast_ref()
-                .expect("Shell of wrong type"),
-            alloc: self
-                .alloc_any
-                .downcast_ref()
-                .expect("Allocator of wrong type"),
+            item: (self.item as &'a dyn Any).downcast_ref::<T>()?,
+            group_item: self.group_item.downcast_ref()?,
+            shell: (self.shell as &'a dyn Any).downcast_ref()?,
+            alloc: self.alloc_any.downcast_ref()?,
         })
     }
 }

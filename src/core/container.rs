@@ -1,13 +1,13 @@
 //! Containers can panic, if you try to use a key that was not produced at any
 //! point by that container.
 
+use crate::UnsafeSlot;
+
+use super::{AnyItem, AnySubKey, AnyUnsafeSlot, ReservedKey, Shell, SubKey};
 use std::{
     any::{Any, TypeId},
-    cell::SyncUnsafeCell,
     collections::HashSet,
 };
-
-use super::{AnyItem, AnyShell, AnySubKey, ReservedKey, Shell, SubKey};
 
 /// A family of containers.
 pub trait ContainerFamily: Send + Sync + 'static {
@@ -25,9 +25,7 @@ pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
     type SlotIter<'a>: Iterator<
             Item = (
                 SubKey<T>,
-                (&'a SyncUnsafeCell<T>, &'a Self::GroupItem),
-                &'a SyncUnsafeCell<Self::Shell>,
-                &'a Self::Alloc,
+                UnsafeSlot<'a, T, Self::GroupItem, Self::Shell, Self::Alloc>,
             ),
         > + Send
     where
@@ -36,11 +34,7 @@ pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<(
-        (&SyncUnsafeCell<T>, &Self::GroupItem),
-        &SyncUnsafeCell<Self::Shell>,
-        &Self::Alloc,
-    )>;
+    ) -> Option<UnsafeSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>>;
 
     /// Iterates in ascending order of key.
     /// UNSAFE: Guarantees no slot is returned twice in returned iterator.
@@ -48,14 +42,7 @@ pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
 }
 
 pub trait AnyContainer: Any + Sync + Send {
-    fn any_get_slot(
-        &self,
-        key: AnySubKey,
-    ) -> Option<(
-        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
-        &SyncUnsafeCell<dyn AnyShell>,
-        &dyn std::alloc::Allocator,
-    )>;
+    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot>;
 
     fn unfill_any(&mut self, key: AnySubKey);
 

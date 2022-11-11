@@ -15,7 +15,7 @@ pub use index::*;
 pub use reserved::*;
 pub use sub::*;
 
-use crate::{core::collection::Access, AnyItem, Collection, Item};
+use crate::{core::collection::Access, AnyItem, Collection, Item, MutSlot, RefSlot};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -58,14 +58,17 @@ impl<T: ?Sized + 'static> Key<T> {
 }
 
 impl<T: AnyItem> Key<T> {
-    pub fn get<A: Access<T>>(self, access: &A) -> Option<((&T, &A::GroupItem), &A::Shell)> {
+    pub fn get<A: Access<T>>(
+        self,
+        access: &A,
+    ) -> Option<RefSlot<T, A::GroupItem, A::Shell, A::Alloc>> {
         access.get(self)
     }
 
     pub fn get_mut<A: Access<T>>(
         self,
         access: &mut A,
-    ) -> Option<((&mut T, &A::GroupItem), &mut A::Shell, &A::Alloc)> {
+    ) -> Option<MutSlot<T, A::GroupItem, A::Shell, A::Alloc>> {
         access.get_mut(self)
     }
 }

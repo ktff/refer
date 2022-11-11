@@ -1,20 +1,24 @@
+use std::any::Any;
+
 use super::{MutAnySlot, MutItemSlot, MutShellSlot};
-use crate::core::{Access, Allocator, AnyItem, ItemsMut, Key, ShellsMut};
+use crate::core::{AnyItem, Key, Shell};
 use getset::{CopyGetters, Getters};
 
 #[derive(Getters, CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct MutSlot<'a, T: AnyItem, C: Access<T>> {
+pub struct MutSlot<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator + Any> {
     pub(super) key: Key<T>,
     #[getset(skip)]
     pub(super) item: &'a mut T,
-    pub(super) group_item: &'a C::GroupItem,
+    pub(super) group_item: &'a G,
     #[getset(skip)]
-    pub(super) shell: &'a mut C::Shell,
-    pub(super) alloc: &'a C::Alloc,
+    pub(super) shell: &'a mut S,
+    pub(super) alloc: &'a A,
 }
 
-impl<'a, T: AnyItem, C: Access<T>> MutSlot<'a, T, C> {
+impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator + Any>
+    MutSlot<'a, T, G, S, A>
+{
     pub fn item(&self) -> &T {
         self.item
     }
@@ -23,23 +27,19 @@ impl<'a, T: AnyItem, C: Access<T>> MutSlot<'a, T, C> {
         self.item
     }
 
-    pub fn shell(&self) -> &C::Shell {
+    pub fn shell(&self) -> &S {
         self.shell
     }
 
-    pub fn shell_mut(&mut self) -> &mut C::Shell {
+    pub fn shell_mut(&mut self) -> &mut S {
         self.shell
     }
 
-    pub fn split_mut(&mut self) -> (&mut T, &mut C::Shell) {
+    pub fn split_mut(&mut self) -> (&mut T, &mut S) {
         (self.item, self.shell)
     }
 
-    pub fn split(self) -> (MutItemSlot<'a, T, C>, MutShellSlot<'a, T, C>)
-    where
-        C: ItemsMut<T, GroupItem = <C as Access<T>>::GroupItem, Alloc = <C as Allocator<T>>::Alloc>
-            + ShellsMut<T, Shell = <C as Access<T>>::Shell, Alloc = <C as Allocator<T>>::Alloc>,
-    {
+    pub fn split(self) -> (MutItemSlot<'a, T, G, A>, MutShellSlot<'a, T, S, A>) {
         (
             MutItemSlot {
                 key: self.key,
@@ -55,9 +55,8 @@ impl<'a, T: AnyItem, C: Access<T>> MutSlot<'a, T, C> {
         )
     }
 
-    pub fn upcast(self) -> MutAnySlot<'a, C> {
+    pub fn upcast(self) -> MutAnySlot<'a> {
         MutAnySlot {
-            _container: std::marker::PhantomData,
             key: self.key.upcast(),
             item: self.item,
             group_item: self.group_item,

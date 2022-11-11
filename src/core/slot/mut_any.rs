@@ -1,13 +1,11 @@
 use super::{MutAnyItemSlot, MutAnyShellSlot, MutSlot};
-use crate::core::{Access, AnyAccess, AnyItem, AnyItems, AnyKey, AnyShell, AnyShells};
+use crate::core::{Access, AnyItem, AnyKey, AnyShell};
 use getset::{CopyGetters, Getters};
-use std::{any::Any, marker::PhantomData};
+use std::any::Any;
 
 #[derive(Getters, CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct MutAnySlot<'a, C: AnyAccess> {
-    #[getset(skip)]
-    pub(super) _container: PhantomData<&'a mut C>,
+pub struct MutAnySlot<'a> {
     pub(super) key: AnyKey,
     #[getset(skip)]
     pub(super) item: &'a mut dyn AnyItem,
@@ -19,7 +17,7 @@ pub struct MutAnySlot<'a, C: AnyAccess> {
     pub(super) alloc_any: &'a dyn Any,
 }
 
-impl<'a, C: AnyAccess> MutAnySlot<'a, C> {
+impl<'a> MutAnySlot<'a> {
     pub fn item(&self) -> &dyn AnyItem {
         self.item
     }
@@ -40,13 +38,9 @@ impl<'a, C: AnyAccess> MutAnySlot<'a, C> {
         (self.item, self.shell)
     }
 
-    pub fn split(self) -> (MutAnyItemSlot<'a, C>, MutAnyShellSlot<'a, C>)
-    where
-        C: AnyItems + AnyShells,
-    {
+    pub fn split(self) -> (MutAnyItemSlot<'a>, MutAnyShellSlot<'a>) {
         (
             MutAnyItemSlot {
-                _container: self._container,
                 key: self.key,
                 item: self.item,
                 group_item: self.group_item,
@@ -54,7 +48,6 @@ impl<'a, C: AnyAccess> MutAnySlot<'a, C> {
                 alloc_any: self.alloc_any,
             },
             MutAnyShellSlot {
-                _container: self._container,
                 key: self.key,
                 shell: self.shell,
                 alloc: self.alloc,
@@ -63,28 +56,33 @@ impl<'a, C: AnyAccess> MutAnySlot<'a, C> {
         )
     }
 
-    pub fn downcast<T: AnyItem>(self) -> Result<MutSlot<'a, T, C>, Self>
-    where
-        C: Access<T>,
-    {
+    pub fn downcast<T: AnyItem, C: Access<T>>(
+        self,
+    ) -> Result<MutSlot<'a, T, C::GroupItem, C::Shell, C::Alloc>, Self> {
         if let Some(key) = self.key.downcast() {
-            Ok(MutSlot {
-                key,
-                item: (self.item as &'a mut dyn Any)
-                    .downcast_mut::<T>()
-                    .expect("Item of wrong type"),
-                group_item: self
-                    .group_item
-                    .downcast_ref()
-                    .expect("Group item of wrong type"),
-                shell: (self.shell as &'a mut dyn Any)
-                    .downcast_mut()
-                    .expect("Shell of wrong type"),
-                alloc: self
-                    .alloc_any
-                    .downcast_ref()
-                    .expect("Allocator of wrong type"),
-            })
+            if let Some(alloc) = self.alloc_any.downcast_ref() {
+                if let Some(group_item) = self.group_item.downcast_ref() {
+                    if (self.shell as &dyn Any).is::<C::Shell>() {
+                        Ok(MutSlot {
+                            key,
+                            shell: (self.shell as &'a mut dyn Any)
+                                .downcast_mut::<C::Shell>()
+                                .expect("Should succeed"),
+                            alloc,
+                            group_item,
+                            item: (self.item as &'a mut dyn Any)
+                                .downcast_mut::<T>()
+                                .expect("Mismatched key-item types"),
+                        })
+                    } else {
+                        Err(self)
+                    }
+                } else {
+                    Err(self)
+                }
+            } else {
+                Err(self)
+            }
         } else {
             Err(self)
         }

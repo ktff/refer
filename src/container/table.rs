@@ -2,7 +2,7 @@ use crate::core::*;
 use bitvec::prelude::*;
 use std::{
     alloc::{self, Layout},
-    any::{Any, TypeId},
+    any::TypeId,
     cell::SyncUnsafeCell,
     collections::HashSet,
     marker::PhantomData,
@@ -271,16 +271,10 @@ where
 
     type SlotIter<'a> = impl Iterator<
         Item = (
-            SubKey<T>,
-            (&'a SyncUnsafeCell<T>, &'a ()),
-            &'a SyncUnsafeCell<S>,
-            &'a A,
+            SubKey<T>,UnsafeSlot<'a,T, (), S, A>
         )> where Self: 'a;
 
-    fn get_slot(
-        &self,
-        key: SubKey<T>,
-    ) -> Option<((&SyncUnsafeCell<T>, &()), &SyncUnsafeCell<Self::Shell>, &A)> {
+    fn get_slot(&self, key: SubKey<T>) -> Option<UnsafeSlot<T, (), Self::Shell, A>> {
         let (table_index, slot_index) = self.split_key(key);
         let table = self.tables.get(table_index)?;
         // Check that the slot is taken/initialized
@@ -288,7 +282,7 @@ where
             // This is safe since we've checked that this slot is taken
             let (item, shell) = unsafe { table.get(slot_index) };
 
-            Some(((item, &()), shell, self.tables.allocator()))
+            Some(UnsafeSlot::new(item, &(), shell, self.tables.allocator()))
         } else {
             None
         }
@@ -308,9 +302,7 @@ where
                         let (item, shell) = unsafe { table.get(slot_index) };
                         (
                             self.join_key(table_index, slot_index),
-                            (item, &()),
-                            shell,
-                            self.tables.allocator(),
+                            UnsafeSlot::new(item, &(), shell, self.tables.allocator()),
                         )
                     })
                 }),
@@ -327,20 +319,8 @@ where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
 {
-    fn any_get_slot(
-        &self,
-        key: AnySubKey,
-    ) -> Option<(
-        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
-        &SyncUnsafeCell<dyn AnyShell>,
-        &dyn std::alloc::Allocator,
-    )> {
-        let ((item, group_data), shell, alloc) = self.get_slot(key.downcast::<T>()?)?;
-        Some((
-            (item as &SyncUnsafeCell<dyn AnyItem>, group_data as &dyn Any),
-            shell as &SyncUnsafeCell<dyn AnyShell>,
-            alloc as &dyn std::alloc::Allocator,
-        ))
+    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
+        Some(self.get_slot(key.downcast::<T>()?)?.upcast())
     }
 
     fn unfill_any(&mut self, key: AnySubKey) {

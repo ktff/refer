@@ -1,6 +1,6 @@
 use super::*;
-use crate::core::{AnyAccess, AnyItem, AnyItems, AnyKey, AnyShell, AnyShells};
-use std::{any::Any, cell::SyncUnsafeCell, marker::PhantomData};
+use crate::core::{AnyItem, AnyKey, AnyShell};
+use std::{any::Any, cell::SyncUnsafeCell};
 
 pub struct AnyUnsafeSlot<'a> {
     item: &'a SyncUnsafeCell<dyn AnyItem>,
@@ -30,11 +30,7 @@ impl<'a> AnyUnsafeSlot<'a> {
     /// Caller must ensure that this slot belongs under the given container and key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient read access to this slot for lifetime 'a.
-    pub unsafe fn into_slot<C: AnyAccess>(
-        self,
-        key: AnyKey,
-        container: &'a C,
-    ) -> RefAnySlot<'a, C> {
+    pub unsafe fn into_slot(self, key: AnyKey) -> RefAnySlot<'a> {
         let Self {
             item,
             group_item,
@@ -48,7 +44,6 @@ impl<'a> AnyUnsafeSlot<'a> {
         let shell = &*shell.get();
 
         RefAnySlot {
-            container,
             key,
             item,
             group_item,
@@ -61,11 +56,7 @@ impl<'a> AnyUnsafeSlot<'a> {
     /// Caller must ensure that this slot belongs under the given container and key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient read access to this item for lifetime 'a.
-    pub unsafe fn into_item<C: AnyItems>(
-        self,
-        key: AnyKey,
-        container: &'a C,
-    ) -> RefAnyItemSlot<'a, C> {
+    pub unsafe fn into_item(self, key: AnyKey) -> RefAnyItemSlot<'a> {
         let Self {
             item,
             group_item,
@@ -78,7 +69,6 @@ impl<'a> AnyUnsafeSlot<'a> {
         let item = &*item.get();
 
         RefAnyItemSlot {
-            container,
             key,
             item,
             group_item,
@@ -90,11 +80,7 @@ impl<'a> AnyUnsafeSlot<'a> {
     /// Caller must ensure that this slot belongs under the given container and key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient read access to this shell for lifetime 'a.
-    pub unsafe fn into_shell<C: AnyShells>(
-        self,
-        key: AnyKey,
-        container: &'a C,
-    ) -> RefAnyShellSlot<'a, C> {
+    pub unsafe fn into_shell(self, key: AnyKey) -> RefAnyShellSlot<'a> {
         let Self {
             item: _,
             group_item: _,
@@ -107,7 +93,6 @@ impl<'a> AnyUnsafeSlot<'a> {
         let shell = &*shell.get();
 
         RefAnyShellSlot {
-            container,
             key,
             shell,
             alloc,
@@ -118,7 +103,7 @@ impl<'a> AnyUnsafeSlot<'a> {
     /// Caller must ensure that this slot belongs under the given key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient write access to this slot for lifetime 'a.
-    pub unsafe fn into_slot_mut<C: AnyAccess>(self, key: AnyKey) -> MutAnySlot<'a, C> {
+    pub unsafe fn into_slot_mut(self, key: AnyKey) -> MutAnySlot<'a> {
         let Self {
             item,
             group_item,
@@ -132,7 +117,6 @@ impl<'a> AnyUnsafeSlot<'a> {
         let shell = &mut *shell.get();
 
         MutAnySlot {
-            _container: PhantomData,
             key,
             item,
             group_item,
@@ -145,7 +129,7 @@ impl<'a> AnyUnsafeSlot<'a> {
     /// Caller must ensure that this slot belongs under the given key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient write access to this item for lifetime 'a.
-    pub unsafe fn into_item_mut<C: AnyItems>(self, key: AnyKey) -> MutAnyItemSlot<'a, C> {
+    pub unsafe fn into_item_mut(self, key: AnyKey) -> MutAnyItemSlot<'a> {
         let Self {
             item,
             group_item,
@@ -158,7 +142,6 @@ impl<'a> AnyUnsafeSlot<'a> {
         let item = &mut *item.get();
 
         MutAnyItemSlot {
-            _container: PhantomData,
             key,
             item,
             group_item,
@@ -170,7 +153,7 @@ impl<'a> AnyUnsafeSlot<'a> {
     /// Caller must ensure that this slot belongs under the given key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient write access to this shell for lifetime 'a.
-    pub unsafe fn into_shell_mut<C: AnyShells>(self, key: AnyKey) -> MutAnyShellSlot<'a, C> {
+    pub unsafe fn into_shell_mut(self, key: AnyKey) -> MutAnyShellSlot<'a> {
         let Self {
             item: _,
             group_item: _,
@@ -183,7 +166,6 @@ impl<'a> AnyUnsafeSlot<'a> {
         let shell = &mut *shell.get();
 
         MutAnyShellSlot {
-            _container: PhantomData,
             key,
             shell,
             alloc,

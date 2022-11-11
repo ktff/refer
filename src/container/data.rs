@@ -1,6 +1,5 @@
 use std::{
     any::{Any, TypeId},
-    cell::SyncUnsafeCell,
     collections::HashSet,
 };
 
@@ -64,17 +63,10 @@ impl<D: Any + Send + Sync, C: Container<T, GroupItem = ()>, T: AnyItem> Containe
 
     type SlotIter<'a> = IterWithData<'a, T, D, C> where Self: 'a;
 
-    fn get_slot(
-        &self,
-        key: SubKey<T>,
-    ) -> Option<(
-        (&SyncUnsafeCell<T>, &D),
-        &SyncUnsafeCell<Self::Shell>,
-        &Self::Alloc,
-    )> {
+    fn get_slot(&self, key: SubKey<T>) -> Option<UnsafeSlot<T, D, Self::Shell, Self::Alloc>> {
         self.container
             .get_slot(key)
-            .map(|((item, _), shell, alloc)| ((item, &self.data), shell, alloc))
+            .map(|slot| slot.with_group_item(&self.data))
     }
 
     unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
@@ -86,17 +78,10 @@ impl<D: Any + Send + Sync, C: Container<T, GroupItem = ()>, T: AnyItem> Containe
 }
 
 impl<D: Any + Send + Sync, C: AnyContainer> AnyContainer for ContainerData<D, C> {
-    fn any_get_slot(
-        &self,
-        key: AnySubKey,
-    ) -> Option<(
-        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
-        &SyncUnsafeCell<dyn AnyShell>,
-        &dyn std::alloc::Allocator,
-    )> {
+    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         self.container
             .any_get_slot(key)
-            .map(|((item, _), shell, alloc)| ((item, &self.data as &dyn Any), shell, alloc))
+            .map(|slot| slot.with_group_item(&self.data))
     }
 
     fn unfill_any(&mut self, key: AnySubKey) {
@@ -116,22 +101,22 @@ impl<D: Any + Send + Sync, C: AnyContainer> AnyContainer for ContainerData<D, C>
     }
 }
 
-pub struct IterWithData<'a, T: AnyItem, D: Send + Sync, C: Container<T>> {
+pub struct IterWithData<'a, T: AnyItem, D: Any + Send + Sync, C: Container<T, GroupItem = ()>> {
     iter: <C as Container<T>>::SlotIter<'a>,
     data: &'a D,
 }
 
-impl<'a, T: AnyItem, D: Send + Sync, C: Container<T>> Iterator for IterWithData<'a, T, D, C> {
+impl<'a, T: AnyItem, D: Any + Send + Sync, C: Container<T, GroupItem = ()>> Iterator
+    for IterWithData<'a, T, D, C>
+{
     type Item = (
         SubKey<T>,
-        (&'a SyncUnsafeCell<T>, &'a D),
-        &'a SyncUnsafeCell<<C as Container<T>>::Shell>,
-        &'a <C as Allocator<T>>::Alloc,
+        UnsafeSlot<'a, T, D, <C as Container<T>>::Shell, <C as Allocator<T>>::Alloc>,
     );
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|(key, (item, _), shell, alloc)| (key, (item, self.data), shell, alloc))
+            .map(|(key, slot)| (key, slot.with_group_item(self.data)))
     }
 }

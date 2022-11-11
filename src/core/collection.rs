@@ -1,13 +1,10 @@
+use super::{
+    AnyItem, AnyItems, AnyKey, AnyShells, Item, Items, ItemsMut, Key, Shell, Shells, ShellsMut,
+};
+use crate::{Allocator, MutAnyItemSlot, MutAnyShellSlot, MutSlot, RefSlot};
 use std::{
     any::{Any, TypeId},
     collections::HashSet,
-};
-
-use crate::Allocator;
-
-use super::{
-    AnyItem, AnyItems, AnyKey, AnyShell, AnyShells, Item, Items, ItemsMut, Key, Shell, Shells,
-    ShellsMut,
 };
 
 /// A collection of entities.
@@ -56,29 +53,23 @@ pub trait Access<T: AnyItem>: Allocator<T> + AnyAccess {
     where
         Self: 'a;
 
-    type Iter<'a>: Iterator<Item = (Key<T>, (&'a T, &'a Self::GroupItem), &'a Self::Shell)> + Send
+    type Iter<'a>: Iterator<Item = RefSlot<'a, T, Self::GroupItem, Self::Shell, Self::Alloc>> + Send
     where
         Self: 'a;
 
-    type MutIter<'a>: Iterator<
-            Item = (
-                Key<T>,
-                (&'a mut T, &'a Self::GroupItem),
-                &'a Self::Shell,
-                &'a Self::Alloc,
-            ),
-        > + Send
+    type MutIter<'a>: Iterator<Item = MutSlot<'a, T, Self::GroupItem, Self::Shell, Self::Alloc>>
+        + Send
     where
         Self: 'a;
 
     /// Some if it exists.
-    fn get(&self, key: Key<T>) -> Option<((&T, &Self::GroupItem), &Self::Shell)>;
+    fn get(&self, key: Key<T>) -> Option<RefSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>>;
 
     /// Some if it exists.
     fn get_mut(
         &mut self,
         key: Key<T>,
-    ) -> Option<((&mut T, &Self::GroupItem), &mut Self::Shell, &Self::Alloc)>;
+    ) -> Option<MutSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>>;
 
     /// Ascending order.
     fn iter(&self) -> Self::Iter<'_>;
@@ -120,21 +111,9 @@ pub trait AnyAccess: Any {
     /// All types in the collection.
     fn types(&self) -> HashSet<TypeId>;
 
-    fn split_item_any(
-        &mut self,
-        key: AnyKey,
-    ) -> Option<(
-        ((&mut dyn AnyItem, &dyn Any), &dyn std::alloc::Allocator),
-        &mut dyn AnyShells,
-    )>;
+    fn split_item_any(&mut self, key: AnyKey) -> Option<(MutAnyItemSlot, &mut dyn AnyShells)>;
 
-    fn split_shell_any(
-        &mut self,
-        key: AnyKey,
-    ) -> Option<(
-        &mut dyn AnyItems,
-        (&mut dyn AnyShell, &dyn std::alloc::Allocator),
-    )>;
+    fn split_shell_any(&mut self, key: AnyKey) -> Option<(&mut dyn AnyItems, MutAnyShellSlot)>;
 
     /// Splits to views of items and shells
     fn split_any(&mut self) -> (Box<dyn AnyItems + '_>, Box<dyn AnyShells + '_>);

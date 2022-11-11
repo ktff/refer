@@ -1,6 +1,5 @@
 use std::{
     any::{Any, TypeId},
-    cell::SyncUnsafeCell,
     collections::{HashMap, HashSet},
     marker::PhantomData,
 };
@@ -103,11 +102,7 @@ where
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<(
-        (&SyncUnsafeCell<T>, &Self::GroupItem),
-        &SyncUnsafeCell<Self::Shell>,
-        &Self::Alloc,
-    )> {
+    ) -> Option<UnsafeSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>> {
         self.coll::<T>()?.get_slot(key)
     }
 
@@ -117,14 +112,7 @@ where
 }
 
 impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
-    fn any_get_slot(
-        &self,
-        key: AnySubKey,
-    ) -> Option<(
-        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
-        &SyncUnsafeCell<dyn AnyShell>,
-        &dyn std::alloc::Allocator,
-    )> {
+    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         self.collections
             .get(&key.type_id())
             .map(|c| &**c)?

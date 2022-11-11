@@ -11,8 +11,8 @@ pub fn add_references<T: Item + ?Sized>(
 ) -> bool {
     // item --> others
     for (i, rf) in item.references(key.index()).enumerate() {
-        if let Some((shell, alloc)) = shells.get_mut_any(rf.key()) {
-            shell.add_from_any(key.into(), alloc);
+        if let Some(mut shell_slot) = shells.get_mut_any(rf.key()) {
+            shell_slot.add_from_any(key.into());
         } else {
             // Reference doesn't exist
 
@@ -51,11 +51,11 @@ pub fn update_diff<T: Item + ?Sized>(
                 // We don't care so much about this reference missing.
                 shells
                     .get_mut_any(rf.key())
-                    .map(|(shell, _)| shell.remove_from(key.into()));
+                    .map(|mut slot| slot.shell_mut().remove_from(key.into()));
             }
             (None, Some(rf)) => {
-                if let Some((shell, alloc)) = shells.get_mut_any(rf.key()) {
-                    shell.add_from_any(key.into(), alloc);
+                if let Some(mut shell_slot) = shells.get_mut_any(rf.key()) {
+                    shell_slot.add_from_any(key.into());
                 } else {
                     // Reference doesn't exist
 
@@ -95,21 +95,22 @@ pub fn notify_item_removed(
     // remove item --> others
     // TODO: Could this call to Box be avoided?
     let (mut items, mut shells) = coll.split_any();
-    let (item, _) = items.get_any(key)?;
-    if let Some(references) = item.references_any(key.index()) {
+    let item_slot = items.get_any(key)?;
+    if let Some(references) = item_slot.item().references_any(key.index()) {
         for rf in references {
             shells
                 .get_mut_any(rf.key())
-                .map(|(shell, _)| shell.remove_from(key.into()));
+                .map(|mut slot| slot.shell_mut().remove_from(key.into()));
         }
     }
 
     // item <-- others
-    let (shell, _) = shells.get_mut_any(key).expect("Should exist");
-    for rf in shell.from_any() {
-        if !items.get_mut_any(rf).map_or(true, |((item, _), _)| {
-            item.item_removed(rf.index(), key.into())
-        }) {
+    let shell_slot = shells.get_mut_any(key).expect("Should exist");
+    for rf in shell_slot.shell().from_any() {
+        if !items
+            .get_mut_any(rf)
+            .map_or(true, |mut slot| slot.item_removed(key.into()))
+        {
             remove.push(rf);
         }
     }

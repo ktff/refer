@@ -1,8 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    cell::SyncUnsafeCell,
-    collections::HashSet,
-};
+use std::{any::TypeId, collections::HashSet};
 
 use crate::core::*;
 
@@ -12,12 +8,13 @@ where
 = impl Iterator<
     Item = (
         SubKey<T>,
-        (
-            &'a SyncUnsafeCell<T>,
-            &'a <<L as Chunk>::C as Container<T>>::GroupItem,
-        ),
-        &'a SyncUnsafeCell<<<L as Chunk>::C as Container<T>>::Shell>,
-        &'a <<L as Chunk>::C as Allocator<T>>::Alloc,
+        UnsafeSlot<
+            'a,
+            T,
+            <<L as Chunk>::C as Container<T>>::GroupItem,
+            <<L as Chunk>::C as Container<T>>::Shell,
+            <<L as Chunk>::C as Allocator<T>>::Alloc,
+        >,
     ),
 >;
 
@@ -126,11 +123,7 @@ where
     fn get_slot(
         &self,
         key: SubKey<T>,
-    ) -> Option<(
-        (&SyncUnsafeCell<T>, &Self::GroupItem),
-        &SyncUnsafeCell<Self::Shell>,
-        &Self::Alloc,
-    )> {
+    ) -> Option<UnsafeSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.get_slot(suffix)
     }
@@ -143,9 +136,7 @@ where
                 .enumerate()
                 .flat_map(move |(prefix, chunk)| {
                     chunk.iter_slot().map(|iter| {
-                        iter.map(move |(suffix, item, shell, alloc)| {
-                            (suffix.push(key_len, prefix), item, shell, alloc)
-                        })
+                        iter.map(move |(suffix, slot)| (suffix.push(key_len, prefix), slot))
                     })
                 })
                 .flat_map(|iter| iter),
@@ -157,14 +148,7 @@ impl<L: Chunk> AnyContainer for Chunked<L>
 where
     L::C: AnyContainer,
 {
-    fn any_get_slot(
-        &self,
-        key: AnySubKey,
-    ) -> Option<(
-        (&SyncUnsafeCell<dyn AnyItem>, &dyn Any),
-        &SyncUnsafeCell<dyn AnyShell>,
-        &dyn std::alloc::Allocator,
-    )> {
+    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks.get(prefix)?.any_get_slot(suffix)
     }

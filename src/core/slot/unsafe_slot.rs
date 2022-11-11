@@ -1,15 +1,17 @@
 use super::*;
-use crate::core::{Access, AnyItem, Items, ItemsMut, Key, Shell, Shells, ShellsMut};
+use crate::core::{AnyItem, Key, Shell};
 use std::{any::Any, cell::SyncUnsafeCell};
 
-pub struct UnsafeSlot<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> {
+pub struct UnsafeSlot<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator + Any> {
     item: &'a SyncUnsafeCell<T>,
     group_item: &'a G,
     shell: &'a SyncUnsafeCell<S>,
     alloc: &'a A,
 }
 
-impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSlot<'a, T, G, S, A> {
+impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator + Any>
+    UnsafeSlot<'a, T, G, S, A>
+{
     pub fn new(
         item: &'a SyncUnsafeCell<T>,
         group_item: &'a G,
@@ -27,11 +29,7 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
     /// Caller must ensure that this slot belongs under the given container and key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient read access to this slot for lifetime 'a.
-    pub unsafe fn into_slot<C: Access<T, GroupItem = G, Shell = S, Alloc = A>>(
-        self,
-        key: Key<T>,
-        container: &'a C,
-    ) -> RefSlot<'a, T, C> {
+    pub unsafe fn into_slot(self, key: Key<T>) -> RefSlot<'a, T, G, S, A> {
         let Self {
             item,
             group_item,
@@ -44,7 +42,6 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
         let shell = &*shell.get();
 
         RefSlot {
-            container,
             key,
             item,
             group_item,
@@ -56,11 +53,7 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
     /// Caller must ensure that this slot belongs under the given container and key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient read access to this item for lifetime 'a.
-    pub unsafe fn into_item<C: Items<T, GroupItem = G, Alloc = A>>(
-        self,
-        key: Key<T>,
-        container: &'a C,
-    ) -> RefItemSlot<'a, T, C> {
+    pub unsafe fn into_item(self, key: Key<T>) -> RefItemSlot<'a, T, G, A> {
         let Self {
             item,
             group_item,
@@ -72,7 +65,6 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
         let item = &*item.get();
 
         RefItemSlot {
-            container,
             key,
             item,
             group_item,
@@ -83,11 +75,7 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
     /// Caller must ensure that this slot belongs under the given container and key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient read access to this shell for lifetime 'a.
-    pub unsafe fn into_shell<C: Shells<T, Shell = S, Alloc = A>>(
-        self,
-        key: Key<T>,
-        container: &'a C,
-    ) -> RefShellSlot<'a, T, C> {
+    pub unsafe fn into_shell(self, key: Key<T>) -> RefShellSlot<'a, T, S, A> {
         let Self {
             item: _,
             group_item: _,
@@ -98,21 +86,13 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
         // UNSAFE CASTS
         let shell = &*shell.get();
 
-        RefShellSlot {
-            container,
-            key,
-            shell,
-            alloc,
-        }
+        RefShellSlot { key, shell, alloc }
     }
 
     /// Caller must ensure that this slot belongs under the given key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient write access to this slot for lifetime 'a.
-    pub unsafe fn into_slot_mut<C: Access<T, GroupItem = G, Shell = S, Alloc = A>>(
-        self,
-        key: Key<T>,
-    ) -> MutSlot<'a, T, C> {
+    pub unsafe fn into_slot_mut(self, key: Key<T>) -> MutSlot<'a, T, G, S, A> {
         let Self {
             item,
             group_item,
@@ -136,10 +116,7 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
     /// Caller must ensure that this slot belongs under the given key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient write access to this item for lifetime 'a.
-    pub unsafe fn into_item_mut<C: ItemsMut<T, GroupItem = G, Alloc = A>>(
-        self,
-        key: Key<T>,
-    ) -> MutItemSlot<'a, T, C> {
+    pub unsafe fn into_item_mut(self, key: Key<T>) -> MutItemSlot<'a, T, G, A> {
         let Self {
             item,
             group_item,
@@ -161,10 +138,7 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
     /// Caller must ensure that this slot belongs under the given key.
     ///
     /// UNSAFE: Caller must ensure that it has sufficient write access to this shell for lifetime 'a.
-    pub unsafe fn into_shell_mut<C: ShellsMut<T, Shell = S, Alloc = A>>(
-        self,
-        key: Key<T>,
-    ) -> MutShellSlot<'a, T, C> {
+    pub unsafe fn into_shell_mut(self, key: Key<T>) -> MutShellSlot<'a, T, S, A> {
         let Self {
             item: _,
             group_item: _,
@@ -177,9 +151,19 @@ impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSl
 
         MutShellSlot { key, shell, alloc }
     }
+
+    pub fn upcast(self) -> AnyUnsafeSlot<'a> {
+        AnyUnsafeSlot::new(
+            self.item,
+            self.group_item,
+            self.shell,
+            self.alloc,
+            self.alloc,
+        )
+    }
 }
 
-impl<'a, T: AnyItem, S: Shell<T = T>, A: std::alloc::Allocator> UnsafeSlot<'a, T, (), S, A> {
+impl<'a, T: AnyItem, S: Shell<T = T>, A: std::alloc::Allocator + Any> UnsafeSlot<'a, T, (), S, A> {
     pub fn with_group_item<G: Any>(self, group_item: &'a G) -> UnsafeSlot<'a, T, G, S, A> {
         let Self {
             item,

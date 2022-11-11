@@ -1,15 +1,15 @@
 use crate::{core::*, item::edge};
 use std::ops::{Deref, DerefMut};
 
-pub struct Edge<D: Sync + Send + 'static, I: Sync + Send + 'static>(D, edge::Edge<I>);
+pub struct Edge<D: Sync + Send + 'static, I: AnyItem>(D, edge::Edge<I>);
 
-impl<D: Sync + Send + 'static, I: Sync + Send + 'static> Edge<D, I> {
+impl<D: Sync + Send + 'static, I: AnyItem> Edge<D, I> {
     pub fn new(data: D, edge: [Ref<I>; 2]) -> Self {
         Edge(data, edge::Edge::new(edge))
     }
 }
 
-impl<D: Sync + Send + 'static, I: Sync + Send + 'static> Item for Edge<D, I> {
+impl<D: Sync + Send + 'static, I: AnyItem> Item for Edge<D, I> {
     type I<'a> = <edge::Edge<I> as Item>::I<'a>;
 
     fn references(&self, this: Index) -> Self::I<'_> {
@@ -17,7 +17,7 @@ impl<D: Sync + Send + 'static, I: Sync + Send + 'static> Item for Edge<D, I> {
     }
 }
 
-impl<D: Sync + Send + 'static, I: Sync + Send + 'static> AnyItem for Edge<D, I> {
+impl<D: Sync + Send + 'static, I: AnyItem> AnyItem for Edge<D, I> {
     fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
         self.1.references_any(this)
     }
@@ -31,7 +31,7 @@ impl<D: Sync + Send + 'static, I: Sync + Send + 'static> AnyItem for Edge<D, I> 
     }
 }
 
-impl<D: Sync + Send + 'static, I: Sync + Send + 'static> Deref for Edge<D, I> {
+impl<D: Sync + Send + 'static, I: AnyItem> Deref for Edge<D, I> {
     type Target = D;
 
     fn deref(&self) -> &Self::Target {
@@ -39,7 +39,7 @@ impl<D: Sync + Send + 'static, I: Sync + Send + 'static> Deref for Edge<D, I> {
     }
 }
 
-impl<D: Sync + Send + 'static, I: Sync + Send + 'static> DerefMut for Edge<D, I> {
+impl<D: Sync + Send + 'static, I: AnyItem> DerefMut for Edge<D, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
