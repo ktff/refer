@@ -91,7 +91,7 @@ impl<T: AnyItem> Container<T> for ItemContainer<T> {
         }
     }
 
-    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
+    fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
         // This is safe since we only return reference to a single slot.
         match &self.0 {
             Slot::Free => None,

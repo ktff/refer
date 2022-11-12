@@ -128,7 +128,7 @@ where
         self.chunks.get(prefix)?.get_slot(suffix)
     }
 
-    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
+    fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
         let key_len = self.logic.key_len();
         Some(
             self.chunks

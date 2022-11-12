@@ -37,8 +37,8 @@ pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
     ) -> Option<UnsafeSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>>;
 
     /// Iterates in ascending order of key.
-    /// UNSAFE: Guarantees no slot is returned twice in returned iterator.
-    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>>;
+    /// No slot is returned twice in returned iterator.
+    fn iter_slot(&self) -> Option<Self::SlotIter<'_>>;
 }
 
 pub trait AnyContainer: Any + Sync + Send {

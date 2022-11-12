@@ -1,12 +1,16 @@
 use super::*;
 use crate::core::{AnyItem, AnyKey, AnyShell};
+use getset::CopyGetters;
 use std::{any::Any, cell::SyncUnsafeCell};
 
+#[derive(CopyGetters)]
+#[getset(get_copy = "pub")]
 pub struct AnyUnsafeSlot<'a> {
     item: &'a SyncUnsafeCell<dyn AnyItem>,
     group_item: &'a dyn Any,
     shell: &'a SyncUnsafeCell<dyn AnyShell>,
     alloc: &'a dyn std::alloc::Allocator,
+    #[getset(skip)]
     alloc_any: &'a dyn Any,
 }
 

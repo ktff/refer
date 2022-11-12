@@ -1,7 +1,10 @@
 use super::*;
 use crate::core::{AnyItem, Key, Shell};
+use getset::CopyGetters;
 use std::{any::Any, cell::SyncUnsafeCell};
 
+#[derive(CopyGetters)]
+#[getset(get_copy = "pub")]
 pub struct UnsafeSlot<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator + Any> {
     item: &'a SyncUnsafeCell<T>,
     group_item: &'a G,
@@ -176,6 +179,24 @@ impl<'a, T: AnyItem, S: Shell<T = T>, A: std::alloc::Allocator + Any> UnsafeSlot
             group_item,
             shell,
             alloc,
+        }
+    }
+}
+
+impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator + Any> Copy
+    for UnsafeSlot<'a, T, G, S, A>
+{
+}
+
+impl<'a, T: AnyItem, G: Any, S: Shell<T = T>, A: std::alloc::Allocator + Any> Clone
+    for UnsafeSlot<'a, T, G, S, A>
+{
+    fn clone(&self) -> Self {
+        Self {
+            item: self.item,
+            group_item: self.group_item,
+            shell: self.shell,
+            alloc: self.alloc,
         }
     }
 }

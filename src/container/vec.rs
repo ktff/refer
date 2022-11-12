@@ -184,7 +184,7 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 
         }
     }
 
-    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
+    fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
         // This is safe since Vec::iter guarantees that each element
         // is returned only once.
         Some(

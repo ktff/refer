@@ -69,7 +69,7 @@ impl<D: Any + Send + Sync, C: Container<T, GroupItem = ()>, T: AnyItem> Containe
             .map(|slot| slot.with_group_item(&self.data))
     }
 
-    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
+    fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
         self.container.iter_slot().map(|iter| IterWithData {
             iter,
             data: &self.data,

@@ -106,7 +106,7 @@ where
         self.coll::<T>()?.get_slot(key)
     }
 
-    unsafe fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
+    fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
         self.coll::<T>()?.iter_slot()
     }
 }
