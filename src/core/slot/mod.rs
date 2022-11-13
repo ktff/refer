@@ -1,3 +1,4 @@
+mod any_slot;
 mod any_unsafe;
 mod mut_any;
 mod mut_any_item;
@@ -5,13 +6,26 @@ mod mut_any_shell;
 mod mut_item;
 mod mut_shell;
 mod mut_slot;
+pub mod permit;
 mod ref_any;
 mod ref_any_item;
 mod ref_any_shell;
 mod ref_item;
 mod ref_shell;
 mod ref_slot;
+mod slot;
 mod unsafe_slot;
+
+pub use any_slot::AnySlot;
+pub use permit::{AnyPermit, ComplexOwnership, Permit, Split, SplitOwnership, TypePermit};
+pub use slot::Slot;
+
+pub type MutShells<'a, C> = AnyPermit<'a, permit::Mut, permit::Shell, C>;
+pub type MutItems<'a, C> = AnyPermit<'a, permit::Mut, permit::Item, C>;
+pub type MutSlots<'a, C> = AnyPermit<'a, permit::Mut, permit::Slot, C>;
+pub type RefShells<'a, C> = AnyPermit<'a, permit::Ref, permit::Shell, C>;
+pub type RefItems<'a, C> = AnyPermit<'a, permit::Ref, permit::Item, C>;
+pub type RefSlots<'a, C> = AnyPermit<'a, permit::Ref, permit::Slot, C>;
 
 pub use any_unsafe::AnyUnsafeSlot;
 pub use mut_any::MutAnySlot;

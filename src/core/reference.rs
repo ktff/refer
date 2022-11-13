@@ -113,16 +113,16 @@ impl AnyRef {
     }
 
     /// Panics if to doesn't exist.
-    pub fn connect(from: AnyKey, to: AnyKey, collection: &mut (impl AnyShells + ?Sized)) -> Self {
+    pub fn connect(from: AnyKey, to: AnyKey, collection: MutShells<impl AnyContainer>) -> Self {
         collection
-            .get_mut_any(to)
+            .get(to)
             .expect("Item doesn't exist")
-            .add_from_any(from);
+            .add_from(from);
         Self::new(to)
     }
 
-    pub fn disconnect(self, from: AnyKey, collection: &mut (impl AnyShells + ?Sized)) {
-        if let Some(mut slot) = collection.get_mut_any(self.key()) {
+    pub fn disconnect(self, from: AnyKey, collection: MutShells<impl AnyContainer>) {
+        if let Some(mut slot) = collection.get(self.key()) {
             slot.shell_mut().remove_from(from);
         }
     }

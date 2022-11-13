@@ -13,7 +13,7 @@ use std::{
 /// Entities are connected to each other through shells.
 ///
 /// Collection can be split into collections of items and shells.
-pub trait Collection<T: Item>: Access<T> {
+pub trait Collection<T: Item>: Allocator<T> {
     /// Err if collection is out of keys or if some of the references don't exist.
     fn add(&mut self, item: T) -> Result<Key<T>, T>
     where

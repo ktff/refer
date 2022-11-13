@@ -193,4 +193,29 @@ impl<'a> AnyUnsafeSlot<'a> {
             alloc_any,
         }
     }
+
+    // pub fn downcast<T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any>(
+    //     &self,
+    // ) -> Option<UnsafeSlot<'a, T, G, S, A>> {
+    //     Some(UnsafeSlot::new(
+    //         self.item.downcast_ref::<T>()?,
+    //         self.group_item.downcast_ref()?,
+    //         (self.shell as &'a dyn Any).downcast_ref()?,
+    //         self.alloc_any.downcast_ref()?,
+    //     ))
+    // }
+}
+
+impl<'a> Copy for AnyUnsafeSlot<'a> {}
+
+impl<'a> Clone for AnyUnsafeSlot<'a> {
+    fn clone(&self) -> Self {
+        Self {
+            item: self.item,
+            group_item: self.group_item,
+            shell: self.shell,
+            alloc: self.alloc,
+            alloc_any: self.alloc_any,
+        }
+    }
 }
