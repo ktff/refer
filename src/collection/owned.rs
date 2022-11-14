@@ -25,14 +25,12 @@ impl<C: AnyContainer> Owned<C> {
 
     pub fn split(
         &mut self,
-    ) -> Split<SplitOwnership<permit::Item, C>, SplitOwnership<permit::Shell, C>> {
+    ) -> (
+        SplitOwnership<permit::Item, C>,
+        SplitOwnership<permit::Shell, C>,
+    ) {
         // SAFETY: We have at least mut access for whole C.
-        unsafe {
-            Split {
-                items: SplitOwnership::new(&self.0),
-                shells: SplitOwnership::new(&self.0),
-            }
-        }
+        unsafe { (SplitOwnership::new(&self.0), SplitOwnership::new(&self.0)) }
     }
 
     pub fn inner(&self) -> &C {
@@ -57,8 +55,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
         };
 
         // Update connections
-        if !super::util::add_references(self.slot_mut().split().shells, key.key().into_key(), &item)
-        {
+        if !super::util::add_references(self.slot_mut().split().1, key.key().into_key(), &item) {
             // Failed
 
             // Deallocate slot
@@ -72,7 +69,7 @@ impl<C: Allocator<T> + Container<T> + AnyContainer + 'static, T: Item> Collectio
     }
 
     fn set(&mut self, key: Key<T>, set: T) -> Result<T, T> {
-        let Split { items, shells } = self.slot_mut().split();
+        let (items, shells) = self.slot_mut().split();
         let mut slot = if let Some(item) = items.of().get(key) {
             item
         } else {

@@ -13,16 +13,21 @@ impl<T: AnyItem> Edge<T> {
     }
 
     /// Panics if a or b don't exist.
-    pub fn connect(coll: &mut impl ShellsMut<T>, this: AnyKey, a: Key<T>, b: Key<T>) -> Self {
+    pub fn connect(
+        mut coll: MutShells<T, impl Container<T>>,
+        this: AnyKey,
+        a: Key<T>,
+        b: Key<T>,
+    ) -> Self {
         Self([
-            Ref::connect(this.into(), a, coll),
+            Ref::connect(this.into(), a, coll.borrow_mut()),
             Ref::connect(this.into(), b, coll),
         ])
     }
 
-    pub fn disconnect(self, coll: &mut impl ShellsMut<T>, this: AnyKey) {
+    pub fn disconnect(self, mut coll: MutShells<T, impl Container<T>>, this: AnyKey) {
         for rf in self.0 {
-            rf.disconnect(this, coll);
+            rf.disconnect(this, coll.borrow_mut());
         }
     }
 

@@ -13,13 +13,23 @@ impl<T: AnyItem> Vertice<T> {
     }
 
     /// Connects this -> to in collection.
-    pub fn connect(&mut self, collection: &mut impl ShellsMut<T>, this: AnyKey, to: Key<T>) {
+    pub fn connect(
+        &mut self,
+        collection: MutShells<T, impl Container<T>>,
+        this: AnyKey,
+        to: Key<T>,
+    ) {
         self.0.push(Ref::connect(this, to, collection));
     }
 
     /// Disconnects this -> to in collection.
     /// Panics if index is out of bounds.
-    pub fn disconnect(&mut self, collection: &mut impl ShellsMut<T>, this: AnyKey, to: usize) {
+    pub fn disconnect(
+        &mut self,
+        collection: MutShells<T, impl Container<T>>,
+        this: AnyKey,
+        to: usize,
+    ) {
         self[to].disconnect(this, collection);
         self.0.remove(to);
     }

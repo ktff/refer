@@ -15,7 +15,9 @@ pub use index::*;
 pub use reserved::*;
 pub use sub::*;
 
-use crate::{core::collection::Access, AnyItem, Collection, Item, MutSlot, RefSlot};
+use crate::{
+    AnyContainer, AnyItem, AnyPermit, AnySlot, Collection, Container, Item, Slot, TypePermit,
+};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -58,18 +60,11 @@ impl<T: ?Sized + 'static> Key<T> {
 }
 
 impl<T: AnyItem> Key<T> {
-    pub fn get<A: Access<T>>(
+    pub fn get<R, S, C: Container<T>>(
         self,
-        access: &A,
-    ) -> Option<RefSlot<T, A::GroupItem, A::Shell, A::Alloc>> {
-        access.get(self)
-    }
-
-    pub fn get_mut<A: Access<T>>(
-        self,
-        access: &mut A,
-    ) -> Option<MutSlot<T, A::GroupItem, A::Shell, A::Alloc>> {
-        access.get_mut(self)
+        coll: TypePermit<R, T, S, C>,
+    ) -> Option<Slot<T, C::GroupItem, C::Shell, C::Alloc, R, S>> {
+        coll.get(self)
     }
 }
 
@@ -143,6 +138,10 @@ impl AnyKey {
 
     pub fn as_u64(&self) -> u64 {
         self.index().0.get()
+    }
+
+    pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> Option<AnySlot<R, S>> {
+        coll.get(self)
     }
 
     pub fn downcast<T: ?Sized + 'static>(self) -> Option<Key<T>> {

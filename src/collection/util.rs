@@ -5,7 +5,7 @@ use crate::core::*;
 ///
 /// Fails if any reference doesn't exist.
 pub fn add_references<T: Item, C: Container<T>>(
-    mut shells: MutShells<C>,
+    mut shells: MutAnyShells<C>,
     key: Key<T>,
     item: &T,
 ) -> bool {
@@ -32,7 +32,7 @@ pub fn add_references<T: Item, C: Container<T>>(
 ///
 /// Fails if reference is not valid.
 pub fn update_diff<T: Item>(
-    mut shells: MutShells<impl Container<T>>,
+    mut shells: MutAnyShells<impl Container<T>>,
     key: Key<T>,
     old: &T,
     new: &T,
@@ -89,10 +89,7 @@ pub fn update_diff<T: Item>(
 ///
 /// None if it doesn't exist
 pub fn notify_item_removed<C: AnyContainer>(
-    Split {
-        mut items,
-        mut shells,
-    }: Split<MutItems<C>, MutShells<C>>,
+    (mut items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
     key: AnyKey,
     remove: &mut Vec<AnyKey>,
 ) -> Option<()> {

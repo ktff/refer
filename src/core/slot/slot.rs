@@ -1,5 +1,8 @@
 use super::permit::{self, Permit, Split};
-use crate::core::{AnyItem, AnySlot, Key, UnsafeSlot};
+use crate::{
+    core::{AnyItem, AnySlot, Key, UnsafeSlot},
+    AnyKey,
+};
 use std::{
     any::Any,
     ops::{Deref, DerefMut},
@@ -31,11 +34,11 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
         self.key
     }
 
-    pub fn alloc(&self) -> &A {
+    pub fn alloc(&self) -> &'a A {
         self.slot.alloc()
     }
 
-    pub fn group_item(&self) -> &G {
+    pub fn group_item(&self) -> &'a G {
         self.slot.group_item()
     }
 
@@ -136,6 +139,12 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
     pub fn shell_mut(&mut self) -> &mut S {
         // SAFETY: We have mut access to the shell.
         unsafe { &mut *self.slot.shell().get() }
+    }
+
+    /// Additive if called for same `from` multiple times.
+    pub fn add_from(&mut self, from: AnyKey) {
+        let alloc = self.alloc();
+        self.shell_mut().add_from_any(from, alloc);
     }
 }
 

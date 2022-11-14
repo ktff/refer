@@ -102,17 +102,22 @@ impl<'a, T: AnyItem, S, C: Container<T>> TypePermit<'a, Mut, T, S, C> {
 }
 
 impl<'a, R, T: AnyItem, C: Container<T>> TypePermit<'a, R, T, Slot, C> {
-    pub fn split(self) -> Split<TypePermit<'a, R, T, Item, C>, TypePermit<'a, R, T, Shell, C>> {
-        Split {
-            items: TypePermit {
+    pub fn split(
+        self,
+    ) -> (
+        TypePermit<'a, R, T, Item, C>,
+        TypePermit<'a, R, T, Shell, C>,
+    ) {
+        (
+            TypePermit {
                 container: self.container,
                 _marker: PhantomData,
             },
-            shells: TypePermit {
+            TypePermit {
                 container: self.container,
                 _marker: PhantomData,
             },
-        }
+        )
     }
 }
 
@@ -198,17 +203,17 @@ impl<'a, S, C: AnyContainer> AnyPermit<'a, Mut, S, C> {
 }
 
 impl<'a, R, C: AnyContainer> AnyPermit<'a, R, Slot, C> {
-    pub fn split(self) -> Split<AnyPermit<'a, R, Item, C>, AnyPermit<'a, R, Shell, C>> {
-        Split {
-            items: AnyPermit {
+    pub fn split(self) -> (AnyPermit<'a, R, Item, C>, AnyPermit<'a, R, Shell, C>) {
+        (
+            AnyPermit {
                 container: self.container,
                 _marker: PhantomData,
             },
-            shells: AnyPermit {
+            AnyPermit {
                 container: self.container,
                 _marker: PhantomData,
             },
-        }
+        )
     }
 }
 

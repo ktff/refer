@@ -1,6 +1,4 @@
-use crate::{MutItemSlot, RefItemSlot};
-
-use super::{AnyKey, AnyRef, Index, Key, MutAnyItemSlot, RefAnyItemSlot};
+use super::{AnyKey, AnyRef, Index};
 use std::any::Any;
 
 /// An item of a model.
@@ -27,38 +25,4 @@ pub trait AnyItem: Any + Sync + Send {
 
     /// Old and new must be of same type.
     fn item_moved(&mut self, old: AnyKey, new: AnyKey);
-}
-
-pub trait ItemsMut<T: AnyItem>: Items<T> {
-    type MutIter<'a>: Iterator<Item = MutItemSlot<'a, T, Self::GroupItem, Self::Alloc>> + Send
-    where
-        Self: 'a;
-
-    /// Some if it exists.
-    fn get_mut(&mut self, key: Key<T>) -> Option<MutItemSlot<T, Self::GroupItem, Self::Alloc>>;
-
-    /// Ascending order.
-    fn iter_mut(&mut self) -> Self::MutIter<'_>;
-}
-
-pub trait Items<T: AnyItem> {
-    type Alloc: std::alloc::Allocator + 'static;
-
-    type GroupItem: Any;
-
-    type Iter<'a>: Iterator<Item = RefItemSlot<'a, T, Self::GroupItem, Self::Alloc>> + Send
-    where
-        Self: 'a;
-
-    /// Some if it exists.
-    fn get(&self, key: Key<T>) -> Option<RefItemSlot<T, Self::GroupItem, Self::Alloc>>;
-
-    /// Ascending order.
-    fn iter(&self) -> Self::Iter<'_>;
-}
-
-pub trait AnyItems {
-    fn get_any(&self, key: AnyKey) -> Option<RefAnyItemSlot>;
-
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<MutAnyItemSlot>;
 }

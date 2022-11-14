@@ -1,6 +1,4 @@
-use crate::{AnyItem, MutShellSlot, RefShellSlot};
-
-use super::{AnyKey, Key, MutAnyShellSlot, RefAnyShellSlot};
+use super::{AnyKey, Key};
 use std::any::{Any, TypeId};
 
 /// A shell of an item. In which references are recorded.
@@ -40,36 +38,4 @@ pub trait AnyShell: Any + Sync + Send {
 
     /// Subtracts if called for same `from` multiple times.
     fn remove_from(&mut self, from: AnyKey);
-}
-
-pub trait ShellsMut<T: AnyItem>: Shells<T> + AnyShells {
-    type MutIter<'a>: Iterator<Item = MutShellSlot<'a, T, Self::Shell, Self::Alloc>> + Send
-    where
-        Self: 'a;
-
-    fn get_mut(&mut self, key: Key<T>) -> Option<MutShellSlot<T, Self::Shell, Self::Alloc>>;
-
-    /// Ascending order.
-    fn iter_mut(&mut self) -> Self::MutIter<'_>;
-}
-
-pub trait Shells<T: AnyItem> {
-    type Alloc: std::alloc::Allocator + 'static;
-
-    type Shell: Shell<T = T>;
-
-    type Iter<'a>: Iterator<Item = RefShellSlot<'a, T, Self::Shell, Self::Alloc>> + Send
-    where
-        Self: 'a;
-
-    fn get(&self, key: Key<T>) -> Option<RefShellSlot<T, Self::Shell, Self::Alloc>>;
-
-    /// Ascending order.
-    fn iter(&self) -> Self::Iter<'_>;
-}
-
-pub trait AnyShells {
-    fn get_any(&self, key: AnyKey) -> Option<RefAnyShellSlot>;
-
-    fn get_mut_any(&mut self, key: AnyKey) -> Option<MutAnyShellSlot>;
 }

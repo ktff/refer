@@ -18,55 +18,28 @@ impl<T: AnyItem> Ref<T> {
 
 impl<T: AnyItem> Ref<T> {
     /// Panics if to doesn't exist.
-    pub fn connect(from: AnyKey, to: Key<T>, collection: &mut impl ShellsMut<T>) -> Self {
-        let mut shell = collection.get_mut(to).expect("Item doesn't exist");
+    pub fn connect(from: AnyKey, to: Key<T>, collection: MutShells<T, impl Container<T>>) -> Self {
+        let mut shell = collection.get(to).expect("Item doesn't exist");
         shell.add_from(from);
         Self::new(to)
     }
 
-    pub fn disconnect(self, from: AnyKey, collection: &mut impl ShellsMut<T>) {
-        if let Some(mut shell) = collection.get_mut(self.key()) {
+    pub fn disconnect(self, from: AnyKey, collection: MutShells<T, impl Container<T>>) {
+        if let Some(mut shell) = collection.get(self.key()) {
             shell.remove_from(from)
         }
     }
 
+    pub fn get<R, S, C: Container<T>>(
+        self,
+        coll: TypePermit<R, T, S, C>,
+    ) -> Slot<T, C::GroupItem, C::Shell, C::Alloc, R, S> {
+        coll.get(self.key())
+            .unwrap_or_else(|| self.panic_dangling())
+    }
+
     fn panic_dangling(&self) -> ! {
         panic!("Dangling reference {:?}", self);
-    }
-}
-
-impl<T: AnyItem> Ref<T> {
-    pub fn get<C: Access<T>>(self, coll: &C) -> RefSlot<T, C::GroupItem, C::Shell, C::Alloc> {
-        coll.get(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
-    }
-
-    pub fn get_mut<C: Access<T>>(
-        self,
-        coll: &mut C,
-    ) -> MutSlot<T, C::GroupItem, C::Shell, C::Alloc> {
-        coll.get_mut(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
-    }
-
-    pub fn item<C: ItemsMut<T>>(self, coll: &C) -> RefItemSlot<T, C::GroupItem, C::Alloc> {
-        coll.get(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
-    }
-
-    pub fn item_mut<C: ItemsMut<T>>(self, coll: &mut C) -> MutItemSlot<T, C::GroupItem, C::Alloc> {
-        coll.get_mut(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
-    }
-
-    pub fn shell<C: ShellsMut<T>>(self, coll: &C) -> RefShellSlot<T, C::Shell, C::Alloc> {
-        coll.get(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
-    }
-
-    pub fn shell_mut<C: ShellsMut<T>>(self, coll: &mut C) -> MutShellSlot<T, C::Shell, C::Alloc> {
-        coll.get_mut(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
     }
 }
 
@@ -113,7 +86,7 @@ impl AnyRef {
     }
 
     /// Panics if to doesn't exist.
-    pub fn connect(from: AnyKey, to: AnyKey, collection: MutShells<impl AnyContainer>) -> Self {
+    pub fn connect(from: AnyKey, to: AnyKey, collection: MutAnyShells<impl AnyContainer>) -> Self {
         collection
             .get(to)
             .expect("Item doesn't exist")
@@ -121,10 +94,19 @@ impl AnyRef {
         Self::new(to)
     }
 
-    pub fn disconnect(self, from: AnyKey, collection: MutShells<impl AnyContainer>) {
+    pub fn disconnect(self, from: AnyKey, collection: MutAnyShells<impl AnyContainer>) {
         if let Some(mut slot) = collection.get(self.key()) {
             slot.shell_mut().remove_from(from);
         }
+    }
+
+    pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> AnySlot<R, S> {
+        coll.get(self.key())
+            .unwrap_or_else(|| self.panic_dangling())
+    }
+
+    fn panic_dangling(&self) -> ! {
+        panic!("Dangling reference {:?}", self);
     }
 }
 
