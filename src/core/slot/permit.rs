@@ -83,6 +83,8 @@ impl<'a, R, T: AnyItem, S, C: Container<T>> TypePermit<'a, R, T, S, C> {
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
             .map(move |(key, slot)| unsafe { core::Slot::new(key.into_key(), slot, self.access()) })
     }
+
+    // pub fn iter_grouped(self)->
 }
 
 impl<'a, T: AnyItem, S, C: Container<T>> TypePermit<'a, Mut, T, S, C> {
@@ -152,7 +154,7 @@ impl<'a, R, S, C: AnyContainer> AnyPermit<'a, R, S, C> {
 
     pub fn get(self, key: AnyKey) -> Option<core::AnySlot<'a, R, S>> {
         self.container
-            .any_get_slot(key.into())
+            .get_any_slot(key.into())
             // SAFETY: Type level logic of AnyPermit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { core::AnySlot::new(key, slot, self.access()) })
     }

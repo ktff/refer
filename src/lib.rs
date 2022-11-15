@@ -1,4 +1,3 @@
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(const_option)]
 #![feature(negative_impls)]
@@ -15,6 +14,7 @@
 #![feature(layout_for_ptr)]
 #![feature(sync_unsafe_cell)]
 #![feature(ptr_as_uninit)]
+#![feature(specialization)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs

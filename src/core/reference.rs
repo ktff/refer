@@ -2,7 +2,7 @@ use crate::core::*;
 use std::fmt;
 
 // TODO: Pinned outer references
-
+// TODO: Make ref builded by adding ref fn on recipient.
 #[derive(PartialEq, Eq)]
 pub struct Ref<T: AnyItem>(Key<T>);
 

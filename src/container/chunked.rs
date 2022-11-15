@@ -148,9 +148,9 @@ impl<L: Chunk> AnyContainer for Chunked<L>
 where
     L::C: AnyContainer,
 {
-    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
+    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         let (prefix, suffix) = key.pop(self.logic.key_len());
-        self.chunks.get(prefix)?.any_get_slot(suffix)
+        self.chunks.get(prefix)?.get_any_slot(suffix)
     }
 
     fn unfill_any(&mut self, key: AnySubKey) {

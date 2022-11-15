@@ -112,11 +112,11 @@ where
 }
 
 impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
-    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
+    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         self.collections
             .get(&key.type_id())
             .map(|c| &**c)?
-            .any_get_slot(key)
+            .get_any_slot(key)
     }
 
     fn unfill_any(&mut self, key: AnySubKey) {

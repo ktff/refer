@@ -319,7 +319,7 @@ where
     [(); taken_len::<T, S>()]: Sized,
     [(); slots_len::<T, S>()]: Sized,
 {
-    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
+    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         Some(self.get_slot(key.downcast::<T>()?)?.upcast())
     }
 

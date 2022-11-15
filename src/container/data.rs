@@ -78,9 +78,9 @@ impl<D: Any + Send + Sync, C: Container<T, GroupItem = ()>, T: AnyItem> Containe
 }
 
 impl<D: Any + Send + Sync, C: AnyContainer> AnyContainer for ContainerData<D, C> {
-    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
+    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         self.container
-            .any_get_slot(key)
+            .get_any_slot(key)
             .map(|slot| slot.with_group_item(&self.data))
     }
 

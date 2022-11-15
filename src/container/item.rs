@@ -111,7 +111,7 @@ impl<T: AnyItem> Container<T> for ItemContainer<T> {
 }
 
 impl<T: AnyItem> AnyContainer for ItemContainer<T> {
-    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
+    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         key.downcast::<T>()?;
         match &self.0 {
             Slot::Free => None,

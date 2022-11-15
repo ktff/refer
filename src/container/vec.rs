@@ -208,7 +208,7 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 
 impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 'static>
     AnyContainer for VecContainer<T, S, A>
 {
-    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
+    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
         let i = key.downcast::<T>()?.index(self.key_len).as_usize();
 
         let slot = self.slots.get(i)?;

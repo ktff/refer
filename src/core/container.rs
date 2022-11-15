@@ -42,7 +42,7 @@ pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
 }
 
 pub trait AnyContainer: Any + Sync + Send {
-    fn any_get_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot>;
+    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot>;
 
     fn unfill_any(&mut self, key: AnySubKey);
 
