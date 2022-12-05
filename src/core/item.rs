@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, Index};
+use super::{AnyKey, AnyRef, Index, KeyPrefix};
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
@@ -13,10 +13,6 @@ Localized Items vs Global Items
 
 // /// Marker trait for items that are independent of locality/placement context, they don't have local data.
 // pub trait GlobalItem: Item {}
-
-/// Builds an Item in given context.
-/// Item and Context must correspond to the same Item type.
-pub type ItemBuilder = Box<dyn FnOnce(AnyItemContext) -> Box<dyn Any>>;
 
 /// An item of a model.
 pub trait Item: AnyItem + Sized {
@@ -55,37 +51,42 @@ pub trait AnyItem: Any + Sync + Send {
     /// Will be called for references of self, but can be called for other references.
     fn replace_reference(&mut self, context: AnyItemContext<'_>, other: AnyKey, to: Index);
 
-    /// True if this should be duplicated and then replace duplicated reference, else should duplicate all references to other
-    /// with to, 1 to 1. If true, fn duplicate must return Some.
+    /// Should replace all of it's references to other with to, 1 to 1.
+    ///
+    /// Some if this should be displaced under given prefix.
     ///
     /// Will be called for references of self, but can be called for other references.
+    fn displace_reference(
+        &mut self,
+        context: AnyItemContext<'_>,
+        other: AnyKey,
+        to: Index,
+    ) -> Option<KeyPrefix> {
+        self.replace_reference(context, other, to);
+        None
+    }
+
+    /// Some if this should be duplicated under given prefix and then replace duplicated reference in duplicated item,
+    /// else should duplicate all references to other with to, 1 to 1.
     ///
-    /// If false, it's duplicate must also return false.
+    /// If Some, fn duplicate must return Some.
+    ///
+    /// If None, it's duplicate must also return None.
+    ///
+    /// Will be called for references of self, but can be called for other references.
     fn duplicate_reference(
         &mut self,
         context: AnyItemContext<'_>,
         other: AnyKey,
         to: Index,
-    ) -> bool;
+    ) -> Option<KeyPrefix>;
 
-    // /// If Some, its locality is tied to given key. // //Also fn displace must return Some.
-    // fn preferred_locality(&self, _: AnyItemContext<'_>) -> Option<AnyKey> {
-    //     None
-    // }
-
+    /// Clone this item from context to context.
     /// None if it can't be duplicated/cloned.
     // /// If Some, displace must also me Some.
-    fn duplicate(&self, _: AnyItemContext<'_>) -> Option<ItemBuilder> {
+    fn duplicate(&self, _: AnyItemContext<'_>, _: AnyItemContext<'_>) -> Option<Box<dyn Any>> {
         None
     }
-
-    // /// None if it can't be displaced/moved.
-    // fn displace(&mut self, context: AnyItemContext<'_>) -> Option<ItemBuilder> {
-    //     self.duplicate(context).map(|builder| {
-    //         self.drop_local(context);
-    //         builder
-    //     })
-    // }
 
     // /// Localized Items vs Global Items
     // /// - Localized items depend on their context.
@@ -105,6 +106,8 @@ pub trait AnyItem: Any + Sync + Send {
 }
 
 // ******************************** OTHER ******************************** //
+
+// TODO: Extend Context with Locality prefix.
 
 #[derive(Clone, Copy)]
 pub struct ItemContext<'a, I: Item> {
@@ -159,10 +162,6 @@ impl<'a> AnyItemContext<'a> {
             allocator,
             alloc_any,
         }
-    }
-
-    pub fn locality_data(&self) -> &'a dyn Any {
-        self.locality_data
     }
 
     pub fn allocator(&self) -> &'a dyn std::alloc::Allocator {

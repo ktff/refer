@@ -2,8 +2,8 @@
 //! point by that container.
 
 use super::{
-    AnyItem, AnyItemContext, AnyKey, AnySubKey, AnyUnsafeSlot, Item, KeyPrefix, Shell, SubKey,
-    UnsafeSlot,
+    AnyItem, AnyItemContext, AnyKey, AnySubKey, AnyUnsafeSlot, Item, KeyPrefix, LocalityPrefix,
+    Shell, SubKey, UnsafeSlot,
 };
 use std::{
     alloc::Allocator,
@@ -77,15 +77,6 @@ pub trait Container<T: AnyItem>: AnyContainer {
         key: SubKey<T>,
     ) -> Option<UnsafeSlot<T, Self::LocalityData, Self::Shell, Self::Alloc>>;
 
-    /// Some if locality exists.
-    fn locality_prefix(&self, locality: Self::Locality) -> Option<KeyPrefix>;
-
-    /// None if there is no more place for localities.
-    fn fill_locality(
-        &mut self,
-        locality: Self::Locality,
-    ) -> Option<(&Self::LocalityData, &Self::Alloc)>;
-
     /// None if there is no more place in locality.
     fn fill_slot(&mut self, locality: Self::Locality, item: T) -> Result<SubKey<T>, T>;
 
@@ -94,6 +85,12 @@ pub trait Container<T: AnyItem>: AnyContainer {
         &mut self,
         key: SubKey<T>,
     ) -> Option<(T, Self::Shell, (&Self::LocalityData, &Self::Alloc))>;
+
+    /// Some if locality exists.
+    fn locality_to_prefix(&self, locality: Self::Locality) -> Option<LocalityPrefix>;
+
+    /// Selects locality that corresponds to given data.
+    fn select_locality(&mut self, locality: Self::Locality) -> LocalityPrefix;
 
     // // *************** Alt method set
     // /// None if there is no more place for localities.
@@ -106,9 +103,13 @@ pub trait Container<T: AnyItem>: AnyContainer {
     // fn fill_slot_2(&mut self, prefix: KeyPrefix, item: T) -> Result<SubKey<T>, T>;
 }
 
+/*
+    TODO: Revisit naming of locality methods and AnyContainer methods
+*/
+
 pub trait AnyContainer: Any + Sync + Send {
-    // /// None if near doesn't exist.
-    // fn get_locality_any(&self, ty: TypeId, near: AnySubKey) -> Option<AnyItemContext>;
+    /// None if such locality doesn't exist.
+    fn context_any(&self, prefix: LocalityPrefix) -> Option<AnyItemContext>;
 
     // /// None if there is no more place in localized group or type is unknown.
     // fn fill_slot_any(
@@ -126,11 +127,14 @@ pub trait AnyContainer: Any + Sync + Send {
     fn fill_slot_any(
         &mut self,
         ty: TypeId,
-        locality: KeyPrefix,
+        locality: LocalityPrefix,
         item: Box<dyn Any>,
     ) -> Result<AnySubKey, ContainerError>;
 
-    fn key_prefix(&self, key: AnyKey) -> Option<KeyPrefix>;
+    /// Chooses fill locality for under given prefix, or enclosing locality.
+    fn choose_locality(&mut self, prefix: KeyPrefix) -> LocalityPrefix;
+
+    // fn key_prefix(&self, key: AnyKey) -> Option<KeyPrefix>;
 
     fn unfill_slot_any(&mut self, key: AnySubKey);
 

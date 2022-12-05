@@ -1,4 +1,7 @@
-use super::{permit, CollectionError, Item, ItemContext, Key, Slot};
+use super::{
+    permit, AnyContainer, AnyPermit, CollectionError, Container, Item, ItemContext, Key, Model,
+    Slot,
+};
 
 /// A collection of entities.
 ///
@@ -15,8 +18,8 @@ use super::{permit, CollectionError, Item, ItemContext, Key, Slot};
 ///
 /// On error caused by external state, returns Error. (Argument,call,op)
 /// On error caused by internal state, panics.
-pub trait Collection<T: Item> {
-    // type Shell: Shell<T = T>;
+pub trait Collection<T: Item>: Access<Self::Model> {
+    type Model: Model<T>;
 
     fn add(&mut self, locality: T::Locality, item: T) -> Result<Key<T>, CollectionError>;
 
@@ -56,9 +59,35 @@ pub trait Collection<T: Item> {
     /// T has it's local data dropped.
     /// May have side effects that invalidate some Keys.
     fn remove(&mut self, key: Key<T>) -> Result<T, CollectionError>;
+
+    fn get(
+        &self,
+        key: Key<T>,
+    ) -> Result<
+        Slot<T, <Self::Model as Container<T>>::Shell, permit::Ref, permit::Slot>,
+        CollectionError,
+    > {
+        self.slot().of().get(key)
+    }
+
+    fn get_mut(
+        &mut self,
+        key: Key<T>,
+    ) -> Result<
+        Slot<T, <Self::Model as Container<T>>::Shell, permit::Mut, permit::Slot>,
+        CollectionError,
+    > {
+        self.slot_mut().of().get(key)
+    }
 }
 
-// ************************************* WIP ************************************* //
+pub trait Access<M: AnyContainer> {
+    fn slot(&self) -> AnyPermit<permit::Ref, permit::Slot, M>;
+
+    fn slot_mut(&mut self) -> AnyPermit<permit::Mut, permit::Slot, M>;
+}
+
+// TODO ************************************* WIP ************************************* //
 
 pub trait RefAddition<T: Item> {
     //? NOTE: Issue is addition to any shell. To be of any use, shells of referenced items

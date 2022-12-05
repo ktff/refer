@@ -1,7 +1,16 @@
 use std::num::NonZeroU64;
 
+#[derive(Debug, Clone, Copy)]
+pub struct LocalityPrefix(pub KeyPrefix);
+
+impl From<LocalityPrefix> for KeyPrefix {
+    fn from(prefix: LocalityPrefix) -> Self {
+        prefix.0
+    }
+}
+
 // TODO: Interweave this with Index and Sub keys.
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct KeyPrefix {
     prefix_len: u32,
     prefix: usize,
@@ -10,6 +19,11 @@ pub struct KeyPrefix {
 impl KeyPrefix {
     pub fn new(prefix_len: u32, prefix: usize) -> Self {
         KeyPrefix { prefix_len, prefix }
+    }
+
+    /// Leaves only common prefix.
+    pub fn intersect(self, other: Self) -> Self {
+        unimplemented!()
     }
 
     // pub fn prefix_len(&self) -> u32 {

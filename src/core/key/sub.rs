@@ -59,8 +59,8 @@ impl<T: ?Sized + 'static> SubKey<T> {
     }
 
     /// True if has given prefix.
-    pub fn of(self, prefix: KeyPrefix) -> bool {
-        prefix.prefix_of((self.0).0)
+    pub fn of(self, prefix: impl Into<KeyPrefix>) -> bool {
+        prefix.into().prefix_of((self.0).0)
     }
 }
 

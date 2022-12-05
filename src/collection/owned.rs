@@ -1,6 +1,8 @@
 use crate::core::*;
 use log::*;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{btree_map, hash_map::Entry, BTreeMap, HashMap, HashSet};
+
+// TODO: Try to simplify algorithms
 
 pub struct Owned<C: AnyContainer>(C);
 
@@ -8,36 +10,6 @@ impl<C: AnyContainer> Owned<C> {
     /// UNSAFE: Caller must ensure that complete ownership is transferred.
     pub unsafe fn new(c: C) -> Self {
         Self(c)
-    }
-
-    pub fn get<T: Item>(
-        &self,
-        key: Key<T>,
-    ) -> Result<Slot<T, C::Shell, permit::Ref, permit::Slot>, CollectionError>
-    where
-        C: Model<T>,
-    {
-        self.slot().of().get(key)
-    }
-
-    pub fn get_mut<T: Item>(
-        &mut self,
-        key: Key<T>,
-    ) -> Result<Slot<T, C::Shell, permit::Mut, permit::Slot>, CollectionError>
-    where
-        C: Model<T>,
-    {
-        self.slot_mut().of().get(key)
-    }
-
-    pub fn slot(&self) -> AnyPermit<permit::Ref, permit::Slot, C> {
-        // SAFETY: We have at least read access for whole C.
-        unsafe { AnyPermit::new(&self.0) }
-    }
-
-    pub fn slot_mut(&mut self) -> AnyPermit<permit::Mut, permit::Slot, C> {
-        // SAFETY: We have at least mut access for whole C.
-        unsafe { AnyPermit::new(&self.0) }
     }
 
     /// Temporary method to enable experimentation. Will be removed.
@@ -55,7 +27,7 @@ impl<C: AnyContainer> Owned<C> {
         C: Model<T>,
     {
         self.0
-            .locality_prefix(to)
+            .locality_to_prefix(to)
             .map(|prefix| SubKey::from(key).of(prefix))
             .unwrap_or(false)
     }
@@ -78,47 +50,46 @@ impl<C: AnyContainer> Owned<C> {
     where
         C: Model<T>,
     {
-        // Duplicate
+        // Placement
+        let locality_prefix = self.0.select_locality(to);
+
+        // Build Duplicate
+        let to_context = self
+            .0
+            .context_any(locality_prefix)
+            .expect("Should be valid prefix");
         let duplicate = self
             .get(key)?
-            .duplicate()
+            .duplicate(to_context)
             .ok_or_else(|| CollectionError::invalid_op(key, "duplicate"))?;
 
-        // Build
-        let context = ItemContext::<T>::new(
-            self.0
-                .fill_locality(to)
-                .ok_or_else(|| CollectionError::out_of_keys::<T>(to))?,
-        );
-        let item = Box::into_inner(
-            duplicate(context.upcast())
-                .downcast::<T>()
-                .expect("Wrong type"),
-        );
-
+        // Finish
+        let item = Box::into_inner(duplicate.downcast::<T>().expect("Wrong type"));
         Ok(item)
     }
 
+    /// Clones under given prefix.
     /// Panics if item can't be cloned, or item doesn't exist.
-    fn clone_any_item(&mut self, original_key: AnyKey) -> AnyKey {
-        // Place this duplicate at the same locality as the original.
-        let prefix = self
-            .0
-            .key_prefix(original_key)
-            .expect("Should be valid key");
+    fn clone_any_item(&mut self, original_key: AnyKey, prefix: KeyPrefix) -> AnyKey {
+        // Placement
+        let locality_prefix = self.0.choose_locality(prefix);
 
         // Build duplicate
         let original = self.slot().get(original_key).expect("Should be valid key");
+        let to_context = self
+            .0
+            .context_any(locality_prefix)
+            .expect("Should be valid prefix");
         let duplicate = original
-            .duplicate()
+            .duplicate(to_context)
             .ok_or_else(|| CollectionError::invalid_op_any(original_key, "duplicate"))
-            .expect("Must be able to duplicate")(original.context());
+            .expect("Must be able to duplicate");
 
         // Fill
         let duplicate_ty = duplicate.as_ref().type_id();
         match self
             .0
-            .fill_slot_any(original_key.type_id(), prefix, duplicate)
+            .fill_slot_any(original_key.type_id(), locality_prefix, duplicate)
         {
             Ok(key) => key.into_key(),
             Err(error) => {
@@ -159,7 +130,21 @@ impl<C: AnyContainer> Owned<C> {
 /// This is safe since Owned has full ownership of C.
 unsafe impl<C: AnyContainer + 'static> Sync for Owned<C> {}
 
+impl<C: AnyContainer> Access<C> for Owned<C> {
+    fn slot(&self) -> AnyPermit<permit::Ref, permit::Slot, C> {
+        // SAFETY: We have at least read access for whole C.
+        unsafe { AnyPermit::new(&self.0) }
+    }
+
+    fn slot_mut(&mut self) -> AnyPermit<permit::Mut, permit::Slot, C> {
+        // SAFETY: We have at least mut access for whole C.
+        unsafe { AnyPermit::new(&self.0) }
+    }
+}
+
 impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
+    type Model = C;
+
     fn add(&mut self, locality: T::Locality, item: T) -> Result<Key<T>, CollectionError> {
         let key = self.fill_item(locality, item)?;
 
@@ -246,27 +231,57 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
     /// Moves shell from `from` to `to` so that all references are now pointing to `to`.
     /// May have side effects that invalidate some Keys.
     fn displace_shell(&mut self, from: Key<T>, to: Key<T>) -> Result<(), CollectionError> {
-        let (mut items, shells) = self.slot_mut().split_slots();
+        // Displace shell
+        let mut moves = BTreeMap::new();
+        displace_shell_references(
+            self.slot_mut().split_slots(),
+            from.into(),
+            to.into(),
+            &mut moves,
+            |key| key == from.into(),
+        )?;
 
-        // Fetch shells
-        let (mut from_shell, mut to_shell) = match shells.of().get_pair(from, to)? {
-            // From == to
-            None => return Ok(()),
-            Some(shells) => shells,
-        };
+        // Resolve other moves
+        if !moves.is_empty() {
+            let mut moved = HashSet::new();
+            moved.insert(from.into());
+            moved.insert(to.into());
 
-        // Move references in items -> from_shell
-        for (count, other_rf) in from_shell.iter().dedup() {
-            // TODO: explore possibility if other item should be move.
-            other_rf
-                .get(items.borrow_mut())
-                .replace_reference(from.into(), to.index());
+            while let Some((from, prefix)) = moves.pop_first() {
+                // Has been moved?
+                if moved.insert(from) {
+                    // Does current place satisfy prefix?
+                    if !prefix.prefix_of(from.index().0) {
+                        // Move
 
-            to_shell.add_from_count(other_rf.key(), count);
+                        // Clone & fill
+                        let to = self.clone_any_item(from, prefix);
+
+                        // Move shell
+                        displace_shell_references(
+                            self.slot_mut().split_slots(),
+                            from,
+                            to,
+                            &mut moves,
+                            |key| moved.contains(&key),
+                        )
+                        .expect("Key should be valid");
+
+                        // Rewire from -> other to to -> other
+                        replace_any_item_key(self.slot_mut().split_slots(), from, to);
+
+                        // Item Drop local
+                        let mut slot = self.slot_mut().get(from).expect("Key should be valid");
+                        let context = slot.context();
+                        slot.drop_local(context);
+
+                        // Unfill, drop shell, and drop item
+                        self.0.unfill_slot_any(from.into());
+                    }
+                }
+            }
         }
 
-        //Finish
-        from_shell.clear();
         Ok(())
     }
 
@@ -298,17 +313,19 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
 
         // Resolve other duplications
         while let Some(from) = add.pop() {
-            // Duplicate item
-            let to = self.clone_any_item(from);
-            match duplicates.insert(from, Ok(to)) {
-                Some(Err(replace)) => {
-                    for replace in replace {
-                        // Duplicate references only duplicate
-                        let mut duplicate = self.slot_mut().get(to).expect("Should be valid key");
-                        duplicate.replace_reference(replace.0, replace.1);
-                    }
-                }
+            let (prefix, replace) = match duplicates.remove(&from) {
+                Some(Err(data)) => data,
                 _ => panic!("Illegal state"),
+            };
+
+            // Duplicate item
+            let to = self.clone_any_item(from, prefix);
+            duplicates.insert(from, Ok(to));
+
+            // Adjust references
+            for replace in replace {
+                let mut duplicate = self.slot_mut().get(to).expect("Should be valid key");
+                duplicate.replace_reference(replace.0, replace.1);
             }
 
             // Duplicate shell
@@ -322,8 +339,6 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
             )
             .expect("Should be valid key");
         }
-
-        // TODO: Explore if duplicated items need to be moved.
 
         // Attach duplicate items
         for (_, duplicate_key) in duplicates {
@@ -465,6 +480,21 @@ fn replace_item_key<T: Item, C: Model<T>>(
     }
 }
 
+/// Rewire from -> other to to -> other
+/// Panics if keys don't exist.
+fn replace_any_item_key<C: AnyContainer>(
+    (items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
+    from: AnyKey,
+    to: AnyKey,
+) {
+    let other = items.get(from).expect("Should be valid key");
+    if let Some(references) = other.iter_references_any() {
+        for other_rf in references {
+            other_rf.get(shells.borrow_mut()).replace(from, to.index());
+        }
+    };
+}
+
 /// Updates diff of references between old and new item on key through shells.
 ///
 /// Fails if reference is not valid.
@@ -518,9 +548,65 @@ fn replace_item_references<T: Item, C: Model<T>>(
     Ok(())
 }
 
+/// Displaces references from `from` to `to` so that all references are now pointing to `to`.
+/// Adds additional moves to `moves` if necessary.
+/// Doesn't move moved.
+///
+/// Errors if `from` or `to` don't exist.
+fn displace_shell_references<C: AnyContainer>(
+    (mut items, shells): (MutAnyItems<C>, MutAnyShells<C>),
+    from: AnyKey,
+    to: AnyKey,
+    moves: &mut BTreeMap<AnyKey, KeyPrefix>,
+    moved: impl Fn(AnyKey) -> bool,
+) -> Result<(), CollectionError> {
+    // Fetch shells
+    let (mut from_shell, mut to_shell) = match shells.get_pair(from, to)? {
+        // From == to
+        None => return Ok(()),
+        Some(shells) => shells,
+    };
+
+    // Move references in items -> from_shell
+    if let Some(references) = from_shell.iter_any() {
+        for (count, other_rf) in references.dedup() {
+            if moved(other_rf.key()) {
+                other_rf
+                    .get(items.borrow_mut())
+                    .replace_reference(from.into(), to.index());
+            } else {
+                if let Some(under_prefix) = other_rf
+                    .get(items.borrow_mut())
+                    .displace_reference(from.into(), to.index())
+                {
+                    // Register move
+                    match moves.entry(other_rf.key()) {
+                        btree_map::Entry::Occupied(mut entry) => {
+                            let prefix = entry.get_mut();
+                            *prefix = prefix.intersect(under_prefix);
+                        }
+                        btree_map::Entry::Vacant(entry) => {
+                            entry.insert(under_prefix);
+                        }
+                    }
+                }
+            }
+
+            to_shell.add_from_count(other_rf.key(), count);
+        }
+    }
+
+    //Finish
+    let alloc = from_shell.alloc();
+    from_shell.dealloc(alloc);
+
+    Ok(())
+}
+
 /// Duplicates shell from `from` to `to` so that all references to `from` now also point to `to`.
 ///
-/// Additional slots to duplicate are added to duplicates with replace (from,to) pairs, and add_duplicate with from.
+/// Additional slots to duplicate are added to duplicates with replace (from,to) pairs and key prefix
+/// under which to place the duplicate, and add_duplicate with from.
 ///
 /// Fn attached should return true if provided item is an attached duplicate.
 ///
@@ -529,7 +615,7 @@ fn duplicate_shell_references<C: AnyContainer>(
     (mut items, shells): (MutAnyItems<C>, MutAnyShells<C>),
     from: AnyKey,
     to: AnyKey,
-    duplicates: &mut HashMap<AnyKey, Result<AnyKey, Vec<(AnyKey, Index)>>>,
+    duplicates: &mut HashMap<AnyKey, Result<AnyKey, (KeyPrefix, Vec<(AnyKey, Index)>)>>,
     add_duplicate: &mut Vec<AnyKey>,
     attached: impl Fn(AnyKey) -> bool,
 ) -> Result<(), CollectionError> {
@@ -545,10 +631,10 @@ fn duplicate_shell_references<C: AnyContainer>(
         for (count, other_ref) in references.dedup().filter(|(_, rf)| !attached(rf.key())) {
             // NOTE: Duplicate items aren't attached at this point
             let mut other = other_ref.get(items.borrow_mut());
-            if other.duplicate_reference(from, to.index()) {
+            if let Some(under_prefix) = other.duplicate_reference(from, to.index()) {
                 match duplicates.entry(other_ref.key()) {
                     Entry::Vacant(entry) => {
-                        entry.insert(Err(vec![(from, to.index())]));
+                        entry.insert(Err((under_prefix, vec![(from, to.index())])));
                         add_duplicate.push(other_ref.key());
                     }
                     Entry::Occupied(mut entry) => {
@@ -567,7 +653,10 @@ fn duplicate_shell_references<C: AnyContainer>(
                                     to_shell.add_from_count(*duplicate_key, count);
                                 }
                             }
-                            Err(vec) => vec.push((from, to.index())),
+                            Err((prefix, vec)) => {
+                                vec.push((from, to.index()));
+                                *prefix = prefix.intersect(under_prefix);
+                            }
                         }
                     }
                 }
@@ -585,7 +674,7 @@ fn duplicate_shell_references<C: AnyContainer>(
                         .get(duplicate_key)
                         .expect("Should be valid key");
                     assert!(
-                        !duplicate.duplicate_reference(from, to.index()),
+                        duplicate.duplicate_reference(from, to.index()).is_none(),
                         "Should be able to duplicate reference"
                     );
 
@@ -638,8 +727,6 @@ fn detach_shell<C: AnyContainer>(
                 let context = other.context();
                 if other.remove_reference(context, key) {
                     remove.push(other_rf.key());
-                } else {
-                    // TODO: explore possibility if other item should be move.
                 }
             }
         }

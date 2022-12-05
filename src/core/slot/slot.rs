@@ -1,6 +1,11 @@
 use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
-use crate::core::{AnyKey, AnySlot, Index, Item, ItemBuilder, ItemContext, Key, Shell, UnsafeSlot};
-use std::ops::{Deref, DerefMut};
+use crate::core::{
+    AnyItemContext, AnyKey, AnySlot, Index, Item, ItemContext, Key, KeyPrefix, Shell, UnsafeSlot,
+};
+use std::{
+    any::Any,
+    ops::{Deref, DerefMut},
+};
 
 pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
     key: Key<T>,
@@ -50,9 +55,10 @@ impl<'a, T: Item, S: Shell<T = T>, R: RefAccess, A: ItemAccess> Slot<'a, T, S, R
         self.item().iter_references(self.context())
     }
 
-    pub fn duplicate(&self) -> Option<ItemBuilder> {
+    /// Can panic if context isn't for this type.
+    pub fn duplicate(&self, to: AnyItemContext) -> Option<Box<dyn Any>> {
         let context = self.context();
-        self.item().duplicate(context.upcast())
+        self.item().duplicate(context.upcast(), to)
     }
 }
 
@@ -68,7 +74,13 @@ impl<'a, T: Item, S: Shell<T = T>, A: ItemAccess> Slot<'a, T, S, permit::Mut, A>
             .replace_reference(context.upcast(), other, to);
     }
 
-    pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> bool {
+    pub fn displace_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
+        let context = self.context();
+        self.item_mut()
+            .displace_reference(context.upcast(), other, to)
+    }
+
+    pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
         let context = self.context();
         self.item_mut()
             .duplicate_reference(context.upcast(), other, to)
