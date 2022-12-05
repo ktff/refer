@@ -1,4 +1,4 @@
-use super::permit::{self, Permit, Split};
+use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
 use crate::core::{
     AnyItem, AnyItemContext, AnyKey, AnyRef, AnyShell, AnyUnsafeSlot, Index, ItemBuilder,
 };
@@ -7,15 +7,15 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-pub struct AnySlot<'a, R, W> {
+pub struct AnySlot<'a, R, A> {
     key: AnyKey,
     slot: AnyUnsafeSlot<'a>,
-    access: Permit<R, W>,
+    access: Permit<R, A>,
 }
 
-impl<'a, R, W> AnySlot<'a, R, W> {
+impl<'a, R, A> AnySlot<'a, R, A> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(key: AnyKey, slot: AnyUnsafeSlot<'a>, access: Permit<R, W>) -> Self {
+    pub unsafe fn new(key: AnyKey, slot: AnyUnsafeSlot<'a>, access: Permit<R, A>) -> Self {
         Self { key, slot, access }
     }
 
@@ -59,73 +59,7 @@ impl<'a, R, W> AnySlot<'a, R, W> {
     // }
 }
 
-impl<'a, R> AnySlot<'a, R, permit::Slot> {
-    pub fn item(&self) -> &dyn AnyItem {
-        // SAFETY: We have at least read access to the item. R
-        unsafe { &*self.slot.item().get() }
-    }
-
-    pub fn iter_references_any(&self) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
-        self.item().iter_references_any(self.context())
-    }
-
-    pub fn duplicate(&self) -> Option<ItemBuilder> {
-        let context = self.context();
-        self.item().duplicate(context)
-    }
-
-    pub fn shell(&self) -> &dyn AnyShell {
-        // SAFETY: We have at least read access to the shell. R
-        unsafe { &*self.slot.shell().get() }
-    }
-}
-
-impl<'a> AnySlot<'a, permit::Mut, permit::Slot> {
-    pub fn item_mut(&mut self) -> &mut dyn AnyItem {
-        // SAFETY: We have mut access to the item.
-        unsafe { &mut *self.slot.item().get() }
-    }
-
-    pub fn shell_mut(&mut self) -> &mut dyn AnyShell {
-        // SAFETY: We have mut access to the shell.
-        unsafe { &mut *self.slot.shell().get() }
-    }
-
-    pub fn split_mut(&mut self) -> Split<&mut dyn AnyItem, &mut dyn AnyShell> {
-        // SAFETY: We have mut access to the item and shell.
-        unsafe {
-            Split {
-                items: &mut *self.slot.item().get(),
-                shells: &mut *self.slot.shell().get(),
-            }
-        }
-    }
-
-    pub fn split(
-        self,
-    ) -> Split<AnySlot<'a, permit::Mut, permit::Item>, AnySlot<'a, permit::Mut, permit::Shell>>
-    {
-        self.access.split().map(
-            |access| AnySlot {
-                key: self.key,
-                slot: self.slot,
-                access,
-            },
-            |access| AnySlot {
-                key: self.key,
-                slot: self.slot,
-                access,
-            },
-        )
-    }
-
-    pub fn replace_reference(&mut self, other: AnyKey, to: Index) {
-        let context = self.context();
-        self.item_mut().replace_reference(context, other, to);
-    }
-}
-
-impl<'a, R> AnySlot<'a, R, permit::Item> {
+impl<'a, R: RefAccess, A: ItemAccess> AnySlot<'a, R, A> {
     pub fn item(&self) -> &dyn AnyItem {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
@@ -141,7 +75,7 @@ impl<'a, R> AnySlot<'a, R, permit::Item> {
     }
 }
 
-impl<'a> AnySlot<'a, permit::Mut, permit::Item> {
+impl<'a, A: ItemAccess> AnySlot<'a, permit::Mut, A> {
     pub fn item_mut(&mut self) -> &mut dyn AnyItem {
         // SAFETY: We have mut access to the item.
         unsafe { &mut *self.slot.item().get() }
@@ -158,14 +92,14 @@ impl<'a> AnySlot<'a, permit::Mut, permit::Item> {
     }
 }
 
-impl<'a, R> AnySlot<'a, R, permit::Shell> {
+impl<'a, R: RefAccess, A: ShellAccess> AnySlot<'a, R, A> {
     pub fn shell(&self) -> &dyn AnyShell {
         // SAFETY: We have at least read access to the shell. R
         unsafe { &*self.slot.shell().get() }
     }
 }
 
-impl<'a> AnySlot<'a, permit::Mut, permit::Shell> {
+impl<'a, A: ShellAccess> AnySlot<'a, permit::Mut, A> {
     pub fn shell_mut(&mut self) -> &mut dyn AnyShell {
         // SAFETY: We have mut access to the shell.
         unsafe { &mut *self.slot.shell().get() }
@@ -187,11 +121,40 @@ impl<'a> AnySlot<'a, permit::Mut, permit::Shell> {
     }
 }
 
-impl<'a, R, S> Copy for AnySlot<'a, R, S> where Permit<R, S>: Copy {}
+impl<'a> AnySlot<'a, permit::Mut, permit::Slot> {
+    pub fn split(&mut self) -> (&mut dyn AnyItem, &mut dyn AnyShell) {
+        // SAFETY: We have mut access to the item and shell.
+        unsafe { (&mut *self.slot.item().get(), &mut *self.slot.shell().get()) }
+    }
 
-impl<'a, R, S> Clone for AnySlot<'a, R, S>
+    pub fn split_slot(
+        self,
+    ) -> (
+        AnySlot<'a, permit::Mut, permit::Item>,
+        AnySlot<'a, permit::Mut, permit::Shell>,
+    ) {
+        let (item_access, shell_access) = self.access.split();
+
+        (
+            AnySlot {
+                key: self.key,
+                slot: self.slot,
+                access: item_access,
+            },
+            AnySlot {
+                key: self.key,
+                slot: self.slot,
+                access: shell_access,
+            },
+        )
+    }
+}
+
+impl<'a, R, A> Copy for AnySlot<'a, R, A> where Permit<R, A>: Copy {}
+
+impl<'a, R, A> Clone for AnySlot<'a, R, A>
 where
-    Permit<R, S>: Clone,
+    Permit<R, A>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -202,7 +165,7 @@ where
     }
 }
 
-impl<'a, R> Deref for AnySlot<'a, R, permit::Item> {
+impl<'a, R: RefAccess> Deref for AnySlot<'a, R, permit::Item> {
     type Target = dyn AnyItem;
 
     fn deref(&self) -> &Self::Target {
@@ -216,7 +179,21 @@ impl<'a> DerefMut for AnySlot<'a, permit::Mut, permit::Item> {
     }
 }
 
-impl<'a, R> Deref for AnySlot<'a, R, permit::Shell> {
+impl<'a, R: RefAccess> Deref for AnySlot<'a, R, permit::Slot> {
+    type Target = dyn AnyItem;
+
+    fn deref(&self) -> &Self::Target {
+        self.item()
+    }
+}
+
+impl<'a> DerefMut for AnySlot<'a, permit::Mut, permit::Slot> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.item_mut()
+    }
+}
+
+impl<'a, R: RefAccess> Deref for AnySlot<'a, R, permit::Shell> {
     type Target = dyn AnyShell;
 
     fn deref(&self) -> &Self::Target {

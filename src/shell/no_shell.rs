@@ -2,8 +2,6 @@ use std::{any::TypeId, marker::PhantomData};
 
 use crate::*;
 
-// TODO: Add unreferable item which can have zero sized shell and static guarantee that nothing will have reference to it.
-
 /// No shell.
 /// Panics if anything tries to add reference.
 #[derive(Debug, Clone, Copy)]

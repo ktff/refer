@@ -40,26 +40,6 @@ impl<C: AnyContainer> Owned<C> {
         unsafe { AnyPermit::new(&self.0) }
     }
 
-    pub fn split_types(&mut self) -> TypeOwnership<permit::Slot, C> {
-        // SAFETY: We have at least mut access for whole C.
-        unsafe { TypeOwnership::new(&self.0) }
-    }
-
-    pub fn split_keys(&self) -> KeyOwnership<permit::Slot, C> {
-        // SAFETY: We have at least mut access for whole C.
-        unsafe { KeyOwnership::new(&self.0) }
-    }
-
-    pub fn split(
-        &mut self,
-    ) -> (
-        SplitOwnership<permit::Item, C>,
-        SplitOwnership<permit::Shell, C>,
-    ) {
-        // SAFETY: We have at least mut access for whole C.
-        unsafe { (SplitOwnership::new(&self.0), SplitOwnership::new(&self.0)) }
-    }
-
     /// Temporary method to enable experimentation. Will be removed.
     pub fn inner(&self) -> &C {
         &self.0
@@ -164,9 +144,10 @@ impl<C: AnyContainer> Owned<C> {
             // Detach
 
             // item --> others
-            if detach_item(self.slot_mut().split(), other).is_ok() {
+            if detach_item(self.slot_mut().split_slots(), other).is_ok() {
                 // item <-- others
-                detach_shell(self.slot_mut().split(), other, &mut remove).expect("Should exist");
+                detach_shell(self.slot_mut().split_slots(), other, &mut remove)
+                    .expect("Should exist");
 
                 // Unfill, drop shell, and drop item
                 self.0.unfill_slot_any(other.into());
@@ -182,7 +163,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
     fn add(&mut self, locality: T::Locality, item: T) -> Result<Key<T>, CollectionError> {
         let key = self.fill_item(locality, item)?;
 
-        if let Err(error) = attach_item(self.slot_mut().split(), key) {
+        if let Err(error) = attach_item(self.slot_mut().split_slots(), key) {
             // Rollback filling the slot.
             self.drop_slot(key);
 
@@ -193,7 +174,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
     }
 
     fn replace_item(&mut self, key: Key<T>, item: T) -> Result<T, CollectionError> {
-        let (items, shells) = self.slot_mut().split();
+        let (items, shells) = self.slot_mut().split_slots();
         let mut slot = items.of().get(key)?;
 
         // Update connections
@@ -226,7 +207,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
         }
 
         // Rewire from -> other to to -> other
-        replace_item_key(self.slot_mut().split(), from, to);
+        replace_item_key(self.slot_mut().split_slots(), from, to);
 
         // Unfill and drop from
         self.drop_slot(from);
@@ -241,7 +222,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
         if self.in_locality(from, to) {
             // Detach shell
             let mut remove = Vec::new();
-            detach_shell(self.slot_mut().split(), from.into(), &mut remove)?;
+            detach_shell(self.slot_mut().split_slots(), from.into(), &mut remove)?;
             self.resolve_remove(remove);
 
             Ok(from)
@@ -253,7 +234,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
             let to = self.fill_item(to, item)?;
 
             // Rewire from -> other to to -> other
-            replace_item_key(self.slot_mut().split(), from, to);
+            replace_item_key(self.slot_mut().split_slots(), from, to);
 
             // Unfill and drop from
             self.drop_slot(from);
@@ -265,10 +246,10 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
     /// Moves shell from `from` to `to` so that all references are now pointing to `to`.
     /// May have side effects that invalidate some Keys.
     fn displace_shell(&mut self, from: Key<T>, to: Key<T>) -> Result<(), CollectionError> {
-        let (mut items, shells) = self.slot_mut().split();
+        let (mut items, shells) = self.slot_mut().split_slots();
 
         // Fetch shells
-        let (mut from_shell, mut to_shell) = match shells.of().split_pair(from, to)? {
+        let (mut from_shell, mut to_shell) = match shells.of().get_pair(from, to)? {
             // From == to
             None => return Ok(()),
             Some(shells) => shells,
@@ -307,7 +288,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
 
         // Duplicate this shell
         duplicate_shell_references(
-            self.slot_mut().split(),
+            self.slot_mut().split_slots(),
             from.upcast(),
             to.upcast(),
             &mut duplicates,
@@ -332,7 +313,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
 
             // Duplicate shell
             duplicate_shell_references(
-                self.slot_mut().split(),
+                self.slot_mut().split_slots(),
                 from,
                 to,
                 &mut duplicates,
@@ -349,7 +330,7 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
             let duplicate_key =
                 duplicate_key.expect("All duplicates should be created before attaching");
             if !attached(duplicate_key) {
-                attach_any_item(self.slot_mut().split(), duplicate_key)
+                attach_any_item(self.slot_mut().split_slots(), duplicate_key)
                     .expect("Invalid Item references");
             }
         }
@@ -361,11 +342,11 @@ impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
         // Detach
 
         // item --> others
-        detach_item(self.slot_mut().split(), key.into())?;
+        detach_item(self.slot_mut().split_slots(), key.into())?;
 
         // item <-- others
         let mut remove = Vec::new();
-        detach_shell(self.slot_mut().split(), key.into(), &mut remove).expect("Should exist");
+        detach_shell(self.slot_mut().split_slots(), key.into(), &mut remove).expect("Should exist");
 
         // Unfill and drop shell
         let (item, _, _) = self.0.unfill_slot(key.into()).expect("Should be present");
@@ -553,7 +534,7 @@ fn duplicate_shell_references<C: AnyContainer>(
     attached: impl Fn(AnyKey) -> bool,
 ) -> Result<(), CollectionError> {
     // Fetch shells
-    let (from_shell, mut to_shell) = match shells.split_pair(from, to)? {
+    let (from_shell, mut to_shell) = match shells.get_pair(from, to)? {
         // From == to
         None => return Ok(()),
         Some(shells) => shells,

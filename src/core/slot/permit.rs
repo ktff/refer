@@ -2,19 +2,29 @@ use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 use crate::core::{self, AnyContainer, AnyKey, CollectionError, Container, Key, Model};
 
-// TODO: Make this types as only acceptable for R and S in Permit.
-
 pub struct Ref;
 pub struct Mut;
 pub struct Slot;
 pub struct Item;
 pub struct Shell;
 
-pub struct Permit<R, S> {
-    _marker: PhantomData<(R, S)>,
+pub trait ItemAccess {}
+impl ItemAccess for Item {}
+impl ItemAccess for Slot {}
+
+pub trait ShellAccess {}
+impl ShellAccess for Shell {}
+impl ShellAccess for Slot {}
+
+pub trait RefAccess {}
+impl RefAccess for Ref {}
+impl RefAccess for Mut {}
+
+pub struct Permit<R, A> {
+    _marker: PhantomData<(R, A)>,
 }
 
-impl<R, S> Permit<R, S> {
+impl<R, A> Permit<R, A> {
     pub fn new() -> Self {
         Self {
             _marker: PhantomData,
@@ -23,29 +33,29 @@ impl<R, S> Permit<R, S> {
 }
 
 impl<R> Permit<R, Slot> {
-    pub fn split(self) -> Split<Permit<R, Item>, Permit<R, Shell>> {
-        Split {
-            items: Permit {
+    pub fn split(self) -> (Permit<R, Item>, Permit<R, Shell>) {
+        (
+            Permit {
                 _marker: PhantomData,
             },
-            shells: Permit {
+            Permit {
                 _marker: PhantomData,
             },
-        }
+        )
     }
 }
 
-impl<S> Permit<Mut, S> {
-    pub fn borrow(&self) -> Permit<Ref, S> {
+impl<A> Permit<Mut, A> {
+    pub fn borrow(&self) -> Permit<Ref, A> {
         Permit {
             _marker: PhantomData,
         }
     }
 }
 
-impl<S> Copy for Permit<Ref, S> {}
+impl<A> Copy for Permit<Ref, A> {}
 
-impl<S> Clone for Permit<Ref, S> {
+impl<A> Clone for Permit<Ref, A> {
     fn clone(&self) -> Self {
         Self {
             _marker: PhantomData,
@@ -53,12 +63,12 @@ impl<S> Clone for Permit<Ref, S> {
     }
 }
 
-pub struct TypePermit<'a, T, R, S, C> {
+pub struct TypePermit<'a, T, R, A, C> {
     container: &'a C,
-    _marker: PhantomData<(R, T, S)>,
+    _marker: PhantomData<(R, T, A)>,
 }
 
-impl<'a, R, T: core::Item, S, C: Model<T>> TypePermit<'a, T, R, S, C> {
+impl<'a, R, T: core::Item, A, C: Model<T>> TypePermit<'a, T, R, A, C> {
     /// SAFETY: Caller must ensure that it has the correct R & S access to all T in C for the given 'a.
     pub unsafe fn new(container: &'a C) -> Self {
         Self {
@@ -67,11 +77,11 @@ impl<'a, R, T: core::Item, S, C: Model<T>> TypePermit<'a, T, R, S, C> {
         }
     }
 
-    fn access(&self) -> Permit<R, S> {
+    fn access(&self) -> Permit<R, A> {
         Permit::new()
     }
 
-    pub fn get(self, key: Key<T>) -> Result<core::Slot<'a, T, C::Shell, R, S>, CollectionError> {
+    pub fn get(self, key: Key<T>) -> Result<core::Slot<'a, T, C::Shell, R, A>, CollectionError> {
         self.container
             .get_slot(key.into())
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to this slot.
@@ -79,7 +89,7 @@ impl<'a, R, T: core::Item, S, C: Model<T>> TypePermit<'a, T, R, S, C> {
             .ok_or_else(|| key.into())
     }
 
-    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, S>> {
+    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
         self.container
             .iter_slot()
             .into_iter()
@@ -91,14 +101,14 @@ impl<'a, R, T: core::Item, S, C: Model<T>> TypePermit<'a, T, R, S, C> {
     // pub fn iter_grouped(self)->
 
     // None if a == b
-    pub fn split_pair(
+    pub fn get_pair(
         self,
         a: Key<T>,
         b: Key<T>,
     ) -> Result<
         Option<(
-            core::Slot<'a, T, C::Shell, R, S>,
-            core::Slot<'a, T, C::Shell, R, S>,
+            core::Slot<'a, T, C::Shell, R, A>,
+            core::Slot<'a, T, C::Shell, R, A>,
         )>,
         CollectionError,
     > {
@@ -120,15 +130,15 @@ impl<'a, R, T: core::Item, S, C: Model<T>> TypePermit<'a, T, R, S, C> {
     }
 }
 
-impl<'a, T: core::Item, S, C: Container<T>> TypePermit<'a, T, Mut, S, C> {
-    pub fn borrow(&self) -> TypePermit<T, Ref, S, C> {
+impl<'a, T: core::Item, A, C: Container<T>> TypePermit<'a, T, Mut, A, C> {
+    pub fn borrow(&self) -> TypePermit<T, Ref, A, C> {
         TypePermit {
             container: self.container,
             _marker: PhantomData,
         }
     }
 
-    pub fn borrow_mut(&mut self) -> TypePermit<T, Mut, S, C> {
+    pub fn borrow_mut(&mut self) -> TypePermit<T, Mut, A, C> {
         TypePermit {
             container: self.container,
             _marker: PhantomData,
@@ -137,7 +147,7 @@ impl<'a, T: core::Item, S, C: Container<T>> TypePermit<'a, T, Mut, S, C> {
 }
 
 impl<'a, R, T: core::Item, C: Container<T>> TypePermit<'a, T, R, Slot, C> {
-    pub fn split(
+    pub fn split_slot(
         self,
     ) -> (
         TypePermit<'a, T, R, Item, C>,
@@ -156,9 +166,9 @@ impl<'a, R, T: core::Item, C: Container<T>> TypePermit<'a, T, R, Slot, C> {
     }
 }
 
-impl<'a, T, S, C> Copy for TypePermit<'a, T, Ref, S, C> {}
+impl<'a, T, A, C> Copy for TypePermit<'a, T, Ref, A, C> {}
 
-impl<'a, T, S, C> Clone for TypePermit<'a, T, Ref, S, C> {
+impl<'a, T, A, C> Clone for TypePermit<'a, T, Ref, A, C> {
     fn clone(&self) -> Self {
         Self {
             container: self.container,
@@ -167,12 +177,12 @@ impl<'a, T, S, C> Clone for TypePermit<'a, T, Ref, S, C> {
     }
 }
 
-pub struct AnyPermit<'a, R, S, C> {
+pub struct AnyPermit<'a, R, A, C> {
     container: &'a C,
-    _marker: PhantomData<(R, S)>,
+    _marker: PhantomData<(R, A)>,
 }
 
-impl<'a, R, S, C: AnyContainer> AnyPermit<'a, R, S, C> {
+impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
     /// SAFETY: Caller must ensure that it has the correct R & S access to C for the given 'a.
     pub unsafe fn new(container: &'a C) -> Self {
         Self {
@@ -181,11 +191,21 @@ impl<'a, R, S, C: AnyContainer> AnyPermit<'a, R, S, C> {
         }
     }
 
-    fn access(&self) -> Permit<R, S> {
+    fn access(&self) -> Permit<R, A> {
         Permit::new()
     }
 
-    pub fn get(self, key: AnyKey) -> Result<core::AnySlot<'a, R, S>, CollectionError> {
+    pub fn of<T: core::Item>(self) -> TypePermit<'a, T, R, A, C>
+    where
+        C: Container<T>,
+    {
+        TypePermit {
+            container: self.container,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn get(self, key: AnyKey) -> Result<core::AnySlot<'a, R, A>, CollectionError> {
         self.container
             .get_slot_any(key.into())
             // SAFETY: Type level logic of AnyPermit ensures that it has sufficient access for 'a to this slot.
@@ -210,11 +230,11 @@ impl<'a, R, S, C: AnyContainer> AnyPermit<'a, R, S, C> {
     }
 
     // None if a == b
-    pub fn split_pair(
+    pub fn get_pair(
         self,
         a: AnyKey,
         b: AnyKey,
-    ) -> Result<Option<(core::AnySlot<'a, R, S>, core::AnySlot<'a, R, S>)>, CollectionError> {
+    ) -> Result<Option<(core::AnySlot<'a, R, A>, core::AnySlot<'a, R, A>)>, CollectionError> {
         if a == b {
             Ok(None)
         } else {
@@ -233,36 +253,8 @@ impl<'a, R, S, C: AnyContainer> AnyPermit<'a, R, S, C> {
     }
 }
 
-impl<'a, R, S, C: AnyContainer> AnyPermit<'a, R, S, C> {
-    pub fn of<T: core::Item>(self) -> TypePermit<'a, T, R, S, C>
-    where
-        C: Container<T>,
-    {
-        TypePermit {
-            container: self.container,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<'a, S, C: AnyContainer> AnyPermit<'a, Mut, S, C> {
-    pub fn borrow(&self) -> AnyPermit<Ref, S, C> {
-        AnyPermit {
-            container: self.container,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn borrow_mut(&mut self) -> AnyPermit<Mut, S, C> {
-        AnyPermit {
-            container: self.container,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<'a, R, C: AnyContainer> AnyPermit<'a, R, Slot, C> {
-    pub fn split(self) -> (AnyPermit<'a, R, Item, C>, AnyPermit<'a, R, Shell, C>) {
+impl<'a, C: AnyContainer> AnyPermit<'a, Mut, Slot, C> {
+    pub fn split_slots(self) -> (AnyPermit<'a, Mut, Item, C>, AnyPermit<'a, Mut, Shell, C>) {
         (
             AnyPermit {
                 container: self.container,
@@ -276,9 +268,43 @@ impl<'a, R, C: AnyContainer> AnyPermit<'a, R, Slot, C> {
     }
 }
 
-impl<'a, S, C> Copy for AnyPermit<'a, Ref, S, C> {}
+impl<'a, A, C: AnyContainer> AnyPermit<'a, Mut, A, C> {
+    pub fn split_types(self) -> TypeSplitPermit<'a, A, C> {
+        TypeSplitPermit {
+            container: self.container,
+            splitted: Vec::new(),
+            _marker: PhantomData,
+        }
+    }
 
-impl<'a, S, C> Clone for AnyPermit<'a, Ref, S, C> {
+    pub fn split_keys(self) -> KeySplitPermit<'a, A, C> {
+        KeySplitPermit {
+            container: self.container,
+            splitted: HashSet::new(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, A, C: AnyContainer> AnyPermit<'a, Mut, A, C> {
+    pub fn borrow(&self) -> AnyPermit<Ref, A, C> {
+        AnyPermit {
+            container: self.container,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn borrow_mut(&mut self) -> AnyPermit<Mut, A, C> {
+        AnyPermit {
+            container: self.container,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, A, C> Copy for AnyPermit<'a, Ref, A, C> {}
+
+impl<'a, A, C> Clone for AnyPermit<'a, Ref, A, C> {
     fn clone(&self) -> Self {
         Self {
             container: self.container,
@@ -287,58 +313,13 @@ impl<'a, S, C> Clone for AnyPermit<'a, Ref, S, C> {
     }
 }
 
-pub struct SplitOwnership<'a, S, C> {
-    container: &'a C,
-    _marker: PhantomData<S>,
-}
-
-impl<'a, S, C: AnyContainer> SplitOwnership<'a, S, C> {
-    /// SAFETY: Caller must ensure that it has exclusive access to S in C for the given 'a.
-    pub unsafe fn new(container: &'a C) -> Self {
-        Self {
-            container,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn get(&self) -> AnyPermit<Ref, S, C> {
-        AnyPermit {
-            container: self.container,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn get_mut(&mut self) -> AnyPermit<Mut, S, C> {
-        AnyPermit {
-            container: self.container,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn split_types(self) -> TypeOwnership<'a, S, C> {
-        TypeOwnership {
-            container: self.container,
-            splitted: Vec::new(),
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn split_keys(self) -> KeyOwnership<'a, S, C> {
-        KeyOwnership {
-            container: self.container,
-            splitted: Vec::new(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-pub struct TypeOwnership<'a, S, C> {
+pub struct TypeSplitPermit<'a, A, C> {
     container: &'a C,
     splitted: Vec<TypeId>,
-    _marker: PhantomData<S>,
+    _marker: PhantomData<A>,
 }
 
-impl<'a, S, C> TypeOwnership<'a, S, C> {
+impl<'a, A, C> TypeSplitPermit<'a, A, C> {
     /// SAFETY: Caller must ensure that it has exclusive access to S in C for the given 'a.
     pub unsafe fn new(container: &'a C) -> Self {
         Self {
@@ -348,7 +329,7 @@ impl<'a, S, C> TypeOwnership<'a, S, C> {
         }
     }
 
-    pub fn split_off<T: core::Item>(&mut self) -> Option<TypePermit<'a, T, Mut, S, C>>
+    pub fn of<T: core::Item>(&mut self) -> Option<TypePermit<'a, T, Mut, A, C>>
     where
         C: Container<T>,
     {
@@ -364,19 +345,18 @@ impl<'a, S, C> TypeOwnership<'a, S, C> {
     }
 }
 
-pub struct KeyOwnership<'a, S, C> {
+pub struct KeySplitPermit<'a, A, C> {
     container: &'a C,
-    // TODO: On more keys change to HashSet
-    splitted: Vec<AnyKey>,
-    _marker: PhantomData<S>,
+    splitted: HashSet<AnyKey>,
+    _marker: PhantomData<A>,
 }
 
-impl<'a, S, C> KeyOwnership<'a, S, C> {
+impl<'a, A, C> KeySplitPermit<'a, A, C> {
     /// SAFETY: Caller must ensure that it has exclusive access to S in C for the given 'a.
     pub unsafe fn new(container: &'a C) -> Self {
         Self {
             container,
-            splitted: Vec::new(),
+            splitted: HashSet::new(),
             _marker: PhantomData,
         }
     }
@@ -385,48 +365,38 @@ impl<'a, S, C> KeyOwnership<'a, S, C> {
     pub fn get<T: core::Item>(
         &mut self,
         key: Key<T>,
-    ) -> Result<Option<core::Slot<'a, T, C::Shell, Mut, S>>, CollectionError>
+    ) -> Result<Option<core::Slot<'a, T, C::Shell, Mut, A>>, CollectionError>
     where
         C: Model<T>,
     {
-        if self.splitted.contains(&key.into()) {
-            Ok(None)
-        } else {
-            self.splitted.push(key.into());
-
+        if self.splitted.insert(key.into()) {
             TypePermit {
                 container: self.container,
                 _marker: PhantomData,
             }
             .get(key)
             .map(Some)
+        } else {
+            Ok(None)
         }
     }
 
-    // TODO: fn get_any
-}
-
-pub struct Split<I, S> {
-    pub items: I,
-    pub shells: S,
-}
-
-impl<I, S> Split<I, S> {
-    pub fn new(item: I, shell: S) -> Self {
-        Self {
-            items: item,
-            shells: shell,
-        }
-    }
-
-    pub fn map<I2, S2, F, G>(self, f: F, g: G) -> Split<I2, S2>
+    pub fn get_any(
+        &mut self,
+        key: AnyKey,
+    ) -> Result<Option<core::AnySlot<'a, Mut, A>>, CollectionError>
     where
-        F: FnOnce(I) -> I2,
-        G: FnOnce(S) -> S2,
+        C: AnyContainer,
     {
-        Split {
-            items: f(self.items),
-            shells: g(self.shells),
+        if self.splitted.insert(key.into()) {
+            AnyPermit {
+                container: self.container,
+                _marker: PhantomData,
+            }
+            .get(key)
+            .map(Some)
+        } else {
+            Ok(None)
         }
     }
 }
