@@ -138,9 +138,9 @@ where
 {
     type Alloc = A;
 
-    type R = ();
+    type Locality = ();
 
-    fn reserve(&mut self, _: Option<&T>, _: Self::R) -> Option<(ReservedKey<T>, &A)> {
+    fn reserve(&mut self, _: Option<&T>, _: Self::Locality) -> Option<(ReservedKey<T>, &A)> {
         // Check free tables
         while let Some(&table_index) = self.free_tables.last() {
             let table = &self.tables[table_index];
@@ -323,7 +323,7 @@ where
         Some(self.get_slot(key.downcast::<T>()?)?.upcast())
     }
 
-    fn unfill_any(&mut self, key: AnySubKey) {
+    fn unfill_any_slot(&mut self, key: AnySubKey) {
         if let Some(key) = key.downcast() {
             self.unfill(key);
         }
@@ -691,7 +691,7 @@ mod tests {
         let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item);
 
-        container.unfill_any(key.into());
+        container.unfill_any_slot(key.into());
         assert!(container.get_slot(key.into()).is_none());
     }
 

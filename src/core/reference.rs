@@ -1,12 +1,13 @@
 use crate::core::*;
-use std::fmt;
+use log::*;
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+};
 
-// TODO: Pinned outer references
-// TODO: Make ref builded by adding ref fn on recipient.
-#[derive(PartialEq, Eq)]
-pub struct Ref<T: AnyItem>(Key<T>);
+pub struct Ref<T: Item>(Key<T>);
 
-impl<T: AnyItem> Ref<T> {
+impl<T: Item> Ref<T> {
     pub fn new(key: Key<T>) -> Self {
         Ref(key)
     }
@@ -16,54 +17,106 @@ impl<T: AnyItem> Ref<T> {
     }
 }
 
-impl<T: AnyItem> Ref<T> {
+impl<T: Item> Ref<T> {
     /// Panics if to doesn't exist.
-    pub fn connect(from: AnyKey, to: Key<T>, collection: MutShells<T, impl Container<T>>) -> Self {
-        let mut shell = collection.get(to).expect("Item doesn't exist");
+    pub fn connect(from: AnyKey, to: Key<T>, collection: MutShells<T, impl Model<T>>) -> Self {
+        let mut shell = collection
+            .get(to)
+            .map_err(|error| {
+                error!("Failed to connect {} - {}, error: {}", from, to, error);
+                error
+            })
+            .expect("Failed to connect");
+
         shell.add_from(from);
         Self::new(to)
     }
 
-    pub fn disconnect(self, from: AnyKey, collection: MutShells<T, impl Container<T>>) {
-        if let Some(mut shell) = collection.get(self.key()) {
-            shell.remove_from(from)
-        }
+    pub fn disconnect_from(self, from: AnyKey, collection: MutShells<T, impl Model<T>>) {
+        collection
+            .get(self.key())
+            .map_err(|error| {
+                error!(
+                    "Failed to disconnect {} - {}, error: {}",
+                    from, self.0, error
+                );
+                error
+            })
+            .expect("Failed to disconnect")
+            .remove_from(from)
     }
 
-    pub fn get<R, S, C: Container<T>>(
-        self,
-        coll: TypePermit<R, T, S, C>,
-    ) -> Slot<T, C::GroupItem, C::Shell, C::Alloc, R, S> {
+    pub fn get<R, S, C: Model<T>>(self, coll: TypePermit<T, R, S, C>) -> Slot<T, C::Shell, R, S> {
         coll.get(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
-    }
-
-    fn panic_dangling(&self) -> ! {
-        panic!("Dangling reference {:?}", self);
+            .map_err(|error| {
+                error!("Failed to fetch {}, error: {}", self.0, error);
+                error
+            })
+            .expect("Failed to fetch")
     }
 }
 
-impl<T: AnyItem> Copy for Ref<T> {}
+impl<T: Item> Key<T> {
+    pub fn connect_from(
+        self,
+        from: impl Into<AnyKey>,
+        collection: MutShells<T, impl Model<T>>,
+    ) -> Ref<T> {
+        Ref::connect(from.into(), self, collection)
+    }
 
-impl<T: AnyItem> Clone for Ref<T> {
+    pub fn connect_to(self, to: Key<T>, collection: MutShells<T, impl Model<T>>) -> Ref<T> {
+        Ref::connect(self.into(), to, collection)
+    }
+}
+
+impl<T: Item> Eq for Ref<T> {}
+
+impl<T: Item> PartialEq for Ref<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: Item> Ord for Ref<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl<T: Item> PartialOrd for Ref<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T: Item> Hash for Ref<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T: Item> Copy for Ref<T> {}
+
+impl<T: Item> Clone for Ref<T> {
     fn clone(&self) -> Self {
         Ref(self.0)
     }
 }
 
-impl<T: AnyItem> From<Ref<T>> for Key<T> {
+impl<T: Item> From<Ref<T>> for Key<T> {
     fn from(ref_: Ref<T>) -> Self {
         ref_.0
     }
 }
 
-impl<T: AnyItem> fmt::Debug for Ref<T> {
+impl<T: Item> fmt::Debug for Ref<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Ref({:?})", self.0)
     }
 }
 
-impl<T: AnyItem> PartialEq<AnyKey> for Ref<T> {
+impl<T: Item> PartialEq<AnyKey> for Ref<T> {
     fn eq(&self, other: &AnyKey) -> bool {
         AnyKey::from(self.0) == *other
     }
@@ -81,7 +134,7 @@ impl AnyRef {
         self.0
     }
 
-    pub fn downcast<T: AnyItem>(self) -> Option<Ref<T>> {
+    pub fn downcast<T: Item>(self) -> Option<Ref<T>> {
         self.0.downcast().map(Ref)
     }
 
@@ -89,28 +142,60 @@ impl AnyRef {
     pub fn connect(from: AnyKey, to: AnyKey, collection: MutAnyShells<impl AnyContainer>) -> Self {
         collection
             .get(to)
-            .expect("Item doesn't exist")
+            .map_err(|error| {
+                error!("Failed to connect {} - {}, error: {}", from, to, error);
+                error
+            })
+            .expect("Failed to connect")
             .add_from(from);
+
         Self::new(to)
     }
 
-    pub fn disconnect(self, from: AnyKey, collection: MutAnyShells<impl AnyContainer>) {
-        if let Some(mut slot) = collection.get(self.key()) {
-            slot.shell_mut().remove_from(from);
-        }
+    pub fn disconnect_from(self, from: AnyKey, collection: MutAnyShells<impl AnyContainer>) {
+        collection
+            .get(self.key())
+            .map_err(|error| {
+                error!(
+                    "Failed to disconnect {} - {}, error: {}",
+                    from, self.0, error
+                );
+                error
+            })
+            .expect("Failed to disconnect")
+            .shell_mut()
+            .remove_from(from);
     }
 
     pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> AnySlot<R, S> {
         coll.get(self.key())
-            .unwrap_or_else(|| self.panic_dangling())
-    }
-
-    fn panic_dangling(&self) -> ! {
-        panic!("Dangling reference {:?}", self);
+            .map_err(|error| {
+                error!("Failed to fetch {}, error: {}", self.0, error);
+                error
+            })
+            .expect("Failed to fetch")
     }
 }
 
-impl<T: AnyItem> From<Ref<T>> for AnyRef {
+impl AnyKey {
+    pub fn connect_from(
+        self,
+        from: impl Into<AnyKey>,
+        collection: MutAnyShells<impl AnyContainer>,
+    ) -> AnyRef {
+        AnyRef::connect(from.into(), self, collection)
+    }
+
+    pub fn connect_to<T: Item>(
+        self,
+        to: Key<T>,
+        collection: MutShells<T, impl Model<T>>,
+    ) -> Ref<T> {
+        Ref::connect(self, to, collection)
+    }
+}
+
+impl<T: Item> From<Ref<T>> for AnyRef {
     fn from(ref_: Ref<T>) -> Self {
         AnyRef(ref_.0.into())
     }

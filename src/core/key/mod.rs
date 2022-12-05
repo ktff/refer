@@ -1,6 +1,7 @@
-mod delta;
+// mod delta;
 mod index;
-mod reserved;
+mod prefix;
+// mod reserved;
 mod sub;
 
 use std::{
@@ -10,14 +11,13 @@ use std::{
     marker::PhantomData,
 };
 
-pub use delta::*;
+// pub use delta::*;
 pub use index::*;
-pub use reserved::*;
+pub use prefix::*;
+// pub use reserved::*;
 pub use sub::*;
 
-use crate::{
-    AnyContainer, AnyItem, AnyPermit, AnySlot, Collection, Container, Item, Slot, TypePermit,
-};
+use crate::core::{AnyContainer, AnyPermit, AnySlot};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -56,21 +56,6 @@ impl<T: ?Sized + 'static> Key<T> {
         } else {
             [array[1], array[0]]
         }
-    }
-}
-
-impl<T: AnyItem> Key<T> {
-    pub fn get<R, S, C: Container<T>>(
-        self,
-        coll: TypePermit<R, T, S, C>,
-    ) -> Option<Slot<T, C::GroupItem, C::Shell, C::Alloc, R, S>> {
-        coll.get(self)
-    }
-}
-
-impl<T: Item> Key<T> {
-    pub fn take<A: Collection<T>>(self, access: &mut A) -> Option<T> {
-        access.take(self)
     }
 }
 
@@ -140,10 +125,6 @@ impl AnyKey {
         self.index().0.get()
     }
 
-    pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> Option<AnySlot<R, S>> {
-        coll.get(self)
-    }
-
     pub fn downcast<T: ?Sized + 'static>(self) -> Option<Key<T>> {
         if self.0 == TypeId::of::<T>() {
             Some(Key::new(self.1))
@@ -159,8 +140,17 @@ impl fmt::Debug for AnyKey {
     }
 }
 
+impl fmt::Display for AnyKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}#{}", self.0, self.1)
+    }
+}
+
 impl<T: ?Sized + 'static> From<Key<T>> for AnyKey {
     fn from(key: Key<T>) -> Self {
         AnyKey(TypeId::of::<T>(), key.0)
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct DynKey<T: ?Sized + 'static>(AnyKey, PhantomData<T>);

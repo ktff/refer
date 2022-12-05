@@ -5,7 +5,7 @@ use std::{
     num::NonZeroU64,
 };
 
-use super::{AnyKey, Index, Key, MAX_KEY_LEN};
+use super::{AnyKey, Index, Key, KeyPrefix, MAX_KEY_LEN};
 
 /// This is builded by pushing prefixes on top.
 /// And deconstructed by popping prefixes from top.
@@ -56,6 +56,11 @@ impl<T: ?Sized + 'static> SubKey<T> {
             Ok((prefix, suffix)) => Ok((prefix, Self(suffix, PhantomData))),
             Err(suffix) => Err(suffix),
         }
+    }
+
+    /// True if has given prefix.
+    pub fn of(self, prefix: KeyPrefix) -> bool {
+        prefix.prefix_of((self.0).0)
     }
 }
 

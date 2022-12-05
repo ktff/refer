@@ -59,9 +59,30 @@ impl Index {
             Err(Index(NonZeroU64::new(prefix).expect("Invalid prefix")))
         }
     }
+
+    // /// Tries to split of prefix from top of self.
+    // /// Can fail if there is no suffix.
+    // pub fn new_split_prefix_try(self, prefix_len: u32) -> Result<(usize, Self), Self> {
+    //     let rotated = self.0.get().rotate_left(prefix_len);
+    //     let top_mask = ((!0u64) << prefix_len);
+    //     let prefix = rotated & (!top_mask);
+    //     let suffix = NonZeroU64::new(rotated & top_mask);
+
+    //     if let Some(suffix) = suffix {
+    //         Ok(((prefix as usize), Index(suffix)))
+    //     } else {
+    //         Err(Index(NonZeroU64::new(prefix).expect("Invalid prefix")))
+    //     }
+    // }
 }
 
 impl fmt::Debug for Index {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self.0)
+    }
+}
+
+impl fmt::Display for Index {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#x}", self.0)
     }
@@ -154,7 +175,4 @@ mod tests {
             Err(Index(NonZeroU64::new(0x34).unwrap()))
         );
     }
-
-
-    
 }

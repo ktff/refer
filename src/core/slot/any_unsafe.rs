@@ -47,6 +47,10 @@ impl<'a> AnyUnsafeSlot<'a> {
         }
     }
 
+    pub(super) fn alloc_any(&self) -> &'a dyn Any {
+        self.alloc_any
+    }
+
     // pub fn downcast<T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any>(
     //     &self,
     // ) -> Option<UnsafeSlot<'a, T, G, S, A>> {

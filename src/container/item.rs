@@ -38,11 +38,11 @@ impl<T: Sync + Send + 'static> ItemContainer<T> {
 }
 
 impl<T: Sync + Send + 'static> Allocator<T> for ItemContainer<T> {
-    type Alloc = std::alloc::Global;
-
-    type R = ();
-
-    fn reserve(&mut self, _: Option<&T>, _: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+    fn reserve(
+        &mut self,
+        _: Option<&T>,
+        _: Self::Locality,
+    ) -> Option<(ReservedKey<T>, &Self::Alloc)> {
         match self.0 {
             Slot::Free => {
                 self.0 = Slot::Reserved;
@@ -72,10 +72,6 @@ impl<T: Sync + Send + 'static> Allocator<T> for ItemContainer<T> {
 }
 
 impl<T: AnyItem> Container<T> for ItemContainer<T> {
-    type GroupItem = ();
-
-    type Shell = SizedShell<T>;
-
     type SlotIter<'a> = SlotIter<'a, T> where Self: 'a;
 
     fn get_slot(&self, _: SubKey<T>) -> Option<UnsafeSlot<T, (), Self::Shell, Self::Alloc>> {
@@ -129,7 +125,7 @@ impl<T: AnyItem> AnyContainer for ItemContainer<T> {
         }
     }
 
-    fn unfill_any(&mut self, key: AnySubKey) {
+    fn unfill_any_slot(&mut self, key: AnySubKey) {
         if key.downcast::<T>().is_some() {
             self.0.unfill();
         }
@@ -159,6 +155,16 @@ impl<T: AnyItem> AnyContainer for ItemContainer<T> {
         set.insert(TypeId::of::<T>());
         set
     }
+}
+
+impl<T: AnyItem> ContainerTypes<T> for ItemContainer<T> {
+    type Alloc = std::alloc::Global;
+
+    type Locality = ();
+
+    type GroupItem = ();
+
+    type Shell = SizedShell<T>;
 }
 
 impl<T: Sync + Send + 'static> Default for ItemContainer<T> {
@@ -365,7 +371,7 @@ mod tests {
         let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item);
 
-        container.unfill_any(key.into());
+        container.unfill_any_slot(key.into());
         assert!(container.get_slot(key.into()).is_none());
     }
 

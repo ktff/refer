@@ -32,22 +32,25 @@ pub struct Vertice<T: Sync + Send + 'static>(T, Node<Self>);
 impl<T: Sync + Send + 'static> Item for Vertice<T> {
     type I<'a> = <Node<Self> as Item>::I<'a>;
 
-    fn references(&self, this: Index) -> Self::I<'_> {
-        self.1.references(this)
+    fn iter_references(&self, this: Index) -> Self::I<'_> {
+        self.1.iter_references(this)
     }
 }
 
 impl<T: Sync + Send + 'static> AnyItem for Vertice<T> {
-    fn references_any<'a>(&'a self, this: Index) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
-        self.1.references_any(this)
+    fn iter_references_any<'a>(
+        &'a self,
+        this: Index,
+    ) -> Option<Box<dyn Iterator<Item = AnyRef> + 'a>> {
+        self.1.iter_references_any(this)
     }
 
-    fn item_removed(&mut self, this: Index, key: AnyKey) -> bool {
-        self.1.item_removed(this, key)
+    fn remove_reference(&mut self, this: Index, key: AnyKey) -> bool {
+        self.1.remove_reference(this, key)
     }
 
-    fn item_moved(&mut self, old: AnyKey, new: AnyKey) {
-        self.1.item_moved(old, new)
+    fn set_reference(&mut self, old: AnyKey, new: AnyKey) {
+        self.1.set_reference(old, new)
     }
 }
 

@@ -114,9 +114,9 @@ impl<
 {
     type Alloc = A;
 
-    type R = ();
+    type Locality = ();
 
-    fn reserve(&mut self, _: Option<&T>, _: Self::R) -> Option<(ReservedKey<T>, &A)> {
+    fn reserve(&mut self, _: Option<&T>, _: Self::Locality) -> Option<(ReservedKey<T>, &A)> {
         let index = if let Some(index) = self.free.pop() {
             debug_assert!(matches!(self.slots[index.as_usize()], Slot::Free));
             index
@@ -224,7 +224,7 @@ impl<T: AnyItem, S: Shell<T = T> + Default, A: alloc::Allocator + Sync + Send + 
         }
     }
 
-    fn unfill_any(&mut self, key: AnySubKey) {
+    fn unfill_any_slot(&mut self, key: AnySubKey) {
         if let Some(key) = key.downcast() {
             self.unfill(key);
         }
@@ -349,7 +349,7 @@ mod tests {
         let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item);
 
-        container.unfill_any(key.into());
+        container.unfill_any_slot(key.into());
         assert!(container.get_slot(key.into()).is_none());
     }
 

@@ -58,9 +58,13 @@ where
 {
     type Alloc = <F::C<T> as Allocator<T>>::Alloc;
 
-    type R = <F::C<T> as Allocator<T>>::R;
+    type Locality = <F::C<T> as Allocator<T>>::Locality;
 
-    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+    fn reserve(
+        &mut self,
+        item: Option<&T>,
+        r: Self::Locality,
+    ) -> Option<(ReservedKey<T>, &Self::Alloc)> {
         self.coll_or_insert::<T>().reserve(item, r)
     }
 
@@ -119,11 +123,11 @@ impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
             .get_any_slot(key)
     }
 
-    fn unfill_any(&mut self, key: AnySubKey) {
+    fn unfill_any_slot(&mut self, key: AnySubKey) {
         self.collections
             .get_mut(&key.type_id())
             .map(|c| &mut **c)
-            .map(|c| c.unfill_any(key));
+            .map(|c| c.unfill_any_slot(key));
     }
 
     fn first(&self, key: TypeId) -> Option<AnySubKey> {
@@ -215,7 +219,7 @@ mod tests {
         let key_b = container.add_with(true, ()).unwrap();
         let key_c = container.add_with("Hello", ()).unwrap();
 
-        assert_eq!(container.take(key_b), Some(true));
+        assert_eq!(container.remove(key_b), Some(true));
 
         assert_eq!(container.get(key_a).map(|((item, _), _)| item), Some(&42));
         assert!(container.get(key_b).is_none());

@@ -1,32 +1,20 @@
 use super::permit::{self, Permit, Split};
-use crate::{
-    core::{AnyItem, AnySlot, Key, UnsafeSlot},
-    AnyKey,
-};
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-};
+use crate::core::{AnyKey, AnySlot, Index, Item, ItemBuilder, ItemContext, Key, Shell, UnsafeSlot};
+use std::ops::{Deref, DerefMut};
 
-pub struct Slot<
-    'a,
-    T: AnyItem,
-    G: Any,
-    S: crate::Shell<T = T>,
-    A: std::alloc::Allocator + Any,
-    R,
-    W,
-> {
+pub struct Slot<'a, T: Item, S: Shell<T = T>, R, W> {
     key: Key<T>,
-    slot: UnsafeSlot<'a, T, G, S, A>,
+    slot: UnsafeSlot<'a, T, T::LocalityData, S, T::Alloc>,
     access: Permit<R, W>,
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R, W>
-    Slot<'a, T, G, S, A, R, W>
-{
+impl<'a, T: Item, S: Shell<T = T>, R, W> Slot<'a, T, S, R, W> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(key: Key<T>, slot: UnsafeSlot<'a, T, G, S, A>, access: Permit<R, W>) -> Self {
+    pub unsafe fn new(
+        key: Key<T>,
+        slot: UnsafeSlot<'a, T, T::LocalityData, S, T::Alloc>,
+        access: Permit<R, W>,
+    ) -> Self {
         Self { key, slot, access }
     }
 
@@ -34,12 +22,16 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
         self.key
     }
 
-    pub fn alloc(&self) -> &'a A {
+    pub fn alloc(&self) -> &'a T::Alloc {
         self.slot.alloc()
     }
 
-    pub fn group_item(&self) -> &'a G {
+    pub fn group_item(&self) -> &'a T::LocalityData {
         self.slot.group_item()
+    }
+
+    pub fn context(&self) -> ItemContext<'a, T> {
+        ItemContext::new((self.slot.group_item(), self.slot.alloc()))
     }
 
     pub fn upcast(self) -> AnySlot<'a, R, W> {
@@ -48,9 +40,7 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
     }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R>
-    Slot<'a, T, G, S, A, R, permit::Slot>
-{
+impl<'a, T: Item, S: Shell<T = T>, R> Slot<'a, T, S, R, permit::Slot> {
     pub fn item(&self) -> &T {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
@@ -60,11 +50,18 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
         // SAFETY: We have at least read access to the shell. R
         unsafe { &*self.slot.shell().get() }
     }
+
+    pub fn iter_references(&self) -> T::I<'_> {
+        self.item().iter_references(self.context())
+    }
+
+    pub fn duplicate(&self) -> Option<ItemBuilder> {
+        let context = self.context();
+        self.item().duplicate(context.upcast())
+    }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any>
-    Slot<'a, T, G, S, A, permit::Mut, permit::Slot>
-{
+impl<'a, T: Item, S: Shell<T = T>> Slot<'a, T, S, permit::Mut, permit::Slot> {
     pub fn item_mut(&mut self) -> &mut T {
         // SAFETY: We have mut access to the item.
         unsafe { &mut *self.slot.item().get() }
@@ -87,10 +84,8 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
 
     pub fn split(
         self,
-    ) -> Split<
-        Slot<'a, T, G, S, A, permit::Mut, permit::Item>,
-        Slot<'a, T, G, S, A, permit::Mut, permit::Shell>,
-    > {
+    ) -> Split<Slot<'a, T, S, permit::Mut, permit::Item>, Slot<'a, T, S, permit::Mut, permit::Shell>>
+    {
         self.access.split().map(
             |access| Slot {
                 key: self.key,
@@ -104,59 +99,82 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
             },
         )
     }
+
+    // pub fn displace(&mut self) -> Option<ItemBuilder> {
+    //     let context = self.context();
+    //     self.item_mut().displace(context.upcast())
+    // }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R>
-    Slot<'a, T, G, S, A, R, permit::Item>
-{
+impl<'a, T: Item, S: Shell<T = T>, R> Slot<'a, T, S, R, permit::Item> {
     pub fn item(&self) -> &T {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
     }
+
+    pub fn iter_references(&self) -> T::I<'_> {
+        self.item().iter_references(self.context())
+    }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any>
-    Slot<'a, T, G, S, A, permit::Mut, permit::Item>
-{
+impl<'a, T: Item, S: Shell<T = T>> Slot<'a, T, S, permit::Mut, permit::Item> {
     pub fn item_mut(&mut self) -> &mut T {
         // SAFETY: We have mut access to the item.
         unsafe { &mut *self.slot.item().get() }
     }
+
+    pub fn replace_reference(&mut self, other: AnyKey, to: Index) {
+        let context = self.context();
+        self.item_mut()
+            .replace_reference(context.upcast(), other, to);
+    }
+
+    pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> bool {
+        let context = self.context();
+        self.item_mut()
+            .duplicate_reference(context.upcast(), other, to)
+    }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R>
-    Slot<'a, T, G, S, A, R, permit::Shell>
-{
+impl<'a, T: Item, S: Shell<T = T>, R> Slot<'a, T, S, R, permit::Shell> {
     pub fn shell(&self) -> &S {
         // SAFETY: We have at least read access to the shell. R
         unsafe { &*self.slot.shell().get() }
     }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any>
-    Slot<'a, T, G, S, A, permit::Mut, permit::Shell>
-{
+impl<'a, T: Item, S: Shell<T = T>> Slot<'a, T, S, permit::Mut, permit::Shell> {
     pub fn shell_mut(&mut self) -> &mut S {
         // SAFETY: We have mut access to the shell.
         unsafe { &mut *self.slot.shell().get() }
     }
 
-    /// Additive if called for same `from` multiple times.
     pub fn add_from(&mut self, from: AnyKey) {
         let alloc = self.alloc();
-        self.shell_mut().add_from_any(from, alloc);
+        self.shell_mut().add_from(from, alloc);
+    }
+
+    pub fn add_from_count(&mut self, from: AnyKey, count: usize) {
+        let alloc = self.alloc();
+        self.shell_mut().add_from_count(from, count, alloc);
+    }
+
+    pub fn replace(&mut self, from: AnyKey, to: Index) {
+        let alloc = self.alloc();
+        self.shell_mut().replace(from, to, alloc);
     }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R, W> Copy
-    for Slot<'a, T, G, S, A, R, W>
-where
-    Permit<R, W>: Copy,
-{
+impl<'a, T: Item, S: Shell<T = T>, W> Slot<'a, T, S, permit::Mut, W> {
+    pub fn borrow(&self) -> Slot<T, S, permit::Ref, W> {
+        // SAFETY: We have mut access to the item.
+        unsafe { Slot::new(self.key, self.slot, self.access.borrow()) }
+    }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R, W> Clone
-    for Slot<'a, T, G, S, A, R, W>
+impl<'a, T: Item, S: Shell<T = T>, R, W> Copy for Slot<'a, T, S, R, W> where Permit<R, W>: Copy {}
+
+impl<'a, T: Item, S: Shell<T = T>, R, W> Clone for Slot<'a, T, S, R, W>
 where
     Permit<R, W>: Clone,
 {
@@ -169,9 +187,7 @@ where
     }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R> Deref
-    for Slot<'a, T, G, S, A, R, permit::Item>
-{
+impl<'a, T: Item, S: Shell<T = T>, R> Deref for Slot<'a, T, S, R, permit::Item> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -179,17 +195,13 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
     }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any> DerefMut
-    for Slot<'a, T, G, S, A, permit::Mut, permit::Item>
-{
+impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Item> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
     }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any, R> Deref
-    for Slot<'a, T, G, S, A, R, permit::Shell>
-{
+impl<'a, T: Item, S: Shell<T = T>, R> Deref for Slot<'a, T, S, R, permit::Shell> {
     type Target = S;
 
     fn deref(&self) -> &Self::Target {
@@ -197,9 +209,7 @@ impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + 
     }
 }
 
-impl<'a, T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any> DerefMut
-    for Slot<'a, T, G, S, A, permit::Mut, permit::Shell>
-{
+impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Shell> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.shell_mut()
     }

@@ -8,11 +8,13 @@ mod unsafe_slot;
 
 pub use any_slot::AnySlot;
 pub use any_unsafe::AnyUnsafeSlot;
-pub use permit::{AnyPermit, ComplexOwnership, Permit, Split, SplitOwnership, TypePermit};
+pub use permit::{
+    AnyPermit, KeyOwnership, Permit, Split, SplitOwnership, TypeOwnership, TypePermit,
+};
 pub use slot::Slot;
 pub use unsafe_slot::UnsafeSlot;
 
-use crate::{AnyItem, Container};
+use crate::core::{AnyItem, Shell};
 
 // *************************** Useful aliases *************************** //
 
@@ -23,22 +25,16 @@ pub type RefAnyShells<'a, C> = AnyPermit<'a, permit::Ref, permit::Shell, C>;
 pub type RefAnyItems<'a, C> = AnyPermit<'a, permit::Ref, permit::Item, C>;
 pub type RefAnySlots<'a, C> = AnyPermit<'a, permit::Ref, permit::Slot, C>;
 
-pub type RefSlots<'a, T, C> = TypePermit<'a, permit::Ref, T, permit::Slot, C>;
-pub type MutSlots<'a, T, C> = TypePermit<'a, permit::Mut, T, permit::Slot, C>;
-pub type RefShells<'a, T, C> = TypePermit<'a, permit::Ref, T, permit::Shell, C>;
-pub type MutShells<'a, T, C> = TypePermit<'a, permit::Mut, T, permit::Shell, C>;
-pub type RefItems<'a, T, C> = TypePermit<'a, permit::Ref, T, permit::Item, C>;
-pub type MutItems<'a, T, C> = TypePermit<'a, permit::Mut, T, permit::Item, C>;
+pub type RefSlots<'a, T, C> = TypePermit<'a, T, permit::Ref, permit::Slot, C>;
+pub type MutSlots<'a, T, C> = TypePermit<'a, T, permit::Mut, permit::Slot, C>;
+pub type RefShells<'a, T, C> = TypePermit<'a, T, permit::Ref, permit::Shell, C>;
+pub type MutShells<'a, T, C> = TypePermit<'a, T, permit::Mut, permit::Shell, C>;
+pub type RefItems<'a, T, C> = TypePermit<'a, T, permit::Ref, permit::Item, C>;
+pub type MutItems<'a, T, C> = TypePermit<'a, T, permit::Mut, permit::Item, C>;
 
-pub type RefSlot<'a, T: AnyItem, C: Container<T>> =
-    Slot<'a, T, C::GroupItem, C::Shell, C::Alloc, permit::Ref, permit::Slot>;
-pub type MutSlot<'a, T: AnyItem, C: Container<T>> =
-    Slot<'a, T, C::GroupItem, C::Shell, C::Alloc, permit::Mut, permit::Slot>;
-pub type RefShell<'a, T: AnyItem, C: Container<T>> =
-    Slot<'a, T, C::GroupItem, C::Shell, C::Alloc, permit::Ref, permit::Shell>;
-pub type MutShell<'a, T: AnyItem, C: Container<T>> =
-    Slot<'a, T, C::GroupItem, C::Shell, C::Alloc, permit::Mut, permit::Shell>;
-pub type RefItem<'a, T: AnyItem, C: Container<T>> =
-    Slot<'a, T, C::GroupItem, C::Shell, C::Alloc, permit::Ref, permit::Item>;
-pub type MutItem<'a, T: AnyItem, C: Container<T>> =
-    Slot<'a, T, C::GroupItem, C::Shell, C::Alloc, permit::Mut, permit::Item>;
+pub type RefSlot<'a, T: AnyItem, S: Shell<T = T>> = Slot<'a, T, S, permit::Ref, permit::Slot>;
+pub type MutSlot<'a, T: AnyItem, S: Shell<T = T>> = Slot<'a, T, S, permit::Mut, permit::Slot>;
+pub type RefShell<'a, T: AnyItem, S: Shell<T = T>> = Slot<'a, T, S, permit::Ref, permit::Shell>;
+pub type MutShell<'a, T: AnyItem, S: Shell<T = T>> = Slot<'a, T, S, permit::Mut, permit::Shell>;
+pub type RefItem<'a, T: AnyItem, S: Shell<T = T>> = Slot<'a, T, S, permit::Ref, permit::Item>;
+pub type MutItem<'a, T: AnyItem, S: Shell<T = T>> = Slot<'a, T, S, permit::Mut, permit::Item>;

@@ -32,9 +32,13 @@ impl<D: Any, C: Send + Sync> ContainerData<D, C> {
 impl<D: Any + Send + Sync, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
     type Alloc = C::Alloc;
 
-    type R = C::R;
+    type Locality = C::Locality;
 
-    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+    fn reserve(
+        &mut self,
+        item: Option<&T>,
+        r: Self::Locality,
+    ) -> Option<(ReservedKey<T>, &Self::Alloc)> {
         self.container.reserve(item, r)
     }
 
@@ -84,8 +88,8 @@ impl<D: Any + Send + Sync, C: AnyContainer> AnyContainer for ContainerData<D, C>
             .map(|slot| slot.with_group_item(&self.data))
     }
 
-    fn unfill_any(&mut self, key: AnySubKey) {
-        self.container.unfill_any(key)
+    fn unfill_any_slot(&mut self, key: AnySubKey) {
+        self.container.unfill_any_slot(key)
     }
 
     fn first(&self, key: TypeId) -> Option<AnySubKey> {

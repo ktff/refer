@@ -1,50 +1,140 @@
 //! Containers can panic, if you try to use a key that was not produced at any
 //! point by that container.
 
-use crate::UnsafeSlot;
-
-use super::{AnyItem, AnySubKey, AnyUnsafeSlot, ReservedKey, Shell, SubKey};
+use super::{
+    AnyItem, AnyItemContext, AnyKey, AnySubKey, AnyUnsafeSlot, Item, KeyPrefix, Shell, SubKey,
+    UnsafeSlot,
+};
 use std::{
+    alloc::Allocator,
     any::{Any, TypeId},
     collections::HashSet,
+    fmt::Debug,
 };
+
+#[derive(Debug, Clone, Copy)]
+pub enum ContainerError {
+    OutOfKeys,
+    UnknownType,
+    UndefinedLocality,
+    IllegalPlacement,
+}
 
 /// A family of containers.
 pub trait ContainerFamily: Send + Sync + 'static {
-    type C<T: AnyItem>: AnyContainer + 'static;
+    type C<T: Item>: AnyContainer + 'static;
 
-    fn new<T: AnyItem>(key_len: u32) -> Self::C<T>;
+    fn new<T: Item>(key_len: u32) -> Self::C<T>;
 }
 
-/// It's responsibility is to contain items and shells, not to manage access to them.
-pub trait Container<T: AnyItem>: Allocator<T> + AnyContainer {
-    type GroupItem: Any;
+/// Fully compliant container for item T.
+pub trait Model<T: Item>:
+    Container<T, Alloc = T::Alloc, Locality = T::Locality, LocalityData = T::LocalityData>
+{
+}
 
+impl<
+        T: Item,
+        C: Container<T, Alloc = T::Alloc, Locality = T::Locality, LocalityData = T::LocalityData>,
+    > Model<T> for C
+{
+}
+
+/// It's responsibility is to allocate/contain/deallocate items and shells, not to manage access to them or
+/// to call their methods.
+/// TODO: remove this panics.
+/// May panic if some inputs don't correspond to this container:
+/// - Locality
+/// - SubKey
+pub trait Container<T: AnyItem>: AnyContainer {
+    /// Allocator used for items and shells.
+    type Alloc: Allocator + Clone + 'static;
+
+    /// Allocator can select placement for item based on this.
+    type Locality: Debug + Copy;
+
+    /// Data of locality.
+    type LocalityData: Any;
+
+    /// Shell of item.
     type Shell: Shell<T = T>;
 
     type SlotIter<'a>: Iterator<
             Item = (
                 SubKey<T>,
-                UnsafeSlot<'a, T, Self::GroupItem, Self::Shell, Self::Alloc>,
+                UnsafeSlot<'a, T, Self::LocalityData, Self::Shell, Self::Alloc>,
             ),
         > + Send
     where
         Self: 'a;
 
-    fn get_slot(
-        &self,
-        key: SubKey<T>,
-    ) -> Option<UnsafeSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>>;
-
     /// Iterates in ascending order of key.
     /// No slot is returned twice in returned iterator.
     fn iter_slot(&self) -> Option<Self::SlotIter<'_>>;
+
+    fn get_slot(
+        &self,
+        key: SubKey<T>,
+    ) -> Option<UnsafeSlot<T, Self::LocalityData, Self::Shell, Self::Alloc>>;
+
+    /// Some if locality exists.
+    fn locality_prefix(&self, locality: Self::Locality) -> Option<KeyPrefix>;
+
+    /// None if there is no more place for localities.
+    fn fill_locality(
+        &mut self,
+        locality: Self::Locality,
+    ) -> Option<(&Self::LocalityData, &Self::Alloc)>;
+
+    /// None if there is no more place in locality.
+    fn fill_slot(&mut self, locality: Self::Locality, item: T) -> Result<SubKey<T>, T>;
+
+    /// Removes from container.
+    fn unfill_slot(
+        &mut self,
+        key: SubKey<T>,
+    ) -> Option<(T, Self::Shell, (&Self::LocalityData, &Self::Alloc))>;
+
+    // // *************** Alt method set
+    // /// None if there is no more place for localities.
+    // fn fill_locality_2(
+    //     &mut self,
+    //     locality: Self::Locality,
+    // ) -> Option<(KeyPrefix, &Self::LocalityData, &Self::Alloc)>;
+
+    // /// None if there is no more place under prefix.
+    // fn fill_slot_2(&mut self, prefix: KeyPrefix, item: T) -> Result<SubKey<T>, T>;
 }
 
 pub trait AnyContainer: Any + Sync + Send {
-    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot>;
+    // /// None if near doesn't exist.
+    // fn get_locality_any(&self, ty: TypeId, near: AnySubKey) -> Option<AnyItemContext>;
 
-    fn unfill_any(&mut self, key: AnySubKey);
+    // /// None if there is no more place in localized group or type is unknown.
+    // fn fill_slot_any(
+    //     &mut self,
+    //     ty: TypeId,
+    //     near: AnySubKey,
+    //     item: Box<dyn Any>,
+    // ) -> Option<AnySubKey>;
+
+    /// Err if:
+    /// - no more place in localized group
+    /// - type is unknown
+    /// - locality is undefined
+    /// - item can't be placed in locality
+    fn fill_slot_any(
+        &mut self,
+        ty: TypeId,
+        locality: KeyPrefix,
+        item: Box<dyn Any>,
+    ) -> Result<AnySubKey, ContainerError>;
+
+    fn key_prefix(&self, key: AnyKey) -> Option<KeyPrefix>;
+
+    fn unfill_slot_any(&mut self, key: AnySubKey);
+
+    fn get_slot_any(&self, key: AnySubKey) -> Option<AnyUnsafeSlot>;
 
     /// Returns first key for given type
     fn first(&self, key: TypeId) -> Option<AnySubKey>;
@@ -55,33 +145,4 @@ pub trait AnyContainer: Any + Sync + Send {
 
     /// All types in the container.
     fn types(&self) -> HashSet<TypeId>;
-}
-
-/// It's responsibility is to manage allocation/placement/deallocation of item
-pub trait Allocator<T: 'static>: Send + Sync {
-    /// Allocator used for items and shells.
-    type Alloc: std::alloc::Allocator + 'static;
-
-    // TODO: Some descriptive name
-    /// Allocator can select placement for item based on this.
-    type R: Copy;
-
-    /// Reserves slot for item based on R.
-    /// None if collection is out of keys or memory.
-    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)>;
-
-    /// Cancels reservation for item.
-    /// Panics if there is no reservation.
-    fn cancel(&mut self, key: ReservedKey<T>);
-
-    /// Fulfills reservation.
-    /// Panics if there is no reservation.
-    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T>
-    where
-        T: Sized;
-
-    /// Frees and returns item if it exists
-    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
-    where
-        T: Sized;
 }

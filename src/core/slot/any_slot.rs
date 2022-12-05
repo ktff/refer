@@ -1,5 +1,7 @@
 use super::permit::{self, Permit, Split};
-use crate::core::{AnyItem, AnyKey, AnyShell, AnyUnsafeSlot};
+use crate::core::{
+    AnyItem, AnyItemContext, AnyKey, AnyRef, AnyShell, AnyUnsafeSlot, Index, ItemBuilder,
+};
 use std::{
     any::Any,
     ops::{Deref, DerefMut},
@@ -29,9 +31,18 @@ impl<'a, R, W> AnySlot<'a, R, W> {
         self.slot.group_item()
     }
 
-    // pub fn downcast<T: AnyItem, C: core::Access<T>>(
+    pub fn context(&self) -> AnyItemContext<'a> {
+        AnyItemContext::new(
+            self.key.type_id(),
+            self.slot.group_item(),
+            self.slot.alloc(),
+            self.slot.alloc_any(),
+        )
+    }
+
+    // pub fn downcast<T: AnyItem, S: Shell<T = T>>(
     //     self,
-    // ) -> Result<Slot<'a, T, C::GroupItem, C::Shell, C::Alloc, R, W>, Self> {
+    // ) -> Result<Slot<'a, T, S, R, W>, Self> {
     //     if let Some(key) = self.key.downcast() {
     //         if let Some(slot) = self.slot.downcast() {
     //             Ok(Slot {
@@ -52,6 +63,15 @@ impl<'a, R> AnySlot<'a, R, permit::Slot> {
     pub fn item(&self) -> &dyn AnyItem {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
+    }
+
+    pub fn iter_references_any(&self) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
+        self.item().iter_references_any(self.context())
+    }
+
+    pub fn duplicate(&self) -> Option<ItemBuilder> {
+        let context = self.context();
+        self.item().duplicate(context)
     }
 
     pub fn shell(&self) -> &dyn AnyShell {
@@ -98,12 +118,26 @@ impl<'a> AnySlot<'a, permit::Mut, permit::Slot> {
             },
         )
     }
+
+    pub fn replace_reference(&mut self, other: AnyKey, to: Index) {
+        let context = self.context();
+        self.item_mut().replace_reference(context, other, to);
+    }
 }
 
 impl<'a, R> AnySlot<'a, R, permit::Item> {
     pub fn item(&self) -> &dyn AnyItem {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
+    }
+
+    pub fn iter_references_any(&self) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
+        self.item().iter_references_any(self.context())
+    }
+
+    pub fn duplicate(&self) -> Option<ItemBuilder> {
+        let context = self.context();
+        self.item().duplicate(context)
     }
 }
 
@@ -113,15 +147,14 @@ impl<'a> AnySlot<'a, permit::Mut, permit::Item> {
         unsafe { &mut *self.slot.item().get() }
     }
 
-    /// Item of given key has/is been removed.
-    ///
-    /// This item should return true if it's ok with it.
-    /// If false, this item will also be removed.
-    ///
-    /// Should be called for its references.
-    pub fn item_removed(&mut self, key: AnyKey) -> bool {
-        let index = self.key.index();
-        self.item_mut().item_removed(index, key)
+    pub fn replace_reference(&mut self, other: AnyKey, to: Index) {
+        let context = self.context();
+        self.item_mut().replace_reference(context, other, to);
+    }
+
+    pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> bool {
+        let context = self.context();
+        self.item_mut().duplicate_reference(context, other, to)
     }
 }
 
@@ -138,10 +171,19 @@ impl<'a> AnySlot<'a, permit::Mut, permit::Shell> {
         unsafe { &mut *self.slot.shell().get() }
     }
 
-    /// Additive if called for same `from` multiple times.
     pub fn add_from(&mut self, from: AnyKey) {
         let alloc = self.alloc();
-        self.shell_mut().add_from_any(from, alloc);
+        self.shell_mut().add_from(from, alloc);
+    }
+
+    pub fn add_from_count(&mut self, from: AnyKey, count: usize) {
+        let alloc = self.alloc();
+        self.shell_mut().add_from_count(from, count, alloc);
+    }
+
+    pub fn replace(&mut self, from: AnyKey, to: Index) {
+        let alloc = self.alloc();
+        self.shell_mut().replace(from, to, alloc);
     }
 }
 

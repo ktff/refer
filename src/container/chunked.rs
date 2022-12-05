@@ -39,7 +39,7 @@ where
         chunks: &mut Vec<Self::C>,
         item: Option<&T>,
         r: Self::R,
-    ) -> Option<(usize, <Self::C as Allocator<T>>::R)>;
+    ) -> Option<(usize, <Self::C as Allocator<T>>::Locality)>;
 }
 
 /// A container that chunks items into separate containers according to ChunkingLogic.
@@ -76,9 +76,13 @@ where
 {
     type Alloc = <L::C as Allocator<T>>::Alloc;
 
-    type R = L::R;
+    type Locality = L::R;
 
-    fn reserve(&mut self, item: Option<&T>, r: Self::R) -> Option<(ReservedKey<T>, &Self::Alloc)> {
+    fn reserve(
+        &mut self,
+        item: Option<&T>,
+        r: Self::Locality,
+    ) -> Option<(ReservedKey<T>, &Self::Alloc)> {
         let (index, r) = self.logic.assign(&mut self.chunks, item, r)?;
         let (sub_key, alloc) = self.chunks[index].reserve(item, r)?;
         Some((sub_key.push(self.logic.key_len(), index), alloc))
@@ -153,11 +157,11 @@ where
         self.chunks.get(prefix)?.get_any_slot(suffix)
     }
 
-    fn unfill_any(&mut self, key: AnySubKey) {
+    fn unfill_any_slot(&mut self, key: AnySubKey) {
         let (prefix, suffix) = key.pop(self.logic.key_len());
         self.chunks
             .get_mut(prefix)
-            .map(|chunk| chunk.unfill_any(suffix));
+            .map(|chunk| chunk.unfill_any_slot(suffix));
     }
 
     fn first(&self, key: TypeId) -> Option<AnySubKey> {
@@ -257,7 +261,7 @@ mod tests {
         let item = 42;
         let key = container.add_with(item, ()).unwrap();
 
-        assert_eq!(container.take(key).unwrap(), item);
+        assert_eq!(container.remove(key).unwrap(), item);
         assert!(container.get(key).is_none());
     }
 
@@ -304,7 +308,7 @@ mod tests {
         let (key, _) = container.reserve(Some(&item), ()).unwrap();
         let key = container.fulfill(key, item);
 
-        container.unfill_any(key.into());
+        container.unfill_any_slot(key.into());
         assert!(container.get_slot(key.into()).is_none());
     }
 

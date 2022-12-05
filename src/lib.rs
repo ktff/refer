@@ -14,7 +14,7 @@
 #![feature(layout_for_ptr)]
 #![feature(sync_unsafe_cell)]
 #![feature(ptr_as_uninit)]
-#![feature(specialization)]
+#![feature(box_into_inner)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs
@@ -55,17 +55,31 @@
 //! # Examples
 //! TODO
 
-pub mod collection;
-#[macro_use]
-pub mod container;
-pub mod core;
-#[macro_use]
-pub mod item;
-pub mod components;
-pub mod model;
-pub mod shell;
+//? Important decisions:
+//? - Generic backing up whole graph by a file/disk for the purpose of persistence is not to be supported out of the box.
+//?   There are multiple issues with this:
+//?   - Generic error correction is difficult
+//?   - Versioning is difficult
+//?   - Either all of the items need to use their designated allocator or managing what's saved and what isn't will be a nightmare
+//?   - A translation of references in items will need to be done with respect to offset of their allocator which changes between runtimes.
+//?   - Stored TypeIds need to be translated.
+//?   That said, it's possible to do it for some projects but they need to be designed around these constraints.
+//?
+//? - Focus is on processing.
+//? - Focus is on parallel processing through aliasing rules. That is to say, without atomics and locks.
 
-pub use crate::core::*;
+pub mod collection;
+// #[macro_use]
+// pub mod container;
+pub mod core;
+// pub mod dispatcher;
+// #[macro_use]
+// pub mod item;
+// pub mod components;
+// pub mod model;
+// pub mod shell;
+
+// pub use crate::core::*;
 
 // Generic things
 mod util;
