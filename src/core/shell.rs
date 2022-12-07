@@ -46,16 +46,20 @@ pub trait AnyShell: Any + Sync + Send {
     }
 
     /// Additive if called for same `from` multiple times.
+    /// T::Alloc
     fn add_from(&mut self, from: AnyKey, alloc: &dyn std::alloc::Allocator);
 
+    /// T::Alloc
     fn add_from_count(&mut self, from: AnyKey, count: usize, alloc: &dyn std::alloc::Allocator) {
         for _ in 0..count {
             self.add_from(from, alloc);
         }
     }
 
+    /// T::Alloc
     fn replace(&mut self, from: AnyKey, to: Index, alloc: &dyn std::alloc::Allocator);
 
+    /// T::Alloc
     fn append(&mut self, other: &dyn AnyShell, alloc: &dyn std::alloc::Allocator) {
         if let Some(iter) = other.iter_any() {
             for key in iter {
@@ -71,5 +75,6 @@ pub trait AnyShell: Any + Sync + Send {
 
     /// Should clear itself and shrink.
     /// Must not have any remaining local allocation.
+    /// T::Alloc
     fn dealloc(&mut self, alloc: &dyn std::alloc::Allocator);
 }

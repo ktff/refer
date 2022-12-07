@@ -9,17 +9,13 @@ use std::{
 
 pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
     key: Key<T>,
-    slot: UnsafeSlot<'a, T, T::LocalityData, S, T::Alloc>,
+    slot: UnsafeSlot<'a, T, S>,
     access: Permit<R, A>,
 }
 
 impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(
-        key: Key<T>,
-        slot: UnsafeSlot<'a, T, T::LocalityData, S, T::Alloc>,
-        access: Permit<R, A>,
-    ) -> Self {
+    pub unsafe fn new(key: Key<T>, slot: UnsafeSlot<'a, T, S>, access: Permit<R, A>) -> Self {
         Self { key, slot, access }
     }
 
@@ -27,16 +23,8 @@ impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
         self.key
     }
 
-    pub fn alloc(&self) -> &'a T::Alloc {
-        self.slot.alloc()
-    }
-
-    pub fn group_item(&self) -> &'a T::LocalityData {
-        self.slot.group_item()
-    }
-
     pub fn context(&self) -> ItemContext<'a, T> {
-        ItemContext::new((self.slot.group_item(), self.slot.alloc()))
+        self.slot.context()
     }
 
     pub fn upcast(self) -> AnySlot<'a, R, A> {
@@ -101,17 +89,17 @@ impl<'a, T: Item, S: Shell<T = T>, A: ShellAccess> Slot<'a, T, S, permit::Mut, A
     }
 
     pub fn add_from(&mut self, from: AnyKey) {
-        let alloc = self.alloc();
+        let alloc = self.slot.allocator();
         self.shell_mut().add_from(from, alloc);
     }
 
     pub fn add_from_count(&mut self, from: AnyKey, count: usize) {
-        let alloc = self.alloc();
+        let alloc = self.slot.allocator();
         self.shell_mut().add_from_count(from, count, alloc);
     }
 
     pub fn replace(&mut self, from: AnyKey, to: Index) {
-        let alloc = self.alloc();
+        let alloc = self.slot.allocator();
         self.shell_mut().replace(from, to, alloc);
     }
 }

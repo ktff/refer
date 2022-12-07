@@ -24,7 +24,7 @@ impl<C: AnyContainer> Owned<C> {
 
     fn in_locality<T: Item>(&self, key: Key<T>, to: T::Locality) -> bool
     where
-        C: Model<T>,
+        C: Container<T>,
     {
         self.0
             .locality_to_prefix(to)
@@ -38,7 +38,7 @@ impl<C: AnyContainer> Owned<C> {
         item: T,
     ) -> Result<Key<T>, CollectionError>
     where
-        C: Model<T>,
+        C: Container<T>,
     {
         self.0
             .fill_slot(locality, item)
@@ -48,7 +48,7 @@ impl<C: AnyContainer> Owned<C> {
 
     fn clone_item<T: Item>(&mut self, key: Key<T>, to: T::Locality) -> Result<T, CollectionError>
     where
-        C: Model<T>,
+        C: Container<T>,
     {
         // Placement
         let locality_prefix = self.0.select_locality(to);
@@ -101,12 +101,12 @@ impl<C: AnyContainer> Owned<C> {
     /// Expects that slot exists
     fn drop_slot<T: Item>(&mut self, key: Key<T>)
     where
-        C: Model<T>,
+        C: Container<T>,
     {
         let (mut item, mut shell, context) =
             self.0.unfill_slot(key.into()).expect("Should be present");
-        shell.dealloc(context.1);
-        item.drop_local(ItemContext::<T>::new(context).upcast());
+        shell.dealloc(context.allocator());
+        item.drop_local(context.upcast());
     }
 
     fn resolve_remove(&mut self, mut remove: Vec<AnyKey>) {
@@ -142,7 +142,7 @@ impl<C: AnyContainer> Access<C> for Owned<C> {
     }
 }
 
-impl<T: Item, C: Model<T>> Collection<T> for Owned<C> {
+impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
     type Model = C;
 
     fn add(&mut self, locality: T::Locality, item: T) -> Result<Key<T>, CollectionError> {
@@ -411,7 +411,7 @@ impl<C: AnyContainer> Drop for Owned<C> {
 /// On failure, rolls back all changes.
 ///
 /// Panics if keys don't exist.
-fn attach_item<T: Item, C: Model<T>>(
+fn attach_item<T: Item, C: Container<T>>(
     (items, shells): (MutAnyItems<C>, MutAnyShells<C>),
     key: Key<T>,
 ) -> Result<(), CollectionError> {
@@ -467,7 +467,7 @@ fn attach_item_loop<C: AnyContainer, I: Iterator<Item = AnyRef>>(
 
 /// Rewire from -> other to to -> other
 /// Panics if keys don't exist.
-fn replace_item_key<T: Item, C: Model<T>>(
+fn replace_item_key<T: Item, C: Container<T>>(
     (items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
     from: Key<T>,
     to: Key<T>,
@@ -498,7 +498,7 @@ fn replace_any_item_key<C: AnyContainer>(
 /// Updates diff of references between old and new item on key through shells.
 ///
 /// Fails if reference is not valid.
-fn replace_item_references<T: Item, C: Model<T>>(
+fn replace_item_references<T: Item, C: Container<T>>(
     mut shells: MutAnyShells<C>,
     slot: Slot<T, C::Shell, permit::Ref, permit::Item>,
     new: &T,
@@ -597,7 +597,7 @@ fn displace_shell_references<C: AnyContainer>(
     }
 
     //Finish
-    let alloc = from_shell.alloc();
+    let alloc = from_shell.context().allocator();
     from_shell.dealloc(alloc);
 
     Ok(())
@@ -732,7 +732,7 @@ fn detach_shell<C: AnyContainer>(
         }
     }
     // Clear local data
-    let alloc = shell_slot.alloc();
+    let alloc = shell_slot.context().allocator();
     shell_slot.dealloc(alloc);
 
     Ok(())

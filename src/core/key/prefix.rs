@@ -1,3 +1,4 @@
+use super::{Index, Key};
 use std::num::NonZeroU64;
 
 #[derive(Debug, Clone, Copy)]
@@ -24,6 +25,10 @@ impl KeyPrefix {
     /// Leaves only common prefix.
     pub fn intersect(self, other: Self) -> Self {
         unimplemented!()
+    }
+
+    pub fn key<T: ?Sized + 'static>(self, index: Index) -> Key<T> {
+        Key::new(index.with_prefix(self.prefix_len, self.prefix))
     }
 
     // pub fn prefix_len(&self) -> u32 {

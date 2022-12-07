@@ -1,4 +1,5 @@
-use super::{AnyKey, AnyRef, Index, KeyPrefix};
+use super::{AnyItemContext, AnyKey, AnyRef, Index, ItemContext, KeyPrefix};
+use getset::{CopyGetters, Getters};
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
@@ -103,89 +104,4 @@ pub trait AnyItem: Any + Sync + Send {
     /// If method is not empty, don't make Item Clone, instead use fn duplicate.
     // /// If this method is empty, consider returning true from fn global.
     fn drop_local(&mut self, context: AnyItemContext<'_>);
-}
-
-// ******************************** OTHER ******************************** //
-
-// TODO: Extend Context with Locality prefix.
-
-#[derive(Clone, Copy)]
-pub struct ItemContext<'a, I: Item> {
-    locality_data: &'a I::LocalityData,
-    allocator: &'a I::Alloc,
-}
-
-impl<'a, I: Item> ItemContext<'a, I> {
-    pub fn new((locality_data, allocator): (&'a I::LocalityData, &'a I::Alloc)) -> Self {
-        Self {
-            locality_data,
-            allocator,
-        }
-    }
-
-    pub fn locality_data(&self) -> &'a I::LocalityData {
-        self.locality_data
-    }
-
-    pub fn allocator(&self) -> &'a I::Alloc {
-        self.allocator
-    }
-
-    pub fn upcast(self) -> AnyItemContext<'a> {
-        AnyItemContext {
-            ty: TypeId::of::<I>(),
-            locality_data: self.locality_data,
-            allocator: self.allocator,
-            alloc_any: self.allocator,
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct AnyItemContext<'a> {
-    ty: TypeId,
-    locality_data: &'a dyn Any,
-    allocator: &'a dyn std::alloc::Allocator,
-    alloc_any: &'a dyn Any,
-}
-
-impl<'a> AnyItemContext<'a> {
-    pub fn new(
-        ty: TypeId,
-        locality_data: &'a dyn Any,
-        allocator: &'a dyn std::alloc::Allocator,
-        alloc_any: &'a dyn Any,
-    ) -> Self {
-        Self {
-            ty,
-            locality_data,
-            allocator,
-            alloc_any,
-        }
-    }
-
-    pub fn allocator(&self) -> &'a dyn std::alloc::Allocator {
-        self.allocator
-    }
-
-    pub fn downcast<I: Item>(self) -> ItemContext<'a, I> {
-        self.downcast_try().expect("Unexpected item type")
-    }
-
-    pub fn downcast_try<I: Item>(self) -> Option<ItemContext<'a, I>> {
-        if self.ty == TypeId::of::<I>() {
-            Some(ItemContext {
-                locality_data: self
-                    .locality_data
-                    .downcast_ref()
-                    .expect("Mismatched locality data type"),
-                allocator: self
-                    .alloc_any
-                    .downcast_ref()
-                    .expect("Mismatched allocator type"),
-            })
-        } else {
-            None
-        }
-    }
 }

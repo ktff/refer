@@ -1,6 +1,5 @@
 use super::{
-    permit, AnyContainer, AnyPermit, CollectionError, Container, Item, ItemContext, Key, Model,
-    Slot,
+    permit, AnyContainer, AnyPermit, CollectionError, Container, Item, ItemContext, Key, Slot,
 };
 
 /// A collection of entities.
@@ -19,7 +18,7 @@ use super::{
 /// On error caused by external state, returns Error. (Argument,call,op)
 /// On error caused by internal state, panics.
 pub trait Collection<T: Item>: Access<Self::Model> {
-    type Model: Model<T>;
+    type Model: Container<T>;
 
     fn add(&mut self, locality: T::Locality, item: T) -> Result<Key<T>, CollectionError>;
 

@@ -23,21 +23,8 @@ impl<'a, R, A> AnySlot<'a, R, A> {
         self.key
     }
 
-    pub fn alloc(&self) -> &'a dyn std::alloc::Allocator {
-        self.slot.alloc()
-    }
-
-    pub fn group_item(&self) -> &'a dyn Any {
-        self.slot.group_item()
-    }
-
     pub fn context(&self) -> AnyItemContext<'a> {
-        AnyItemContext::new(
-            self.key.type_id(),
-            self.slot.group_item(),
-            self.slot.alloc(),
-            self.slot.alloc_any(),
-        )
+        self.slot.context()
     }
 
     // pub fn downcast<T: AnyItem, S: Shell<T = T>>(
@@ -112,17 +99,17 @@ impl<'a, A: ShellAccess> AnySlot<'a, permit::Mut, A> {
     }
 
     pub fn add_from(&mut self, from: AnyKey) {
-        let alloc = self.alloc();
+        let alloc = self.slot.allocator();
         self.shell_mut().add_from(from, alloc);
     }
 
     pub fn add_from_count(&mut self, from: AnyKey, count: usize) {
-        let alloc = self.alloc();
+        let alloc = self.slot.allocator();
         self.shell_mut().add_from_count(from, count, alloc);
     }
 
     pub fn replace(&mut self, from: AnyKey, to: Index) {
-        let alloc = self.alloc();
+        let alloc = self.slot.allocator();
         self.shell_mut().replace(from, to, alloc);
     }
 }

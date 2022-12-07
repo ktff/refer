@@ -1,6 +1,8 @@
 use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
-use crate::core::{self, AnyContainer, AnyKey, CollectionError, Container, Key, Model};
+use crate::core::{self, AnyContainer, AnyKey, CollectionError, Container, Key};
+
+use super::UnsafeSlot;
 
 pub struct Ref;
 pub struct Mut;
@@ -68,7 +70,7 @@ pub struct TypePermit<'a, T, R, A, C> {
     _marker: PhantomData<(R, T, A)>,
 }
 
-impl<'a, R, T: core::Item, A, C: Model<T>> TypePermit<'a, T, R, A, C> {
+impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
     /// SAFETY: Caller must ensure that it has the correct R & S access to all T in C for the given 'a.
     pub unsafe fn new(container: &'a C) -> Self {
         Self {
@@ -95,7 +97,9 @@ impl<'a, R, T: core::Item, A, C: Model<T>> TypePermit<'a, T, R, A, C> {
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
-            .map(move |(key, slot)| unsafe { core::Slot::new(key.into_key(), slot, self.access()) })
+            .map(move |(index, slot)| unsafe {
+                core::Slot::new(slot.prefix().key(index), slot, self.access())
+            })
     }
 
     // pub fn iter_grouped(self)->
@@ -367,7 +371,7 @@ impl<'a, A, C> KeySplitPermit<'a, A, C> {
         key: Key<T>,
     ) -> Result<Option<core::Slot<'a, T, C::Shell, Mut, A>>, CollectionError>
     where
-        C: Model<T>,
+        C: Container<T>,
     {
         if self.splitted.insert(key.into()) {
             TypePermit {

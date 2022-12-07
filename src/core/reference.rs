@@ -19,7 +19,7 @@ impl<T: Item> Ref<T> {
 
 impl<T: Item> Ref<T> {
     /// Panics if to doesn't exist.
-    pub fn connect(from: AnyKey, to: Key<T>, collection: MutShells<T, impl Model<T>>) -> Self {
+    pub fn connect(from: AnyKey, to: Key<T>, collection: MutShells<T, impl Container<T>>) -> Self {
         let mut shell = collection
             .get(to)
             .map_err(|error| {
@@ -32,7 +32,7 @@ impl<T: Item> Ref<T> {
         Self::new(to)
     }
 
-    pub fn disconnect_from(self, from: AnyKey, collection: MutShells<T, impl Model<T>>) {
+    pub fn disconnect_from(self, from: AnyKey, collection: MutShells<T, impl Container<T>>) {
         collection
             .get(self.key())
             .map_err(|error| {
@@ -46,7 +46,10 @@ impl<T: Item> Ref<T> {
             .remove_from(from)
     }
 
-    pub fn get<R, S, C: Model<T>>(self, coll: TypePermit<T, R, S, C>) -> Slot<T, C::Shell, R, S> {
+    pub fn get<R, S, C: Container<T>>(
+        self,
+        coll: TypePermit<T, R, S, C>,
+    ) -> Slot<T, C::Shell, R, S> {
         coll.get(self.key())
             .map_err(|error| {
                 error!("Failed to fetch {}, error: {}", self.0, error);
@@ -60,12 +63,12 @@ impl<T: Item> Key<T> {
     pub fn connect_from(
         self,
         from: impl Into<AnyKey>,
-        collection: MutShells<T, impl Model<T>>,
+        collection: MutShells<T, impl Container<T>>,
     ) -> Ref<T> {
         Ref::connect(from.into(), self, collection)
     }
 
-    pub fn connect_to(self, to: Key<T>, collection: MutShells<T, impl Model<T>>) -> Ref<T> {
+    pub fn connect_to(self, to: Key<T>, collection: MutShells<T, impl Container<T>>) -> Ref<T> {
         Ref::connect(self.into(), to, collection)
     }
 }
@@ -189,7 +192,7 @@ impl AnyKey {
     pub fn connect_to<T: Item>(
         self,
         to: Key<T>,
-        collection: MutShells<T, impl Model<T>>,
+        collection: MutShells<T, impl Container<T>>,
     ) -> Ref<T> {
         Ref::connect(self, to, collection)
     }
