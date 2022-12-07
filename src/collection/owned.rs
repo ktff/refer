@@ -72,7 +72,10 @@ impl<C: AnyContainer> Owned<C> {
             .fill_locality_any(AnyKeyPrefix::new(original_key.type_id(), prefix));
 
         // Build duplicate
-        let original = self.slot().get(original_key).expect("Should be valid key");
+        let original = self
+            .access()
+            .get(original_key)
+            .expect("Should be valid key");
         let to_context = self
             .0
             .get_locality_any(locality_prefix)
@@ -109,9 +112,9 @@ impl<C: AnyContainer> Owned<C> {
             // Detach
 
             // item --> others
-            if detach_item(self.slot_mut().split_slots(), other).is_ok() {
+            if detach_item(self.access_mut().split_slots(), other).is_ok() {
                 // item <-- others
-                detach_shell(self.slot_mut().split_slots(), other, &mut remove)
+                detach_shell(self.access_mut().split_slots(), other, &mut remove)
                     .expect("Should exist");
 
                 // Unfill, drop shell, and drop item
@@ -125,12 +128,12 @@ impl<C: AnyContainer> Owned<C> {
 unsafe impl<C: AnyContainer + 'static> Sync for Owned<C> {}
 
 impl<C: AnyContainer> Access<C> for Owned<C> {
-    fn slot(&self) -> AnyPermit<permit::Ref, permit::Slot, C> {
+    fn access(&self) -> AnyPermit<permit::Ref, permit::Slot, C> {
         // SAFETY: We have at least read access for whole C.
         unsafe { AnyPermit::new(&self.0) }
     }
 
-    fn slot_mut(&mut self) -> AnyPermit<permit::Mut, permit::Slot, C> {
+    fn access_mut(&mut self) -> AnyPermit<permit::Mut, permit::Slot, C> {
         // SAFETY: We have at least mut access for whole C.
         unsafe { AnyPermit::new(&self.0) }
     }
@@ -142,7 +145,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
     fn add(&mut self, locality: T::LocalityKey, item: T) -> Result<Key<T>, CollectionError> {
         let key = self.fill_item(locality, item)?;
 
-        if let Err(error) = attach_item(self.slot_mut().split_slots(), key) {
+        if let Err(error) = attach_item(self.access_mut().split_slots(), key) {
             // Rollback filling the slot.
             self.drop_slot(key);
 
@@ -153,7 +156,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
     }
 
     fn replace_item(&mut self, key: Key<T>, item: T) -> Result<T, CollectionError> {
-        let (items, shells) = self.slot_mut().split_slots();
+        let (items, shells) = self.access_mut().split_slots();
         let mut slot = items.of().get(key)?;
 
         // Update connections
@@ -185,7 +188,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         }
 
         // Rewire from -> other to to -> other
-        replace_item_key(self.slot_mut().split_slots(), from, to);
+        replace_item_key(self.access_mut().split_slots(), from, to);
 
         // Unfill and drop from
         self.drop_slot(from);
@@ -204,7 +207,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         if self.in_locality(from, to) {
             // Detach shell
             let mut remove = Vec::new();
-            detach_shell(self.slot_mut().split_slots(), from.into(), &mut remove)?;
+            detach_shell(self.access_mut().split_slots(), from.into(), &mut remove)?;
             self.resolve_remove(remove);
 
             Ok(from)
@@ -216,7 +219,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
             let to = self.fill_item(to, item)?;
 
             // Rewire from -> other to to -> other
-            replace_item_key(self.slot_mut().split_slots(), from, to);
+            replace_item_key(self.access_mut().split_slots(), from, to);
 
             // Unfill and drop from
             self.drop_slot(from);
@@ -225,13 +228,11 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         }
     }
 
-    /// Moves shell from `from` to `to` so that all references are now pointing to `to`.
-    /// May have side effects that invalidate some Keys.
     fn displace_shell(&mut self, from: Key<T>, to: Key<T>) -> Result<(), CollectionError> {
         // Displace shell
         let mut moves = BTreeMap::new();
         displace_shell_references(
-            self.slot_mut().split_slots(),
+            self.access_mut().split_slots(),
             from.into(),
             to.into(),
             &mut moves,
@@ -256,7 +257,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
 
                         // Move shell
                         displace_shell_references(
-                            self.slot_mut().split_slots(),
+                            self.access_mut().split_slots(),
                             from,
                             to,
                             &mut moves,
@@ -265,10 +266,10 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
                         .expect("Key should be valid");
 
                         // Rewire from -> other to to -> other
-                        replace_any_item_key(self.slot_mut().split_slots(), from, to);
+                        replace_any_item_key(self.access_mut().split_slots(), from, to);
 
                         // Item Drop local
-                        let mut slot = self.slot_mut().get(from).expect("Key should be valid");
+                        let mut slot = self.access_mut().get(from).expect("Key should be valid");
                         slot.displace();
 
                         // Unfill, drop shell, and drop item
@@ -281,7 +282,17 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         Ok(())
     }
 
-    /// Duplicates item to locality.
+    fn duplicate(&mut self, key: Key<T>, to: T::LocalityKey) -> Result<Key<T>, CollectionError> {
+        let to = self.duplicate_item(key, to)?;
+        match self.duplicate_shell(key, to) {
+            Ok(()) => Ok(to),
+            Err(error) => {
+                self.remove(to).expect("Should be valid key");
+                Err(error)
+            }
+        }
+    }
+
     fn duplicate_item(
         &mut self,
         key: Key<T>,
@@ -303,7 +314,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
 
         // Duplicate this shell
         duplicate_shell_references(
-            self.slot_mut().split_slots(),
+            self.access_mut().split_slots(),
             from.upcast(),
             to.upcast(),
             &mut duplicates,
@@ -324,13 +335,13 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
 
             // Adjust references
             for replace in replace {
-                let mut duplicate = self.slot_mut().get(to).expect("Should be valid key");
+                let mut duplicate = self.access_mut().get(to).expect("Should be valid key");
                 duplicate.replace_reference(replace.0, replace.1);
             }
 
             // Duplicate shell
             duplicate_shell_references(
-                self.slot_mut().split_slots(),
+                self.access_mut().split_slots(),
                 from,
                 to,
                 &mut duplicates,
@@ -345,7 +356,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
             let duplicate_key =
                 duplicate_key.expect("All duplicates should be created before attaching");
             if !attached(duplicate_key) {
-                attach_any_item(self.slot_mut().split_slots(), duplicate_key)
+                attach_any_item(self.access_mut().split_slots(), duplicate_key)
                     .expect("Invalid Item references");
             }
         }
@@ -357,11 +368,12 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         // Detach
 
         // item --> others
-        detach_item(self.slot_mut().split_slots(), key.into())?;
+        detach_item(self.access_mut().split_slots(), key.into())?;
 
         // item <-- others
         let mut remove = Vec::new();
-        detach_shell(self.slot_mut().split_slots(), key.into(), &mut remove).expect("Should exist");
+        detach_shell(self.access_mut().split_slots(), key.into(), &mut remove)
+            .expect("Should exist");
 
         // Unfill and drop shell
         let (item, _, _) = self.0.unfill_slot(key.into()).expect("Should be present");
@@ -379,7 +391,7 @@ impl<C: AnyContainer> Drop for Owned<C> {
             if let Some(mut key) = self.0.first(ty) {
                 loop {
                     // Drop slot
-                    match self.slot_mut().get(key) {
+                    match self.access_mut().get(key) {
                         Ok(mut slot) => {
                             // Drop local
                             slot.shell_dealloc();

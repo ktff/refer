@@ -1,4 +1,4 @@
-mod collection;
+pub mod collection;
 mod container;
 mod item;
 mod key;
@@ -13,7 +13,7 @@ use std::{
     fmt::Display,
 };
 
-pub use collection::*;
+pub use collection::{Access, Collection};
 pub use container::*;
 pub use item::*;
 pub use key::*;
