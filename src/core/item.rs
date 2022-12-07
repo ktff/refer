@@ -6,17 +6,8 @@ use std::{
     fmt::Debug,
 };
 
-/*
-Localized Items vs Global Items
-- Localized items depend on their locality. That includes Index, GroupData and Allocator.
-- Global items don't depend on their locality.
-*/
-
-// /// Marker trait for items that are independent of locality/placement context, they don't have local data.
-// pub trait GlobalItem: Item {}
-
 /// An item of a model.
-pub trait Item: AnyItem + Sized {
+pub trait Item: Sized + Any + Sync + Send {
     type Alloc: Allocator + Any + Clone + 'static;
 
     /// Locality of item.
@@ -31,26 +22,16 @@ pub trait Item: AnyItem + Sized {
     ///
     /// Must have stable iteration order.
     fn iter_references(&self, context: ItemContext<'_, Self>) -> Self::I<'_>;
-}
-
-pub trait AnyItem: Any + Sync + Send {
-    /// All internal references.
-    ///
-    /// Must have stable iteration order.
-    fn iter_references_any(
-        &self,
-        context: AnyItemContext<'_>,
-    ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
     /// True if this should also be removed, else should remove all references to other.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn remove_reference(&mut self, context: AnyItemContext<'_>, other: AnyKey) -> bool;
+    fn remove_reference(&mut self, context: ItemContext<'_, Self>, other: AnyKey) -> bool;
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn replace_reference(&mut self, context: AnyItemContext<'_>, other: AnyKey, to: Index);
+    fn replace_reference(&mut self, context: ItemContext<'_, Self>, other: AnyKey, to: Index);
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
@@ -59,7 +40,7 @@ pub trait AnyItem: Any + Sync + Send {
     /// Will be called for references of self, but can be called for other references.
     fn displace_reference(
         &mut self,
-        context: AnyItemContext<'_>,
+        context: ItemContext<'_, Self>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix> {
@@ -77,7 +58,7 @@ pub trait AnyItem: Any + Sync + Send {
     /// Will be called for references of self, but can be called for other references.
     fn duplicate_reference(
         &mut self,
-        context: AnyItemContext<'_>,
+        context: ItemContext<'_, Self>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix>;
@@ -85,7 +66,7 @@ pub trait AnyItem: Any + Sync + Send {
     /// Clone this item from context to context.
     /// None if it can't be duplicated/cloned.
     // /// If Some, displace must also me Some.
-    fn duplicate(&self, _: AnyItemContext<'_>, _: AnyItemContext<'_>) -> Option<Box<dyn Any>> {
+    fn duplicate(&self, _: ItemContext<'_, Self>, _: ItemContext<'_, Self>) -> Option<Self> {
         None
     }
 
@@ -103,5 +84,97 @@ pub trait AnyItem: Any + Sync + Send {
     ///
     /// If method is not empty, don't make Item Clone, instead use fn duplicate.
     // /// If this method is empty, consider returning true from fn global.
-    fn drop_local(&mut self, context: AnyItemContext<'_>);
+    fn drop_local(&mut self, context: ItemContext<'_, Self>);
+}
+
+/// Methods correspond 1 to 1 to Item methods.
+pub trait AnyItem: Any + Sync + Send {
+    fn iter_references_any(
+        &self,
+        context: AnyItemContext<'_>,
+    ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
+
+    fn remove_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey) -> bool;
+
+    fn replace_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey, to: Index);
+
+    fn displace_reference_any(
+        &mut self,
+        context: AnyItemContext<'_>,
+        other: AnyKey,
+        to: Index,
+    ) -> Option<KeyPrefix> {
+        self.replace_reference_any(context, other, to);
+        None
+    }
+
+    fn duplicate_reference_any(
+        &mut self,
+        context: AnyItemContext<'_>,
+        other: AnyKey,
+        to: Index,
+    ) -> Option<KeyPrefix>;
+
+    fn duplicate_any(
+        &self,
+        _from: AnyItemContext<'_>,
+        _to: AnyItemContext<'_>,
+    ) -> Option<Box<dyn Any>> {
+        None
+    }
+
+    fn drop_local_any(&mut self, context: AnyItemContext<'_>);
+}
+
+impl<T: Item> AnyItem for T {
+    fn iter_references_any(
+        &self,
+        context: AnyItemContext<'_>,
+    ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
+        let iter = self.iter_references(context.downcast());
+        if let (0, Some(0)) = iter.size_hint() {
+            None
+        } else {
+            Some(Box::new(iter))
+        }
+    }
+
+    fn remove_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey) -> bool {
+        self.remove_reference(context.downcast(), other)
+    }
+
+    fn replace_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey, to: Index) {
+        self.replace_reference(context.downcast(), other, to)
+    }
+
+    fn displace_reference_any(
+        &mut self,
+        context: AnyItemContext<'_>,
+        other: AnyKey,
+        to: Index,
+    ) -> Option<KeyPrefix> {
+        self.displace_reference(context.downcast(), other, to)
+    }
+
+    fn duplicate_reference_any(
+        &mut self,
+        context: AnyItemContext<'_>,
+        other: AnyKey,
+        to: Index,
+    ) -> Option<KeyPrefix> {
+        self.duplicate_reference(context.downcast(), other, to)
+    }
+
+    fn duplicate_any(
+        &self,
+        from: AnyItemContext<'_>,
+        to: AnyItemContext<'_>,
+    ) -> Option<Box<dyn Any>> {
+        self.duplicate(from.downcast(), to.downcast())
+            .map(|x| Box::new(x) as Box<dyn Any>)
+    }
+
+    fn drop_local_any(&mut self, context: AnyItemContext<'_>) {
+        self.drop_local(context.downcast())
+    }
 }

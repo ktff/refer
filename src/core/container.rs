@@ -60,6 +60,9 @@ pub trait Container<T: Item>: AnyContainer {
     /// Selects locality that corresponds to given data.
     fn select_locality(&mut self, locality: T::Locality) -> LocalityPrefix;
 
+    /// None if such locality doesn't exist.
+    fn context(&self, prefix: LocalityPrefix) -> Option<ItemContext<T>>;
+
     // // *************** Alt method set
     // /// None if there is no more place for localities.
     // fn fill_locality_2(

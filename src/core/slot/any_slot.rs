@@ -59,7 +59,7 @@ impl<'a, R: RefAccess, A: ItemAccess> AnySlot<'a, R, A> {
     /// Can panic if context isn't for this type.
     pub fn duplicate(&self, to: AnyItemContext) -> Option<Box<dyn Any>> {
         let context = self.context();
-        self.item().duplicate(context, to)
+        self.item().duplicate_any(context, to)
     }
 }
 
@@ -69,19 +69,29 @@ impl<'a, A: ItemAccess> AnySlot<'a, permit::Mut, A> {
         unsafe { &mut *self.slot.item().get() }
     }
 
+    pub fn remove_reference(&mut self, other: AnyKey) -> bool {
+        let context = self.context();
+        self.item_mut().remove_reference_any(context, other)
+    }
+
     pub fn replace_reference(&mut self, other: AnyKey, to: Index) {
         let context = self.context();
-        self.item_mut().replace_reference(context, other, to);
+        self.item_mut().replace_reference_any(context, other, to);
     }
 
     pub fn displace_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
         let context = self.context();
-        self.item_mut().displace_reference(context, other, to)
+        self.item_mut().displace_reference_any(context, other, to)
     }
 
     pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
         let context = self.context();
-        self.item_mut().duplicate_reference(context, other, to)
+        self.item_mut().duplicate_reference_any(context, other, to)
+    }
+
+    pub fn drop_local(&mut self) {
+        let context = self.context();
+        self.item_mut().drop_local_any(context);
     }
 }
 
@@ -111,6 +121,11 @@ impl<'a, A: ShellAccess> AnySlot<'a, permit::Mut, A> {
     pub fn replace(&mut self, from: AnyKey, to: Index) {
         let alloc = self.slot.allocator();
         self.shell_mut().replace(from, to, alloc);
+    }
+
+    pub fn shell_dealloc(&mut self) {
+        let alloc = self.slot.allocator();
+        self.shell_mut().dealloc(alloc);
     }
 }
 

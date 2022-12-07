@@ -56,7 +56,7 @@ impl<C: AnyContainer> Owned<C> {
         // Build Duplicate
         let to_context = self
             .0
-            .context_any(locality_prefix)
+            .context(locality_prefix)
             .expect("Should be valid prefix");
         let duplicate = self
             .get(key)?
@@ -64,8 +64,7 @@ impl<C: AnyContainer> Owned<C> {
             .ok_or_else(|| CollectionError::invalid_op(key, "duplicate"))?;
 
         // Finish
-        let item = Box::into_inner(duplicate.downcast::<T>().expect("Wrong type"));
-        Ok(item)
+        Ok(duplicate)
     }
 
     /// Clones under given prefix.
@@ -106,7 +105,7 @@ impl<C: AnyContainer> Owned<C> {
         let (mut item, mut shell, context) =
             self.0.unfill_slot(key.into()).expect("Should be present");
         shell.dealloc(context.allocator());
-        item.drop_local(context.upcast());
+        item.drop_local(context);
     }
 
     fn resolve_remove(&mut self, mut remove: Vec<AnyKey>) {
@@ -166,8 +165,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         replace_item_references(shells, slot.borrow(), &item)?;
 
         // Replace item
-        let context = slot.context();
-        slot.drop_local(context.upcast());
+        slot.drop_local();
         Ok(std::mem::replace(slot.item_mut(), item))
     }
 
@@ -272,8 +270,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
 
                         // Item Drop local
                         let mut slot = self.slot_mut().get(from).expect("Key should be valid");
-                        let context = slot.context();
-                        slot.drop_local(context);
+                        slot.drop_local();
 
                         // Unfill, drop shell, and drop item
                         self.0.unfill_slot_any(from.into());
@@ -382,9 +379,8 @@ impl<C: AnyContainer> Drop for Owned<C> {
                     match self.slot_mut().get(key.into_key()) {
                         Ok(mut slot) => {
                             // Drop local
-                            let context = slot.context();
-                            slot.shell_mut().dealloc(context.allocator());
-                            slot.item_mut().drop_local(context);
+                            slot.shell_dealloc();
+                            slot.drop_local();
 
                             // Unfill
                             self.0.unfill_slot_any(key);
@@ -704,8 +700,7 @@ fn detach_item<C: AnyContainer>(
         }
     }
     // Clear local data
-    let context = item_slot.context();
-    item_slot.drop_local(context);
+    item_slot.drop_local();
 
     Ok(())
 }
@@ -724,8 +719,7 @@ fn detach_shell<C: AnyContainer>(
     if let Some(references) = shell_slot.shell().iter_any() {
         for (_, other_rf) in references.dedup() {
             if let Ok(mut other) = items.borrow_mut().get(other_rf.key()) {
-                let context = other.context();
-                if other.remove_reference(context, key) {
+                if other.remove_reference(key) {
                     remove.push(other_rf.key());
                 }
             }

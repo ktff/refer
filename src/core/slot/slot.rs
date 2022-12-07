@@ -44,9 +44,9 @@ impl<'a, T: Item, S: Shell<T = T>, R: RefAccess, A: ItemAccess> Slot<'a, T, S, R
     }
 
     /// Can panic if context isn't for this type.
-    pub fn duplicate(&self, to: AnyItemContext) -> Option<Box<dyn Any>> {
+    pub fn duplicate(&self, to: ItemContext<T>) -> Option<T> {
         let context = self.context();
-        self.item().duplicate(context.upcast(), to)
+        self.item().duplicate(context, to)
     }
 }
 
@@ -58,20 +58,22 @@ impl<'a, T: Item, S: Shell<T = T>, A: ItemAccess> Slot<'a, T, S, permit::Mut, A>
 
     pub fn replace_reference(&mut self, other: AnyKey, to: Index) {
         let context = self.context();
-        self.item_mut()
-            .replace_reference(context.upcast(), other, to);
+        self.item_mut().replace_reference(context, other, to);
     }
 
     pub fn displace_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
         let context = self.context();
-        self.item_mut()
-            .displace_reference(context.upcast(), other, to)
+        self.item_mut().displace_reference(context, other, to)
     }
 
     pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
         let context = self.context();
-        self.item_mut()
-            .duplicate_reference(context.upcast(), other, to)
+        self.item_mut().duplicate_reference(context, other, to)
+    }
+
+    pub fn drop_local(&mut self) {
+        let context = self.context();
+        self.item_mut().drop_local(context)
     }
 }
 
