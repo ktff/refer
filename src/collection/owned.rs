@@ -27,8 +27,8 @@ impl<C: AnyContainer> Owned<C> {
         C: Container<T>,
     {
         self.0
-            .locality_to_prefix(to)
-            .map(|prefix| SubKey::from(key).of(prefix))
+            .get_locality(to)
+            .map(|context| SubKey::from(key).of(context.prefix()))
             .unwrap_or(false)
     }
 
@@ -43,7 +43,6 @@ impl<C: AnyContainer> Owned<C> {
         self.0
             .fill_slot(locality, item)
             .map_err(|_| CollectionError::out_of_keys::<T>(locality))
-            .map(SubKey::into_key)
     }
 
     fn clone_item<T: Item>(&mut self, key: Key<T>, to: T::LocalityKey) -> Result<T, CollectionError>
@@ -51,13 +50,10 @@ impl<C: AnyContainer> Owned<C> {
         C: Container<T>,
     {
         // Placement
-        let locality_prefix = self.0.select_locality(to);
+        self.0.fill_locality(to);
+        let to_context = self.0.get_locality(to).expect("Should be valid locality");
 
         // Build Duplicate
-        let to_context = self
-            .0
-            .context(locality_prefix)
-            .expect("Should be valid prefix");
         let duplicate = self
             .get(key)?
             .duplicate(to_context)
@@ -71,13 +67,15 @@ impl<C: AnyContainer> Owned<C> {
     /// Panics if item can't be cloned, or item doesn't exist.
     fn clone_any_item(&mut self, original_key: AnyKey, prefix: KeyPrefix) -> AnyKey {
         // Placement
-        let locality_prefix = self.0.choose_locality(prefix);
+        let locality_prefix = self
+            .0
+            .fill_locality_any(AnyKeyPrefix::new(original_key.type_id(), prefix));
 
         // Build duplicate
         let original = self.slot().get(original_key).expect("Should be valid key");
         let to_context = self
             .0
-            .context_any(locality_prefix)
+            .get_locality_any(locality_prefix)
             .expect("Should be valid prefix");
         let duplicate = original
             .duplicate(to_context)
@@ -86,11 +84,8 @@ impl<C: AnyContainer> Owned<C> {
 
         // Fill
         let duplicate_ty = duplicate.as_ref().type_id();
-        match self
-            .0
-            .fill_slot_any(original_key.type_id(), locality_prefix, duplicate)
-        {
-            Ok(key) => key.into_key(),
+        match self.0.fill_slot_any(locality_prefix, duplicate) {
+            Ok(key) => key,
             Err(error) => {
                 panic!("Failed to fill slot of ty:{:?} locality:{} with duplicate of ty:{:?}.Cause: {:?}",original_key.type_id(),prefix,duplicate_ty,error);
             }
@@ -384,20 +379,20 @@ impl<C: AnyContainer> Drop for Owned<C> {
             if let Some(mut key) = self.0.first(ty) {
                 loop {
                     // Drop slot
-                    match self.slot_mut().get(key.into_key()) {
+                    match self.slot_mut().get(key) {
                         Ok(mut slot) => {
                             // Drop local
                             slot.shell_dealloc();
                             slot.displace();
 
                             // Unfill
-                            self.0.unfill_slot_any(key);
+                            self.0.unfill_slot_any(key.into());
                         }
                         Err(error) => warn!("Invalid key: {}", error),
                     }
 
                     // Next
-                    if let Some(next) = self.0.next(key) {
+                    if let Some(next) = self.0.next(key.into()) {
                         key = next;
                     } else {
                         break;

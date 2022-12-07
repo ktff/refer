@@ -1,14 +1,5 @@
 use super::{Index, Key};
-use std::num::NonZeroU64;
-
-#[derive(Debug, Clone, Copy)]
-pub struct LocalityPrefix(pub KeyPrefix);
-
-impl From<LocalityPrefix> for KeyPrefix {
-    fn from(prefix: LocalityPrefix) -> Self {
-        prefix.0
-    }
-}
+use std::{any::TypeId, num::NonZeroU64};
 
 // TODO: Interweave this with Index and Sub keys.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
@@ -71,5 +62,31 @@ impl std::fmt::Display for KeyPrefix {
             self.prefix,
             width = self.prefix_len as usize
         )
+    }
+}
+
+impl Default for KeyPrefix {
+    fn default() -> Self {
+        KeyPrefix {
+            prefix_len: 0,
+            prefix: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AnyKeyPrefix(TypeId, KeyPrefix);
+
+impl AnyKeyPrefix {
+    pub fn new(ty: TypeId, prefix: KeyPrefix) -> Self {
+        Self(ty, prefix)
+    }
+
+    pub fn ty(&self) -> TypeId {
+        self.0
+    }
+
+    pub fn prefix(&self) -> KeyPrefix {
+        self.1
     }
 }

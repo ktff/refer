@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
-use crate::core::{self, AnyContainer, AnyKey, CollectionError, Container, Key};
+use crate::core::{self, AnyContainer, AnyKey, CollectionError, Container, Key, KeyPrefix};
 
 use super::UnsafeSlot;
 
@@ -90,10 +90,10 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
             .map(|slot| unsafe { core::Slot::new(key, slot, self.access()) })
             .ok_or_else(|| key.into())
     }
-
+    // TODO: Expose key prefix iter
     pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
         self.container
-            .iter_slot()
+            .iter_slot(KeyPrefix::default())
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
@@ -219,13 +219,13 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
 
     /// Returns first key for given type
     pub fn first(&self, key: TypeId) -> Option<AnyKey> {
-        self.container.first(key).map(|key| key.into_key())
+        self.container.first(key)
     }
 
     /// Returns following key after given in ascending order
     /// for the same type.
     pub fn next(&self, key: AnyKey) -> Option<AnyKey> {
-        self.container.next(key.into()).map(|key| key.into_key())
+        self.container.next(key.into())
     }
 
     /// All types in the container.
