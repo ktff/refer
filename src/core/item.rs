@@ -11,17 +11,17 @@ pub trait Item: Sized + Any + Sync + Send {
     type Alloc: Allocator + Any + Clone + 'static;
 
     /// Locality of item.
-    type Locality: Debug + Copy;
+    type LocalityKey: Debug + Copy;
 
     /// Data shared by local items.
     type LocalityData: Any + Send + Sync;
 
-    type I<'a>: Iterator<Item = AnyRef>;
+    type Iter<'a>: Iterator<Item = AnyRef>;
 
     /// All internal references.
     ///
     /// Must have stable iteration order.
-    fn iter_references(&self, context: ItemContext<'_, Self>) -> Self::I<'_>;
+    fn iter_references(&self, context: ItemContext<'_, Self>) -> Self::Iter<'_>;
 
     /// True if this should also be removed, else should remove all references to other.
     ///
@@ -66,7 +66,7 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Clone this item from context to context.
     /// None if it can't be duplicated/cloned.
     // /// If Some, displace must also me Some.
-    fn duplicate(&self, _: ItemContext<'_, Self>, _: ItemContext<'_, Self>) -> Option<Self> {
+    fn duplicate(&self, _from: ItemContext<'_, Self>, _to: ItemContext<'_, Self>) -> Option<Self> {
         None
     }
 
@@ -79,12 +79,13 @@ pub trait Item: Sized + Any + Sync + Send {
     //     false
     // }
 
-    /// Drop local data.
-    /// Also any remaining reference should be considered invalid.
+    /// This is being displaced.
+    ///
+    /// If not placed in a new context, drop local data and any remaining reference should be considered invalid.
     ///
     /// If method is not empty, don't make Item Clone, instead use fn duplicate.
     // /// If this method is empty, consider returning true from fn global.
-    fn drop_local(&mut self, context: ItemContext<'_, Self>);
+    fn displace(&mut self, from: ItemContext<'_, Self>, to: Option<ItemContext<'_, Self>>);
 }
 
 /// Methods correspond 1 to 1 to Item methods.
@@ -123,7 +124,7 @@ pub trait AnyItem: Any + Sync + Send {
         None
     }
 
-    fn drop_local_any(&mut self, context: AnyItemContext<'_>);
+    fn displace_any(&mut self, from: AnyItemContext<'_>, to: Option<AnyItemContext<'_>>);
 }
 
 impl<T: Item> AnyItem for T {
@@ -174,7 +175,7 @@ impl<T: Item> AnyItem for T {
             .map(|x| Box::new(x) as Box<dyn Any>)
     }
 
-    fn drop_local_any(&mut self, context: AnyItemContext<'_>) {
-        self.drop_local(context.downcast())
+    fn displace_any(&mut self, from: AnyItemContext<'_>, to: Option<AnyItemContext<'_>>) {
+        self.displace(from.downcast(), to.map(|to| to.downcast()))
     }
 }

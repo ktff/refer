@@ -20,25 +20,29 @@ use super::{
 pub trait Collection<T: Item>: Access<Self::Model> {
     type Model: Container<T>;
 
-    fn add(&mut self, locality: T::Locality, item: T) -> Result<Key<T>, CollectionError>;
+    fn add(&mut self, locality: T::LocalityKey, item: T) -> Result<Key<T>, CollectionError>;
 
     /// Removes previous item and sets new one in his place while updating references accordingly.
     fn replace_item(&mut self, key: Key<T>, item: T) -> Result<T, CollectionError>;
 
-    fn displace(&mut self, key: Key<T>, locality: T::Locality) -> Result<Key<T>, CollectionError>;
+    fn displace(
+        &mut self,
+        key: Key<T>,
+        locality: T::LocalityKey,
+    ) -> Result<Key<T>, CollectionError>;
 
     /// Moves item and removes shell.
     fn displace_item(
         &mut self,
         key: Key<T>,
-        locality: T::Locality,
+        locality: T::LocalityKey,
     ) -> Result<Key<T>, CollectionError>;
 
     /// Moves shell from `from` to `to` so that all references are now pointing to `to`.
     /// May have side effects that invalidate some Keys.
     fn displace_shell(&mut self, from: Key<T>, to: Key<T>) -> Result<(), CollectionError>;
 
-    fn duplicate(&mut self, key: Key<T>, to: T::Locality) -> Result<Key<T>, CollectionError> {
+    fn duplicate(&mut self, key: Key<T>, to: T::LocalityKey) -> Result<Key<T>, CollectionError> {
         let to = self.duplicate_item(key, to)?;
         match self.duplicate_shell(key, to) {
             Ok(()) => Ok(to),
@@ -50,7 +54,11 @@ pub trait Collection<T: Item>: Access<Self::Model> {
     }
 
     /// Duplicates item to locality.
-    fn duplicate_item(&mut self, key: Key<T>, to: T::Locality) -> Result<Key<T>, CollectionError>;
+    fn duplicate_item(
+        &mut self,
+        key: Key<T>,
+        to: T::LocalityKey,
+    ) -> Result<Key<T>, CollectionError>;
 
     /// Duplicates shell from `from` to `to` so that all references to `from` now also point to `to`.
     fn duplicate_shell(&mut self, from: Key<T>, to: Key<T>) -> Result<(), CollectionError>;
@@ -93,7 +101,7 @@ pub trait RefAddition<T: Item> {
     //?       also need to be RefAddition.
     fn add(
         &self,
-        locality: T::Locality,
+        locality: T::LocalityKey,
         builder: impl FnOnce(ItemContext<T>) -> T,
     ) -> Result<Key<T>, CollectionError>;
 }

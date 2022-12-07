@@ -59,7 +59,7 @@ pub enum CollectionError {
 }
 
 impl CollectionError {
-    pub fn out_of_keys<T: Item>(locality: T::Locality) -> Self {
+    pub fn out_of_keys<T: Item>(locality: T::LocalityKey) -> Self {
         Self::OutOfKeys {
             ty: TypeInfo::of::<T>(),
             locality: format!("{:?}", locality),

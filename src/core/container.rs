@@ -49,16 +49,16 @@ pub trait Container<T: Item>: AnyContainer {
     fn get_slot(&self, key: SubKey<T>) -> Option<UnsafeSlot<T, Self::Shell>>;
 
     /// None if there is no more place in locality.
-    fn fill_slot(&mut self, locality: T::Locality, item: T) -> Result<SubKey<T>, T>;
+    fn fill_slot(&mut self, locality: T::LocalityKey, item: T) -> Result<SubKey<T>, T>;
 
     /// Removes from container.
     fn unfill_slot(&mut self, key: SubKey<T>) -> Option<(T, Self::Shell, ItemContext<T>)>;
 
     /// Some if locality exists.
-    fn locality_to_prefix(&self, locality: T::Locality) -> Option<LocalityPrefix>;
+    fn locality_to_prefix(&self, locality: T::LocalityKey) -> Option<LocalityPrefix>;
 
     /// Selects locality that corresponds to given data.
-    fn select_locality(&mut self, locality: T::Locality) -> LocalityPrefix;
+    fn select_locality(&mut self, locality: T::LocalityKey) -> LocalityPrefix;
 
     /// None if such locality doesn't exist.
     fn context(&self, prefix: LocalityPrefix) -> Option<ItemContext<T>>;

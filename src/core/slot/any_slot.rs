@@ -89,9 +89,9 @@ impl<'a, A: ItemAccess> AnySlot<'a, permit::Mut, A> {
         self.item_mut().duplicate_reference_any(context, other, to)
     }
 
-    pub fn drop_local(&mut self) {
+    pub fn displace(&mut self) {
         let context = self.context();
-        self.item_mut().drop_local_any(context);
+        self.item_mut().displace_any(context, None);
     }
 }
 

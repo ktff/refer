@@ -22,7 +22,7 @@ impl<C: AnyContainer> Owned<C> {
         &mut self.0
     }
 
-    fn in_locality<T: Item>(&self, key: Key<T>, to: T::Locality) -> bool
+    fn in_locality<T: Item>(&self, key: Key<T>, to: T::LocalityKey) -> bool
     where
         C: Container<T>,
     {
@@ -34,7 +34,7 @@ impl<C: AnyContainer> Owned<C> {
 
     fn fill_item<T: Item>(
         &mut self,
-        locality: T::Locality,
+        locality: T::LocalityKey,
         item: T,
     ) -> Result<Key<T>, CollectionError>
     where
@@ -46,7 +46,7 @@ impl<C: AnyContainer> Owned<C> {
             .map(SubKey::into_key)
     }
 
-    fn clone_item<T: Item>(&mut self, key: Key<T>, to: T::Locality) -> Result<T, CollectionError>
+    fn clone_item<T: Item>(&mut self, key: Key<T>, to: T::LocalityKey) -> Result<T, CollectionError>
     where
         C: Container<T>,
     {
@@ -105,7 +105,7 @@ impl<C: AnyContainer> Owned<C> {
         let (mut item, mut shell, context) =
             self.0.unfill_slot(key.into()).expect("Should be present");
         shell.dealloc(context.allocator());
-        item.drop_local(context);
+        item.displace(context, None);
     }
 
     fn resolve_remove(&mut self, mut remove: Vec<AnyKey>) {
@@ -144,7 +144,7 @@ impl<C: AnyContainer> Access<C> for Owned<C> {
 impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
     type Model = C;
 
-    fn add(&mut self, locality: T::Locality, item: T) -> Result<Key<T>, CollectionError> {
+    fn add(&mut self, locality: T::LocalityKey, item: T) -> Result<Key<T>, CollectionError> {
         let key = self.fill_item(locality, item)?;
 
         if let Err(error) = attach_item(self.slot_mut().split_slots(), key) {
@@ -165,11 +165,11 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         replace_item_references(shells, slot.borrow(), &item)?;
 
         // Replace item
-        slot.drop_local();
+        slot.displace();
         Ok(std::mem::replace(slot.item_mut(), item))
     }
 
-    fn displace(&mut self, from: Key<T>, to: T::Locality) -> Result<Key<T>, CollectionError> {
+    fn displace(&mut self, from: Key<T>, to: T::LocalityKey) -> Result<Key<T>, CollectionError> {
         // Check if key is in to locality.
         if self.in_locality(from, to) {
             return Ok(from);
@@ -200,7 +200,11 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
     }
 
     /// Moves item and removes shell.
-    fn displace_item(&mut self, from: Key<T>, to: T::Locality) -> Result<Key<T>, CollectionError> {
+    fn displace_item(
+        &mut self,
+        from: Key<T>,
+        to: T::LocalityKey,
+    ) -> Result<Key<T>, CollectionError> {
         // Check if key is in to locality.
         if self.in_locality(from, to) {
             // Detach shell
@@ -270,7 +274,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
 
                         // Item Drop local
                         let mut slot = self.slot_mut().get(from).expect("Key should be valid");
-                        slot.drop_local();
+                        slot.displace();
 
                         // Unfill, drop shell, and drop item
                         self.0.unfill_slot_any(from.into());
@@ -283,7 +287,11 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
     }
 
     /// Duplicates item to locality.
-    fn duplicate_item(&mut self, key: Key<T>, to: T::Locality) -> Result<Key<T>, CollectionError> {
+    fn duplicate_item(
+        &mut self,
+        key: Key<T>,
+        to: T::LocalityKey,
+    ) -> Result<Key<T>, CollectionError> {
         // Clone
         let item = self.clone_item(key, to)?;
 
@@ -380,7 +388,7 @@ impl<C: AnyContainer> Drop for Owned<C> {
                         Ok(mut slot) => {
                             // Drop local
                             slot.shell_dealloc();
-                            slot.drop_local();
+                            slot.displace();
 
                             // Unfill
                             self.0.unfill_slot_any(key);
@@ -700,7 +708,7 @@ fn detach_item<C: AnyContainer>(
         }
     }
     // Clear local data
-    item_slot.drop_local();
+    item_slot.displace();
 
     Ok(())
 }

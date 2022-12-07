@@ -39,7 +39,7 @@ impl<'a, T: Item, S: Shell<T = T>, R: RefAccess, A: ItemAccess> Slot<'a, T, S, R
         unsafe { &*self.slot.item().get() }
     }
 
-    pub fn iter_references(&self) -> T::I<'_> {
+    pub fn iter_references(&self) -> T::Iter<'_> {
         self.item().iter_references(self.context())
     }
 
@@ -71,9 +71,9 @@ impl<'a, T: Item, S: Shell<T = T>, A: ItemAccess> Slot<'a, T, S, permit::Mut, A>
         self.item_mut().duplicate_reference(context, other, to)
     }
 
-    pub fn drop_local(&mut self) {
+    pub fn displace(&mut self) {
         let context = self.context();
-        self.item_mut().drop_local(context)
+        self.item_mut().displace(context, None)
     }
 }
 
