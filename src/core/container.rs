@@ -59,6 +59,9 @@ pub trait AnyContainer: Any + Sync + Send {
     /// for the same type.
     fn next(&self, sub_key: AnySubKey) -> Option<AnyKey>;
 
+    /// Returns last key for given type
+    fn last(&self, key: TypeId) -> Option<AnyKey>;
+
     /// All types in the container.
     fn types(&self) -> HashSet<TypeId>;
 

@@ -1,8 +1,10 @@
+use bitvec::access;
+
+use crate::core::{
+    self, collection::Result, container, AnyContainer, AnyKey, Container, Key, KeyPrefix,
+    UnsafeSlot,
+};
 use std::{any::TypeId, collections::HashSet, marker::PhantomData};
-
-use crate::core::{self, AnyContainer, AnyKey, CollectionError, Container, Key, KeyPrefix};
-
-use super::UnsafeSlot;
 
 pub struct Ref;
 pub struct Mut;
@@ -83,17 +85,24 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
         Permit::new()
     }
 
-    pub fn get(self, key: Key<T>) -> Result<core::Slot<'a, T, C::Shell, R, A>, CollectionError> {
+    pub fn get(self, key: Key<T>) -> Result<core::Slot<'a, T, C::Shell, R, A>> {
         self.container
             .get_slot(key.into())
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { core::Slot::new(key, slot, self.access()) })
             .ok_or_else(|| key.into())
     }
-    // TODO: Expose key prefix iter
+
     pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
+        self.iter_sub(KeyPrefix::default())
+    }
+
+    pub fn iter_sub(
+        self,
+        prefix: KeyPrefix,
+    ) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
         self.container
-            .iter_slot(KeyPrefix::default())
+            .iter_slot(prefix)
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
@@ -102,7 +111,39 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
             })
     }
 
-    // pub fn iter_grouped(self)->
+    /// Splits iterator into max 2^chunk_count_pow2 chunks.
+    pub fn iter_chunked(
+        self,
+        chunk_count_pow2: u32,
+    ) -> Vec<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
+        // Compute common prefix of all keys in the iterator.
+        let first = self.container.first(TypeId::of::<T>());
+        let last = self.container.last(TypeId::of::<T>());
+        let (first, last) = match (first, last) {
+            (Some(first), Some(last)) => (first, last),
+            _ => return Vec::new(),
+        };
+        let common = first
+            .index()
+            .as_prefix()
+            .intersect(last.index().as_prefix());
+
+        // Split access into chunks under common.
+        common
+            .iter_sub(chunk_count_pow2)
+            .map(move |prefix| {
+                self.container
+                    .iter_slot(prefix)
+                    .into_iter()
+                    .flat_map(|iter| iter)
+                    // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
+                    //         That whole access we split across mutually exclusive prefixes.
+                    .map(move |(index, slot)| unsafe {
+                        core::Slot::new(slot.prefix().key(index), slot, Permit::<R, A>::new())
+                    })
+            })
+            .collect()
+    }
 
     // None if a == b
     pub fn get_pair(
@@ -114,7 +155,6 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
             core::Slot<'a, T, C::Shell, R, A>,
             core::Slot<'a, T, C::Shell, R, A>,
         )>,
-        CollectionError,
     > {
         if a == b {
             Ok(None)
@@ -209,12 +249,24 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
         }
     }
 
-    pub fn get(self, key: AnyKey) -> Result<core::AnySlot<'a, R, A>, CollectionError> {
+    pub fn get(self, key: AnyKey) -> Result<core::AnySlot<'a, R, A>> {
         self.container
             .get_slot_any(key.into())
             // SAFETY: Type level logic of AnyPermit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { core::AnySlot::new(key, slot, self.access()) })
             .ok_or_else(|| key.into())
+    }
+
+    pub fn iter(self, key: TypeId) -> impl Iterator<Item = core::AnySlot<'a, R, A>> {
+        let container = self.container;
+        std::iter::successors(self.first(key), move |&key| self.next(key)).map(move |key| {
+            container
+                .get_slot_any(key.into())
+                // SAFETY: Type level logic of AnyPermit ensures that it has sufficient access for 'a to all slots.
+                //         Furthermore first-next iteration ensures that we don't access the same slot twice.
+                .map(|slot| unsafe { core::AnySlot::new(key, slot, Permit::<R, A>::new()) })
+                .expect("Should be valid key")
+        })
     }
 
     /// Returns first key for given type
@@ -228,6 +280,11 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
         self.container.next(key.into())
     }
 
+    /// Returns last key for given type
+    pub fn last(&self, key: TypeId) -> Option<AnyKey> {
+        self.container.last(key)
+    }
+
     /// All types in the container.
     pub fn types(&self) -> HashSet<TypeId> {
         self.container.types()
@@ -238,7 +295,7 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
         self,
         a: AnyKey,
         b: AnyKey,
-    ) -> Result<Option<(core::AnySlot<'a, R, A>, core::AnySlot<'a, R, A>)>, CollectionError> {
+    ) -> Result<Option<(core::AnySlot<'a, R, A>, core::AnySlot<'a, R, A>)>> {
         if a == b {
             Ok(None)
         } else {
@@ -369,7 +426,7 @@ impl<'a, A, C> KeySplitPermit<'a, A, C> {
     pub fn get<T: core::Item>(
         &mut self,
         key: Key<T>,
-    ) -> Result<Option<core::Slot<'a, T, C::Shell, Mut, A>>, CollectionError>
+    ) -> Result<Option<core::Slot<'a, T, C::Shell, Mut, A>>>
     where
         C: Container<T>,
     {
@@ -385,10 +442,7 @@ impl<'a, A, C> KeySplitPermit<'a, A, C> {
         }
     }
 
-    pub fn get_any(
-        &mut self,
-        key: AnyKey,
-    ) -> Result<Option<core::AnySlot<'a, Mut, A>>, CollectionError>
+    pub fn get_any(&mut self, key: AnyKey) -> Result<Option<core::AnySlot<'a, Mut, A>>>
     where
         C: AnyContainer,
     {

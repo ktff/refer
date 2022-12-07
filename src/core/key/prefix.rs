@@ -18,6 +18,13 @@ impl KeyPrefix {
         unimplemented!()
     }
 
+    /// Iterates prefixes under this one.
+    /// Prefixes are of max sub_level lower.
+    pub fn iter_sub(self, sub_level: u32) -> impl Iterator<Item = Self> {
+        std::iter::empty()
+        // unimplemented!()
+    }
+
     pub fn key<T: ?Sized + 'static>(self, index: Index) -> Key<T> {
         Key::new(index.with_prefix(self.prefix_len, self.prefix))
     }

@@ -1,5 +1,7 @@
 use std::{fmt, hash::Hash, num::NonZeroU64};
 
+use super::KeyPrefix;
+
 const INDEX_BITS: u32 = std::mem::size_of::<Index>() as u32 * 8;
 pub const MAX_KEY_LEN: u32 = INDEX_BITS;
 
@@ -23,6 +25,10 @@ impl Index {
 
     pub fn as_usize(self) -> usize {
         self.0.get() as usize
+    }
+
+    pub fn as_prefix(self) -> KeyPrefix {
+        KeyPrefix::new(INDEX_BITS, self.as_usize())
     }
 
     /// Pushes prefix on suffix/self from top.
