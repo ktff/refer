@@ -28,7 +28,7 @@ impl<T: Item> Ref<T> {
             })
             .expect("Failed to connect");
 
-        shell.add_from(from);
+        shell.add_to_shell(from);
         Self::new(to)
     }
 
@@ -43,7 +43,7 @@ impl<T: Item> Ref<T> {
                 error
             })
             .expect("Failed to disconnect")
-            .remove_from(from)
+            .remove(from)
     }
 
     pub fn get<R, S, C: Container<T>>(
@@ -167,7 +167,7 @@ impl AnyRef {
             })
             .expect("Failed to disconnect")
             .shell_mut()
-            .remove_from(from);
+            .remove_any(from);
     }
 
     pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> AnySlot<R, S> {

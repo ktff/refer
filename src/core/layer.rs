@@ -1,6 +1,8 @@
 use crate::core::{Allocator, AnyItem, Container, ReservedKey, Shell, SubKey, UnsafeSlot};
 use std::{any::Any, ops::Range};
 
+// TODO: Revisit this
+
 // pub trait Layer<T: AnyItem> {
 //     type Alloc: std::alloc::Allocator + 'static;
 

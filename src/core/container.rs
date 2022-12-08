@@ -24,6 +24,7 @@ pub trait Container<T: Item>: AnyContainer {
     /// Shell of item.
     type Shell: Shell<T = T>;
 
+    // TODO: Index -> BottomKey ?
     type SlotIter<'a>: Iterator<Item = (Index, UnsafeSlot<'a, T, Self::Shell>)> + Send
     where
         Self: 'a;

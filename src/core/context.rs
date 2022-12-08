@@ -31,7 +31,7 @@ impl<T: Item> Context<T> {
         }
     }
 }
-
+// TODO: SlotContext?
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct ItemContext<'a, T: Item> {

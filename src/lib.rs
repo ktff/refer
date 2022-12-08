@@ -51,9 +51,6 @@
 //! Items are trait families that are intended to be implemented for the model.
 //!
 //! Models aren't represented in any way by the library besides providing some examples/generic implementations.
-//!
-//! # Examples
-//! TODO
 
 //? Important decisions:
 //? - Generic backing up whole graph by a file/disk for the purpose of persistence is not to be supported out of the box.

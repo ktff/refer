@@ -3,6 +3,8 @@ pub mod alloc_box;
 pub mod inline_shell;
 pub mod inline_vec;
 
+// TODO: Move custom alloc structures to their own module somewhere.
+
 /// Reads u64 and fills with higher zero if not enough bytes, discards the rest.
 fn read_u64<const N: usize>(data: [u8; N]) -> u64 {
     let mut tmp = 0u64;

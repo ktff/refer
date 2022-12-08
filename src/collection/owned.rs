@@ -102,7 +102,7 @@ impl<C: AnyContainer> Owned<C> {
     {
         let (mut item, mut shell, context) =
             self.0.unfill_slot(key.into()).expect("Should be present");
-        shell.dealloc(context.allocator());
+        shell.clear(context.allocator());
         item.displace(context, None);
     }
 
@@ -394,7 +394,7 @@ impl<C: AnyContainer> Drop for Owned<C> {
                     match self.access_mut().get(key) {
                         Ok(mut slot) => {
                             // Drop local
-                            slot.shell_dealloc();
+                            slot.clear_shell();
                             slot.displace();
 
                             // Unfill
@@ -487,7 +487,7 @@ fn replace_item_key<T: Item, C: Container<T>>(
     for other_rf in other.iter_references() {
         other_rf
             .get(shells.borrow_mut())
-            .replace(from.into(), to.index());
+            .replace_in_shell(from.into(), to.index());
     }
 }
 
@@ -501,7 +501,9 @@ fn replace_any_item_key<C: AnyContainer>(
     let other = items.get(from).expect("Should be valid key");
     if let Some(references) = other.iter_references_any() {
         for other_rf in references {
-            other_rf.get(shells.borrow_mut()).replace(from, to.index());
+            other_rf
+                .get(shells.borrow_mut())
+                .replace_in_shell(from, to.index());
         }
     };
 }
@@ -530,7 +532,7 @@ fn replace_item_references<T: Item, C: Container<T>>(
                 let _ = shells
                     .borrow_mut()
                     .get(rf.key())
-                    .map(|mut slot| slot.shell_mut().remove_from(key.into()));
+                    .map(|mut slot| slot.remove_in_shell(key.into()));
             }
             (None, Some(rf)) => {
                 match shells.borrow_mut().get(rf.key()) {
@@ -603,13 +605,12 @@ fn displace_shell_references<C: AnyContainer>(
                 }
             }
 
-            to_shell.add_from_count(other_rf.key(), count);
+            to_shell.add_in_shell_many(other_rf.key(), count);
         }
     }
 
     //Finish
-    let alloc = from_shell.context().allocator();
-    from_shell.dealloc(alloc);
+    from_shell.clear_shell();
 
     Ok(())
 }
@@ -661,7 +662,7 @@ fn duplicate_shell_references<C: AnyContainer>(
 
                                 if attached(*duplicate_key) {
                                     // Duplicate is attached
-                                    to_shell.add_from_count(*duplicate_key, count);
+                                    to_shell.add_in_shell_many(*duplicate_key, count);
                                 }
                             }
                             Err((prefix, vec)) => {
@@ -673,7 +674,7 @@ fn duplicate_shell_references<C: AnyContainer>(
                 }
             } else {
                 // Original reference duplicate
-                to_shell.add_from_count(other_ref.key(), count);
+                to_shell.add_in_shell_many(other_ref.key(), count);
 
                 // If duplicate was created, duplicate it's references.
                 if let Some(Ok(&mut duplicate_key)) =
@@ -691,7 +692,7 @@ fn duplicate_shell_references<C: AnyContainer>(
 
                     if attached(duplicate_key) {
                         // Duplicate is attached
-                        to_shell.add_from_count(duplicate_key, count);
+                        to_shell.add_in_shell_many(duplicate_key, count);
                     }
                 }
             }
@@ -741,8 +742,7 @@ fn detach_shell<C: AnyContainer>(
         }
     }
     // Clear local data
-    let alloc = shell_slot.context().allocator();
-    shell_slot.dealloc(alloc);
+    shell_slot.clear_shell();
 
     Ok(())
 }

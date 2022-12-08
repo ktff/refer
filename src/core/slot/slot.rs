@@ -1,12 +1,14 @@
 use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
 use crate::core::{
-    AnyItemContext, AnyKey, AnySlot, Index, Item, ItemContext, Key, KeyPrefix, Shell, UnsafeSlot,
+    AnyItemContext, AnyKey, AnyShell, AnySlot, Index, Item, ItemContext, Key, KeyPrefix, Shell,
+    UnsafeSlot,
 };
 use std::{
     any::Any,
     ops::{Deref, DerefMut},
 };
 
+// TODO: Reflect methods in Shell and item to this.
 pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
     key: Key<T>,
     slot: UnsafeSlot<'a, T, S>,
@@ -90,17 +92,17 @@ impl<'a, T: Item, S: Shell<T = T>, A: ShellAccess> Slot<'a, T, S, permit::Mut, A
         unsafe { &mut *self.slot.shell().get() }
     }
 
-    pub fn add_from(&mut self, from: AnyKey) {
+    pub fn add_to_shell(&mut self, from: AnyKey) {
         let alloc = self.slot.allocator();
-        self.shell_mut().add_from(from, alloc);
+        self.shell_mut().add(from, alloc);
     }
 
-    pub fn add_from_count(&mut self, from: AnyKey, count: usize) {
-        let alloc = self.slot.allocator();
-        self.shell_mut().add_from_count(from, count, alloc);
+    pub fn add_to_shell_many(&mut self, from: AnyKey, count: usize) {
+        let context = self.context();
+        self.shell_mut().add_many_any(from, count, context.upcast());
     }
 
-    pub fn replace(&mut self, from: AnyKey, to: Index) {
+    pub fn replace_in_shell(&mut self, from: AnyKey, to: Index) {
         let alloc = self.slot.allocator();
         self.shell_mut().replace(from, to, alloc);
     }

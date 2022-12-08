@@ -73,6 +73,13 @@ where
     {
         DedupAscendingIterator(self.0.peekable())
     }
+
+    pub fn map_internal<T: Iterator<Item = I::Item>>(
+        self,
+        map: impl FnOnce(I) -> T,
+    ) -> AscendingIterator<T> {
+        AscendingIterator(map(self.0))
+    }
 }
 
 impl<I: Iterator> Iterator for AscendingIterator<I>

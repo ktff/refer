@@ -14,6 +14,8 @@ pub use unsafe_slot::UnsafeSlot;
 
 use crate::core::{AnyItem, Shell};
 
+// TODO: Test permit system, test compile failures?
+
 // *************************** Useful aliases *************************** //
 
 pub type MutAnyShells<'a, C> = AnyPermit<'a, permit::Mut, permit::Shell, C>;

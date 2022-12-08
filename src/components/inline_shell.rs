@@ -4,6 +4,8 @@ use crate::core::*;
 use modular_bitfield::prelude::*;
 use std::{any::TypeId, marker::PhantomData, num::NonZeroU64};
 
+// TODO: Move this to shell
+
 /// If an Item knows which Types can reference it, it can implement
 /// this to enable compressing references.
 pub trait Referable: Send + Sync {

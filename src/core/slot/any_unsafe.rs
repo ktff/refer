@@ -23,6 +23,8 @@ impl<'a> AnyUnsafeSlot<'a> {
         }
     }
 
+    // TODO: Try to enable this
+
     // pub fn downcast<T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any>(
     //     &self,
     // ) -> Option<UnsafeSlot<'a, T, G, S, A>> {

@@ -1,7 +1,5 @@
-// mod delta;
 mod index;
 mod prefix;
-// mod reserved;
 mod sub;
 
 use std::{
@@ -11,13 +9,15 @@ use std::{
     marker::PhantomData,
 };
 
-// pub use delta::*;
 pub use index::*;
 pub use prefix::*;
-// pub use reserved::*;
 pub use sub::*;
 
 use crate::core::{AnyContainer, AnyPermit, AnySlot};
+
+// TODO: Revisit, refactor, Any X {Key,Prefix,SubKey} and Index concepts, interaction, etc.
+// TODO: BottomKey ?
+// TODO: Test this whole stack
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key

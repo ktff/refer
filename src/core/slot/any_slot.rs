@@ -7,6 +7,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+// TODO: Reflect methods in Shell and item to this.
+
 pub struct AnySlot<'a, R, A> {
     key: AnyKey,
     slot: AnyUnsafeSlot<'a>,
@@ -26,6 +28,8 @@ impl<'a, R, A> AnySlot<'a, R, A> {
     pub fn context(&self) -> AnyItemContext<'a> {
         self.slot.context()
     }
+
+    // TODO: Try to enable this
 
     // pub fn downcast<T: AnyItem, S: Shell<T = T>>(
     //     self,
@@ -109,23 +113,27 @@ impl<'a, A: ShellAccess> AnySlot<'a, permit::Mut, A> {
     }
 
     pub fn add_from(&mut self, from: AnyKey) {
-        let alloc = self.slot.allocator();
-        self.shell_mut().add_from(from, alloc);
+        let context = self.context();
+        self.shell_mut().add_any(from, context);
     }
 
-    pub fn add_from_count(&mut self, from: AnyKey, count: usize) {
-        let alloc = self.slot.allocator();
-        self.shell_mut().add_from_count(from, count, alloc);
+    pub fn add_in_shell_many(&mut self, from: AnyKey, count: usize) {
+        let context = self.context();
+        self.shell_mut().add_many_any(from, count, context);
     }
 
-    pub fn replace(&mut self, from: AnyKey, to: Index) {
-        let alloc = self.slot.allocator();
-        self.shell_mut().replace(from, to, alloc);
+    pub fn replace_in_shell(&mut self, from: AnyKey, to: Index) {
+        let context = self.context();
+        self.shell_mut().replace_any(from, to, context);
     }
 
-    pub fn shell_dealloc(&mut self) {
-        let alloc = self.slot.allocator();
-        self.shell_mut().dealloc(alloc);
+    pub fn remove_in_shell(&mut self, from: AnyKey) {
+        self.shell_mut().remove_any(from);
+    }
+
+    pub fn clear_shell(&mut self) {
+        let context = self.context();
+        self.shell_mut().clear_any(context);
     }
 }
 
