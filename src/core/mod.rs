@@ -1,9 +1,8 @@
 pub mod collection;
 mod container;
+mod context;
 mod item;
 mod key;
-// mod layer;
-mod context;
 mod reference;
 mod shell;
 mod slot;
@@ -15,10 +14,9 @@ use std::{
 
 pub use collection::{Access, Collection};
 pub use container::*;
+pub use context::*;
 pub use item::*;
 pub use key::*;
-// pub use layer::*;
-pub use context::*;
 pub use reference::*;
 pub use shell::*;
 pub use slot::*;
