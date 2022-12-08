@@ -1,13 +1,11 @@
 use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
 use crate::core::{
-    AnyItem, AnyItemContext, AnyKey, AnyRef, AnyShell, AnyUnsafeSlot, Index, KeyPrefix,
+    AnyItem, AnyItemContext, AnyKey, AnyRef, AnyShell, AnyUnsafeSlot, Index, Item, KeyPrefix, Shell,
 };
 use std::{
     any::Any,
     ops::{Deref, DerefMut},
 };
-
-// TODO: Reflect methods in Shell and item to this.
 
 pub struct AnySlot<'a, R, A> {
     key: AnyKey,
@@ -28,32 +26,16 @@ impl<'a, R, A> AnySlot<'a, R, A> {
     pub fn context(&self) -> AnyItemContext<'a> {
         self.slot.context()
     }
-
-    // TODO: Try to enable this
-
-    // pub fn downcast<T: AnyItem, S: Shell<T = T>>(
-    //     self,
-    // ) -> Result<Slot<'a, T, S, R, W>, Self> {
-    //     if let Some(key) = self.key.downcast() {
-    //         if let Some(slot) = self.slot.downcast() {
-    //             Ok(Slot {
-    //                 key,
-    //                 slot,
-    //                 access: self.access,
-    //             })
-    //         } else {
-    //             Err(self)
-    //         }
-    //     } else {
-    //         Err(self)
-    //     }
-    // }
 }
 
 impl<'a, R: RefAccess, A: ItemAccess> AnySlot<'a, R, A> {
     pub fn item(&self) -> &dyn AnyItem {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
+    }
+
+    pub fn item_as<T: Item>(&self) -> Option<&T> {
+        (self.item() as &dyn Any).downcast_ref::<T>()
     }
 
     pub fn iter_references_any(&self) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
@@ -71,6 +53,10 @@ impl<'a, A: ItemAccess> AnySlot<'a, permit::Mut, A> {
     pub fn item_mut(&mut self) -> &mut dyn AnyItem {
         // SAFETY: We have mut access to the item.
         unsafe { &mut *self.slot.item().get() }
+    }
+
+    pub fn item_mut_as<T: Item>(&mut self) -> Option<&mut T> {
+        (self.item_mut() as &mut dyn Any).downcast_mut::<T>()
     }
 
     pub fn remove_reference(&mut self, other: AnyKey) -> bool {
@@ -104,12 +90,20 @@ impl<'a, R: RefAccess, A: ShellAccess> AnySlot<'a, R, A> {
         // SAFETY: We have at least read access to the shell. R
         unsafe { &*self.slot.shell().get() }
     }
+
+    pub fn shell_as<S: Shell>(&self) -> Option<&S> {
+        (self.shell() as &dyn Any).downcast_ref::<S>()
+    }
 }
 
 impl<'a, A: ShellAccess> AnySlot<'a, permit::Mut, A> {
     pub fn shell_mut(&mut self) -> &mut dyn AnyShell {
         // SAFETY: We have mut access to the shell.
         unsafe { &mut *self.slot.shell().get() }
+    }
+
+    pub fn shell_mut_as<S: Shell>(&mut self) -> Option<&mut S> {
+        (self.shell_mut() as &mut dyn Any).downcast_mut::<S>()
     }
 
     pub fn add_from(&mut self, from: AnyKey) {

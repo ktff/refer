@@ -104,10 +104,7 @@ pub trait AnyItem: Any + Sync + Send {
         context: AnyItemContext<'_>,
         other: AnyKey,
         to: Index,
-    ) -> Option<KeyPrefix> {
-        self.replace_reference_any(context, other, to);
-        None
-    }
+    ) -> Option<KeyPrefix>;
 
     fn duplicate_reference_any(
         &mut self,
@@ -120,9 +117,7 @@ pub trait AnyItem: Any + Sync + Send {
         &self,
         _from: AnyItemContext<'_>,
         _to: AnyItemContext<'_>,
-    ) -> Option<Box<dyn Any>> {
-        None
-    }
+    ) -> Option<Box<dyn Any>>;
 
     fn displace_any(&mut self, from: AnyItemContext<'_>, to: Option<AnyItemContext<'_>>);
 }

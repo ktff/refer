@@ -8,7 +8,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-// TODO: Reflect methods in Shell and item to this.
 pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
     key: Key<T>,
     slot: UnsafeSlot<'a, T, S>,

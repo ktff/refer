@@ -4,6 +4,8 @@ use std::{
     ptr::NonNull,
 };
 
+// TODO: LocalBox<T>
+
 /// Same as Box but doesn't remember it's allocator.
 // TODO: Some better name, family name for this kind of constructs.
 pub struct AllocBox<T>(NonNull<T>);

@@ -1,6 +1,8 @@
-use crate::core::{AnyItem, AnyItemContext, AnyShell, KeyPrefix};
+use crate::core::{AnyItem, AnyItemContext, AnyShell, Container, Item, KeyPrefix};
 use getset::CopyGetters;
 use std::{any::Any, cell::SyncUnsafeCell};
+
+use super::UnsafeSlot;
 
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
@@ -22,19 +24,6 @@ impl<'a> AnyUnsafeSlot<'a> {
             shell,
         }
     }
-
-    // TODO: Try to enable this
-
-    // pub fn downcast<T: AnyItem, G: Any, S: crate::Shell<T = T>, A: std::alloc::Allocator + Any>(
-    //     &self,
-    // ) -> Option<UnsafeSlot<'a, T, G, S, A>> {
-    //     Some(UnsafeSlot::new(
-    //         self.item.downcast_ref::<T>()?,
-    //         self.group_item.downcast_ref()?,
-    //         (self.shell as &'a dyn Any).downcast_ref()?,
-    //         self.alloc_any.downcast_ref()?,
-    //     ))
-    // }
 }
 
 impl<'a> Copy for AnyUnsafeSlot<'a> {}

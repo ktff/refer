@@ -25,7 +25,6 @@ pub use slot::*;
 
 /*
 NOTES
-
 - Goal is to completely prevent memory errors, and to discourage logical errors.
 
 - If a branch is not correct from the point of logic/expectations but the end result is the same then just log the
@@ -35,11 +34,6 @@ NOTES
 - Multi level containers must know/enforce levels on their children containers so to have an unique path for each key.
 
 - Containers are not to be Items since that creates non trivial recursions on type and logic levels.
-
-TODO:
-
-   * LocalBox<T>
-
 */
 
 /// Collection level errors.
