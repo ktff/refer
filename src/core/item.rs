@@ -1,4 +1,4 @@
-use super::{AnyItemContext, AnyKey, AnyRef, Index, ItemContext, KeyPrefix};
+use super::{AnyKey, AnyRef, AnySlotContext, Index, KeyPrefix, SlotContext};
 use getset::{CopyGetters, Getters};
 use std::{
     alloc::Allocator,
@@ -21,17 +21,17 @@ pub trait Item: Sized + Any + Sync + Send {
     /// All internal references.
     ///
     /// Must have stable iteration order.
-    fn iter_references(&self, context: ItemContext<'_, Self>) -> Self::Iter<'_>;
+    fn iter_references(&self, context: SlotContext<'_, Self>) -> Self::Iter<'_>;
 
     /// True if this should also be removed, else should remove all references to other.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn remove_reference(&mut self, context: ItemContext<'_, Self>, other: AnyKey) -> bool;
+    fn remove_reference(&mut self, context: SlotContext<'_, Self>, other: AnyKey) -> bool;
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn replace_reference(&mut self, context: ItemContext<'_, Self>, other: AnyKey, to: Index);
+    fn replace_reference(&mut self, context: SlotContext<'_, Self>, other: AnyKey, to: Index);
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
@@ -40,7 +40,7 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Will be called for references of self, but can be called for other references.
     fn displace_reference(
         &mut self,
-        context: ItemContext<'_, Self>,
+        context: SlotContext<'_, Self>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix> {
@@ -58,7 +58,7 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Will be called for references of self, but can be called for other references.
     fn duplicate_reference(
         &mut self,
-        context: ItemContext<'_, Self>,
+        context: SlotContext<'_, Self>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix>;
@@ -66,7 +66,7 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Clone this item from context to context.
     /// None if it can't be duplicated/cloned.
     // /// If Some, displace must also me Some.
-    fn duplicate(&self, _from: ItemContext<'_, Self>, _to: ItemContext<'_, Self>) -> Option<Self> {
+    fn duplicate(&self, _from: SlotContext<'_, Self>, _to: SlotContext<'_, Self>) -> Option<Self> {
         None
     }
 
@@ -85,47 +85,47 @@ pub trait Item: Sized + Any + Sync + Send {
     ///
     /// If method is not empty, don't make Item Clone, instead use fn duplicate.
     // /// If this method is empty, consider returning true from fn global.
-    fn displace(&mut self, from: ItemContext<'_, Self>, to: Option<ItemContext<'_, Self>>);
+    fn displace(&mut self, from: SlotContext<'_, Self>, to: Option<SlotContext<'_, Self>>);
 }
 
 /// Methods correspond 1 to 1 to Item methods.
 pub trait AnyItem: Any + Sync + Send {
     fn iter_references_any(
         &self,
-        context: AnyItemContext<'_>,
+        context: AnySlotContext<'_>,
     ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
-    fn remove_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey) -> bool;
+    fn remove_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey) -> bool;
 
-    fn replace_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey, to: Index);
+    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: Index);
 
     fn displace_reference_any(
         &mut self,
-        context: AnyItemContext<'_>,
+        context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix>;
 
     fn duplicate_reference_any(
         &mut self,
-        context: AnyItemContext<'_>,
+        context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix>;
 
     fn duplicate_any(
         &self,
-        _from: AnyItemContext<'_>,
-        _to: AnyItemContext<'_>,
+        _from: AnySlotContext<'_>,
+        _to: AnySlotContext<'_>,
     ) -> Option<Box<dyn Any>>;
 
-    fn displace_any(&mut self, from: AnyItemContext<'_>, to: Option<AnyItemContext<'_>>);
+    fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>);
 }
 
 impl<T: Item> AnyItem for T {
     fn iter_references_any(
         &self,
-        context: AnyItemContext<'_>,
+        context: AnySlotContext<'_>,
     ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
         let iter = self.iter_references(context.downcast());
         if let (0, Some(0)) = iter.size_hint() {
@@ -135,17 +135,17 @@ impl<T: Item> AnyItem for T {
         }
     }
 
-    fn remove_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey) -> bool {
+    fn remove_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey) -> bool {
         self.remove_reference(context.downcast(), other)
     }
 
-    fn replace_reference_any(&mut self, context: AnyItemContext<'_>, other: AnyKey, to: Index) {
+    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: Index) {
         self.replace_reference(context.downcast(), other, to)
     }
 
     fn displace_reference_any(
         &mut self,
-        context: AnyItemContext<'_>,
+        context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix> {
@@ -154,7 +154,7 @@ impl<T: Item> AnyItem for T {
 
     fn duplicate_reference_any(
         &mut self,
-        context: AnyItemContext<'_>,
+        context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
     ) -> Option<KeyPrefix> {
@@ -163,14 +163,14 @@ impl<T: Item> AnyItem for T {
 
     fn duplicate_any(
         &self,
-        from: AnyItemContext<'_>,
-        to: AnyItemContext<'_>,
+        from: AnySlotContext<'_>,
+        to: AnySlotContext<'_>,
     ) -> Option<Box<dyn Any>> {
         self.duplicate(from.downcast(), to.downcast())
             .map(|x| Box::new(x) as Box<dyn Any>)
     }
 
-    fn displace_any(&mut self, from: AnyItemContext<'_>, to: Option<AnyItemContext<'_>>) {
+    fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>) {
         self.displace(from.downcast(), to.map(|to| to.downcast()))
     }
 }

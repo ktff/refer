@@ -1,6 +1,6 @@
 use super::{
-    AnyItem, AnyItemContext, AnyKey, AnyKeyPrefix, AnySubKey, AnyUnsafeSlot, Context, Index, Item,
-    ItemContext, Key, KeyPrefix, Shell, SubKey, UnsafeSlot,
+    AnyItem, AnyKey, AnyKeyPrefix, AnySlotContext, AnySubKey, AnyUnsafeSlot, Context, Index, Item,
+    Key, KeyPrefix, Shell, SlotContext, SubKey, UnsafeSlot,
 };
 use std::{
     alloc::Allocator,
@@ -31,7 +31,7 @@ pub trait Container<T: Item>: AnyContainer {
 
     fn get_slot(&self, sub_key: SubKey<T>) -> Option<UnsafeSlot<T, Self::Shell>>;
 
-    fn get_locality(&self, key: T::LocalityKey) -> Option<ItemContext<T>>;
+    fn get_locality(&self, key: T::LocalityKey) -> Option<SlotContext<T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
     /// No slot is returned twice in returned iterator.
@@ -44,14 +44,14 @@ pub trait Container<T: Item>: AnyContainer {
     fn fill_locality(&mut self, key: T::LocalityKey);
 
     /// Removes from container.
-    fn unfill_slot(&mut self, sub_key: SubKey<T>) -> Option<(T, Self::Shell, ItemContext<T>)>;
+    fn unfill_slot(&mut self, sub_key: SubKey<T>) -> Option<(T, Self::Shell, SlotContext<T>)>;
 }
 
 pub trait AnyContainer: Any + Sync + Send {
     fn get_slot_any(&self, sub_key: AnySubKey) -> Option<AnyUnsafeSlot>;
 
     /// None if such locality doesn't exist.
-    fn get_locality_any(&self, key: AnyKeyPrefix) -> Option<AnyItemContext>;
+    fn get_locality_any(&self, key: AnyKeyPrefix) -> Option<AnySlotContext>;
 
     /// Returns first key for given type
     fn first(&self, key: TypeId) -> Option<AnyKey>;

@@ -1,6 +1,6 @@
 use super::{
-    permit, AnyContainer, AnyPermit, CollectionError, Container, Item, ItemContext, Key, MutSlot,
-    RefSlot, Slot,
+    permit, AnyContainer, AnyPermit, CollectionError, Container, Item, Key, MutSlot, RefSlot, Slot,
+    SlotContext,
 };
 
 pub type Result<T> = std::result::Result<T, CollectionError>;

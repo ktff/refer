@@ -1,6 +1,6 @@
 use crate::util::AscendingIterator;
 
-use super::{AnyItemContext, AnyKey, AnyRef, Index, Item, Key, Ref};
+use super::{AnyKey, AnyRef, AnySlotContext, Index, Item, Key, Ref};
 use std::any::{Any, TypeId};
 
 /// A shell of an item. In which references are recorded.
@@ -41,15 +41,15 @@ pub trait Shell: Any + Sync + Send {
 pub trait AnyShell: Any + Sync + Send {
     fn iter_any(&self) -> Option<AscendingIterator<Box<dyn Iterator<Item = AnyRef> + '_>>>;
 
-    fn add_any(&mut self, from: AnyKey, context: AnyItemContext);
+    fn add_any(&mut self, from: AnyKey, context: AnySlotContext);
 
-    fn add_many_any(&mut self, from: AnyKey, count: usize, context: AnyItemContext);
+    fn add_many_any(&mut self, from: AnyKey, count: usize, context: AnySlotContext);
 
-    fn replace_any(&mut self, from: AnyKey, to: Index, context: AnyItemContext);
+    fn replace_any(&mut self, from: AnyKey, to: Index, context: AnySlotContext);
 
     fn remove_any(&mut self, from: AnyKey);
 
-    fn clear_any(&mut self, context: AnyItemContext);
+    fn clear_any(&mut self, context: AnySlotContext);
 }
 
 impl<T: Shell> AnyShell for T {
@@ -62,19 +62,19 @@ impl<T: Shell> AnyShell for T {
         }
     }
 
-    fn add_any(&mut self, from: AnyKey, context: AnyItemContext) {
+    fn add_any(&mut self, from: AnyKey, context: AnySlotContext) {
         let context = context.downcast::<T::T>();
         self.add(from, context.allocator());
     }
 
-    fn add_many_any(&mut self, from: AnyKey, count: usize, context: AnyItemContext) {
+    fn add_many_any(&mut self, from: AnyKey, count: usize, context: AnySlotContext) {
         let context = context.downcast::<T::T>();
         for _ in 0..count {
             self.add(from, context.allocator());
         }
     }
 
-    fn replace_any(&mut self, from: AnyKey, to: Index, context: AnyItemContext) {
+    fn replace_any(&mut self, from: AnyKey, to: Index, context: AnySlotContext) {
         let context = context.downcast::<T::T>();
         self.replace(from, to, context.allocator());
     }
@@ -83,7 +83,7 @@ impl<T: Shell> AnyShell for T {
         self.remove(from);
     }
 
-    fn clear_any(&mut self, context: AnyItemContext) {
+    fn clear_any(&mut self, context: AnySlotContext) {
         let context = context.downcast::<T::T>();
         self.clear(context.allocator());
     }

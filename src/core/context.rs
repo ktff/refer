@@ -23,24 +23,24 @@ impl<T: Item> Context<T> {
         }
     }
 
-    pub fn item_context(&self) -> ItemContext<'_, T> {
-        ItemContext {
+    pub fn slot_context(&self) -> SlotContext<'_, T> {
+        SlotContext {
             prefix: self.prefix,
             data: &self.data,
             allocator: &self.allocator,
         }
     }
 }
-// TODO: SlotContext?
+
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct ItemContext<'a, T: Item> {
+pub struct SlotContext<'a, T: Item> {
     prefix: KeyPrefix,
     data: &'a T::LocalityData,
     allocator: &'a T::Alloc,
 }
 
-impl<'a, T: Item> ItemContext<'a, T> {
+impl<'a, T: Item> SlotContext<'a, T> {
     pub fn new(prefix: KeyPrefix, data: &'a T::LocalityData, allocator: &'a T::Alloc) -> Self {
         Self {
             prefix,
@@ -49,8 +49,8 @@ impl<'a, T: Item> ItemContext<'a, T> {
         }
     }
 
-    pub fn upcast(self) -> AnyItemContext<'a> {
-        AnyItemContext {
+    pub fn upcast(self) -> AnySlotContext<'a> {
+        AnySlotContext {
             ty: TypeId::of::<T>(),
             prefix: self.prefix,
             data: self.data,
@@ -60,9 +60,9 @@ impl<'a, T: Item> ItemContext<'a, T> {
     }
 }
 
-impl<'a, T: Item> Copy for ItemContext<'a, T> {}
+impl<'a, T: Item> Copy for SlotContext<'a, T> {}
 
-impl<'a, T: Item> Clone for ItemContext<'a, T> {
+impl<'a, T: Item> Clone for SlotContext<'a, T> {
     fn clone(&self) -> Self {
         Self {
             prefix: self.prefix,
@@ -74,7 +74,7 @@ impl<'a, T: Item> Clone for ItemContext<'a, T> {
 
 #[derive(Clone, Copy, CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct AnyItemContext<'a> {
+pub struct AnySlotContext<'a> {
     #[getset(skip)]
     ty: TypeId,
     prefix: KeyPrefix,
@@ -85,7 +85,7 @@ pub struct AnyItemContext<'a> {
     alloc_any: &'a dyn Any,
 }
 
-impl<'a> AnyItemContext<'a> {
+impl<'a> AnySlotContext<'a> {
     pub fn new(
         ty: TypeId,
         prefix: KeyPrefix,
@@ -102,13 +102,13 @@ impl<'a> AnyItemContext<'a> {
         }
     }
 
-    pub fn downcast<I: Item>(self) -> ItemContext<'a, I> {
+    pub fn downcast<I: Item>(self) -> SlotContext<'a, I> {
         self.downcast_try().expect("Unexpected item type")
     }
 
-    pub fn downcast_try<I: Item>(self) -> Option<ItemContext<'a, I>> {
+    pub fn downcast_try<I: Item>(self) -> Option<SlotContext<'a, I>> {
         if self.ty == TypeId::of::<I>() {
-            Some(ItemContext {
+            Some(SlotContext {
                 prefix: self.prefix,
                 data: self
                     .data

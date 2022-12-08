@@ -1,6 +1,6 @@
 use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
 use crate::core::{
-    AnyItem, AnyItemContext, AnyKey, AnyRef, AnyShell, AnyUnsafeSlot, Index, Item, KeyPrefix, Shell,
+    AnyItem, AnyKey, AnyRef, AnyShell, AnySlotContext, AnyUnsafeSlot, Index, Item, KeyPrefix, Shell,
 };
 use std::{
     any::Any,
@@ -23,7 +23,7 @@ impl<'a, R, A> AnySlot<'a, R, A> {
         self.key
     }
 
-    pub fn context(&self) -> AnyItemContext<'a> {
+    pub fn context(&self) -> AnySlotContext<'a> {
         self.slot.context()
     }
 }
@@ -43,7 +43,7 @@ impl<'a, R: RefAccess, A: ItemAccess> AnySlot<'a, R, A> {
     }
 
     /// Can panic if context isn't for this type.
-    pub fn duplicate(&self, to: AnyItemContext) -> Option<Box<dyn Any>> {
+    pub fn duplicate(&self, to: AnySlotContext) -> Option<Box<dyn Any>> {
         let context = self.context();
         self.item().duplicate_any(context, to)
     }

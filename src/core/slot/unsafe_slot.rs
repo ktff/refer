@@ -1,19 +1,19 @@
 use super::*;
-use crate::core::{Item, ItemContext, KeyPrefix, Shell};
+use crate::core::{Item, KeyPrefix, Shell, SlotContext};
 use getset::CopyGetters;
 use std::{any::Any, cell::SyncUnsafeCell};
 
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct UnsafeSlot<'a, T: Item, S: Shell<T = T>> {
-    context: ItemContext<'a, T>,
+    context: SlotContext<'a, T>,
     item: &'a SyncUnsafeCell<T>,
     shell: &'a SyncUnsafeCell<S>,
 }
 
 impl<'a, T: Item, S: Shell<T = T>> UnsafeSlot<'a, T, S> {
     pub fn new(
-        context: ItemContext<'a, T>,
+        context: SlotContext<'a, T>,
         item: &'a SyncUnsafeCell<T>,
         shell: &'a SyncUnsafeCell<S>,
     ) -> Self {
@@ -43,7 +43,7 @@ impl<'a, T: Item, S: Shell<T = T>> Clone for UnsafeSlot<'a, T, S> {
 
 // Deref to context
 impl<'a, T: Item, S: Shell<T = T>> std::ops::Deref for UnsafeSlot<'a, T, S> {
-    type Target = ItemContext<'a, T>;
+    type Target = SlotContext<'a, T>;
 
     fn deref(&self) -> &Self::Target {
         &self.context
