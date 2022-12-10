@@ -28,7 +28,7 @@ impl<C: AnyContainer> Owned<C> {
     {
         self.0
             .get_locality(to)
-            .map(|context| SubKey::from(key).of(context.prefix()))
+            .map(|context| key.of(context.prefix()))
             .unwrap_or(false)
     }
 
@@ -74,7 +74,7 @@ impl<C: AnyContainer> Owned<C> {
         // Build duplicate
         let original = self
             .access()
-            .get(original_key)
+            .get_dyn(original_key)
             .expect("Should be valid key");
         let to_context = self
             .0
@@ -82,7 +82,7 @@ impl<C: AnyContainer> Owned<C> {
             .expect("Should be valid prefix");
         let duplicate = original
             .duplicate(to_context)
-            .ok_or_else(|| CollectionError::invalid_op_any(original_key, "duplicate"))
+            .ok_or_else(|| CollectionError::invalid_op(original_key, "duplicate"))
             .expect("Must be able to duplicate");
 
         // Fill
@@ -100,8 +100,7 @@ impl<C: AnyContainer> Owned<C> {
     where
         C: Container<T>,
     {
-        let (mut item, mut shell, context) =
-            self.0.unfill_slot(key.into()).expect("Should be present");
+        let (mut item, mut shell, context) = self.0.unfill_slot(key).expect("Should be present");
         shell.clear(context.allocator());
         item.displace(context, None);
     }
@@ -157,7 +156,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
 
     fn replace_item(&mut self, key: Key<T>, item: T) -> Result<T, CollectionError> {
         let (items, shells) = self.access_mut().split_slots();
-        let mut slot = items.of().get(key)?;
+        let mut slot = items.get(key)?;
 
         // Update connections
         replace_item_references(shells, slot.borrow(), &item)?;
@@ -207,7 +206,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         if self.in_locality(from, to) {
             // Detach shell
             let mut remove = Vec::new();
-            detach_shell(self.access_mut().split_slots(), from.into(), &mut remove)?;
+            detach_shell(self.access_mut().split_slots(), from.upcast(), &mut remove)?;
             self.resolve_remove(remove);
 
             Ok(from)
@@ -233,17 +232,17 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         let mut moves = BTreeMap::new();
         displace_shell_references(
             self.access_mut().split_slots(),
-            from.into(),
-            to.into(),
+            from.upcast(),
+            to.upcast(),
             &mut moves,
-            |key| key == from.into(),
+            |key| key == from,
         )?;
 
         // Resolve other moves
         if !moves.is_empty() {
             let mut moved = HashSet::new();
-            moved.insert(from.into());
-            moved.insert(to.into());
+            moved.insert(from.upcast());
+            moved.insert(to.upcast());
 
             while let Some((from, prefix)) = moves.pop_first() {
                 // Has been moved?
@@ -269,11 +268,14 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
                         replace_any_item_key(self.access_mut().split_slots(), from, to);
 
                         // Item Drop local
-                        let mut slot = self.access_mut().get(from).expect("Key should be valid");
+                        let mut slot = self
+                            .access_mut()
+                            .get_dyn(from)
+                            .expect("Key should be valid");
                         slot.displace();
 
                         // Unfill, drop shell, and drop item
-                        self.0.unfill_slot_any(from.into());
+                        self.0.unfill_slot_any(from);
                     }
                 }
             }
@@ -309,7 +311,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
     fn duplicate_shell(&mut self, from: Key<T>, to: Key<T>) -> Result<(), CollectionError> {
         let mut duplicates = HashMap::new();
         duplicates.insert(from.upcast(), Ok(to.upcast()));
-        let attached = |other: AnyKey| other == to.upcast();
+        let attached = |other: AnyKey| other == to;
         let mut add = Vec::new();
 
         // Duplicate this shell
@@ -335,7 +337,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
 
             // Adjust references
             for replace in replace {
-                let mut duplicate = self.access_mut().get(to).expect("Should be valid key");
+                let mut duplicate = self.access_mut().get_dyn(to).expect("Should be valid key");
                 duplicate.replace_reference(replace.0, replace.1);
             }
 
@@ -368,20 +370,31 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
         // Detach
 
         // item --> others
-        detach_item(self.access_mut().split_slots(), key.into())?;
+        detach_item(self.access_mut().split_slots(), key.upcast())?;
 
         // item <-- others
         let mut remove = Vec::new();
-        detach_shell(self.access_mut().split_slots(), key.into(), &mut remove)
+        detach_shell(self.access_mut().split_slots(), key.upcast(), &mut remove)
             .expect("Should exist");
 
         // Unfill and drop shell
-        let (item, _, _) = self.0.unfill_slot(key.into()).expect("Should be present");
+        let (item, _, _) = self.0.unfill_slot(key).expect("Should be present");
 
         // Propagate change
         self.resolve_remove(remove);
 
         Ok(item)
+    }
+
+    fn context(&mut self, locality: T::LocalityKey) -> SlotContext<T> {
+        self.0.fill_locality(locality);
+        self.0
+            .get_locality(locality)
+            .expect("Should be valid locality")
+    }
+
+    fn existing_context(&self, locality: T::LocalityKey) -> Option<SlotContext<T>> {
+        self.0.get_locality(locality)
     }
 }
 
@@ -391,20 +404,20 @@ impl<C: AnyContainer> Drop for Owned<C> {
             if let Some(mut key) = self.0.first(ty) {
                 loop {
                     // Drop slot
-                    match self.access_mut().get(key) {
+                    match self.access_mut().get_dyn(key) {
                         Ok(mut slot) => {
                             // Drop local
                             slot.clear_shell();
                             slot.displace();
 
                             // Unfill
-                            self.0.unfill_slot_any(key.into());
+                            self.0.unfill_slot_any(key);
                         }
                         Err(error) => warn!("Invalid key: {}", error),
                     }
 
                     // Next
-                    if let Some(next) = self.0.next(key.into()) {
+                    if let Some(next) = self.0.next(key) {
                         key = next;
                     } else {
                         break;
@@ -426,10 +439,10 @@ fn attach_item<T: Item, C: Container<T>>(
     (items, shells): (MutAnyItems<C>, MutAnyShells<C>),
     key: Key<T>,
 ) -> Result<(), CollectionError> {
-    let item = items.of().get(key).expect("Should be valid key");
+    let item = items.get(key).expect("Should be valid key");
 
     // item --> others
-    attach_item_loop(shells, key.into(), || item.iter_references())
+    attach_item_loop(shells, key.upcast(), || item.iter_references())
 }
 
 /// Adds references in item at key to shells.
@@ -443,7 +456,7 @@ fn attach_any_item<C: AnyContainer>(
     (items, shells): (MutAnyItems<C>, MutAnyShells<C>),
     key: AnyKey,
 ) -> Result<(), CollectionError> {
-    let item = items.get(key).expect("Should be valid key");
+    let item = items.get_dyn(key).expect("Should be valid key");
 
     // item --> others
     attach_item_loop(shells, key, || {
@@ -458,7 +471,7 @@ fn attach_item_loop<C: AnyContainer, I: Iterator<Item = AnyRef>>(
 ) -> Result<(), CollectionError> {
     // item --> others
     for (i, rf) in iter().enumerate() {
-        match shells.borrow_mut().get(rf.key()) {
+        match shells.borrow_mut().get_dyn(rf.key()) {
             Ok(mut shell_slot) => shell_slot.add_from(key),
             Err(error) => {
                 // Reference doesn't exist
@@ -483,11 +496,11 @@ fn replace_item_key<T: Item, C: Container<T>>(
     from: Key<T>,
     to: Key<T>,
 ) {
-    let other = items.of::<T>().get(from).expect("Should be valid key");
+    let other = items.get(from).expect("Should be valid key");
     for other_rf in other.iter_references() {
         other_rf
             .get(shells.borrow_mut())
-            .replace_in_shell(from.into(), to.index());
+            .replace_in_shell(from.upcast(), to.index());
     }
 }
 
@@ -498,7 +511,7 @@ fn replace_any_item_key<C: AnyContainer>(
     from: AnyKey,
     to: AnyKey,
 ) {
-    let other = items.get(from).expect("Should be valid key");
+    let other = items.get_dyn(from).expect("Should be valid key");
     if let Some(references) = other.iter_references_any() {
         for other_rf in references {
             other_rf
@@ -531,22 +544,22 @@ fn replace_item_references<T: Item, C: Container<T>>(
                 // We don't care so much about this reference missing.
                 let _ = shells
                     .borrow_mut()
-                    .get(rf.key())
-                    .map(|mut slot| slot.remove_in_shell(key.into()));
+                    .get_dyn(rf.key())
+                    .map(|mut slot| slot.remove_in_shell(key.upcast()));
             }
             (None, Some(rf)) => {
-                match shells.borrow_mut().get(rf.key()) {
-                    Ok(mut shell_slot) => shell_slot.add_from(key.into()),
+                match shells.borrow_mut().get_dyn(rf.key()) {
+                    Ok(mut shell_slot) => shell_slot.add_from(key.upcast()),
                     Err(error) => {
                         // Rollback and return error
                         for cmp in crate::util::pair_up(&old, &new).take(i) {
                             match cmp {
                                 (Some(_), Some(_)) | (None, None) => (),
                                 (Some(rf), None) => {
-                                    rf.key().connect_from(key, shells.borrow_mut());
+                                    rf.key().connect_from(key.upcast(), shells.borrow_mut());
                                 }
                                 (None, Some(rf)) => {
-                                    rf.disconnect_from(key.into(), shells.borrow_mut());
+                                    rf.disconnect_from(key.upcast(), shells.borrow_mut());
                                 }
                             }
                         }
@@ -586,11 +599,11 @@ fn displace_shell_references<C: AnyContainer>(
             if moved(other_rf.key()) {
                 other_rf
                     .get(items.borrow_mut())
-                    .replace_reference(from.into(), to.index());
+                    .replace_reference(from, to.index());
             } else {
                 if let Some(under_prefix) = other_rf
                     .get(items.borrow_mut())
-                    .displace_reference(from.into(), to.index())
+                    .displace_reference(from, to.index())
                 {
                     // Register move
                     match moves.entry(other_rf.key()) {
@@ -656,7 +669,7 @@ fn duplicate_shell_references<C: AnyContainer>(
                                 // Duplicate references only duplicate
                                 let mut duplicate = items
                                     .borrow_mut()
-                                    .get(*duplicate_key)
+                                    .get_dyn(*duplicate_key)
                                     .expect("Should be valid key");
                                 duplicate.replace_reference(from, to.index());
 
@@ -683,7 +696,7 @@ fn duplicate_shell_references<C: AnyContainer>(
                     // Duplicate reference duplicate
                     let mut duplicate = items
                         .borrow_mut()
-                        .get(duplicate_key)
+                        .get_dyn(duplicate_key)
                         .expect("Should be valid key");
                     assert!(
                         duplicate.duplicate_reference(from, to.index()).is_none(),
@@ -709,7 +722,7 @@ fn detach_item<C: AnyContainer>(
     (mut items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
     key: AnyKey,
 ) -> Result<(), CollectionError> {
-    let mut item_slot = items.borrow_mut().get(key)?;
+    let mut item_slot = items.borrow_mut().get_dyn(key)?;
     if let Some(references) = item_slot.iter_references_any() {
         for rf in references {
             rf.disconnect_from(key, shells.borrow_mut());
@@ -731,10 +744,10 @@ fn detach_shell<C: AnyContainer>(
     key: AnyKey,
     remove: &mut Vec<AnyKey>,
 ) -> Result<(), CollectionError> {
-    let mut shell_slot = shells.borrow_mut().get(key)?;
+    let mut shell_slot = shells.borrow_mut().get_dyn(key)?;
     if let Some(references) = shell_slot.shell().iter_any() {
         for (_, other_rf) in references.dedup() {
-            if let Ok(mut other) = items.borrow_mut().get(other_rf.key()) {
+            if let Ok(mut other) = items.borrow_mut().get_dyn(other_rf.key()) {
                 if other.remove_reference(key) {
                     remove.push(other_rf.key());
                 }

@@ -1,41 +1,79 @@
 use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
 use crate::core::{
-    AnyItem, AnyKey, AnyRef, AnyShell, AnySlotContext, AnyUnsafeSlot, Index, Item, KeyPrefix, Shell,
+    AnyItem, AnyKey, AnyRef, AnyShell, AnySlotContext, AnyUnsafeSlot, Index, Item, Key, KeyPrefix,
+    Shell,
 };
 use std::{
     any::Any,
+    marker::Unsize,
     ops::{Deref, DerefMut},
+    ptr::Pointee,
 };
 
-pub struct AnySlot<'a, R, A> {
-    key: AnyKey,
+pub type AnySlot<'a, R, A> = DynSlot<'a, dyn AnyItem, R, A>;
+
+pub struct DynSlot<'a, T: Pointee + AnyItem + ?Sized, R, A> {
+    key: Key<T>,
     slot: AnyUnsafeSlot<'a>,
     access: Permit<R, A>,
 }
 
-impl<'a, R, A> AnySlot<'a, R, A> {
-    /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(key: AnyKey, slot: AnyUnsafeSlot<'a>, access: Permit<R, A>) -> Self {
+impl<'a, T: Pointee + AnyItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
+    /// Key should correspond to the slot.
+    /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
+    pub unsafe fn new(key: Key<T>, slot: AnyUnsafeSlot<'a>, access: Permit<R, A>) -> Self {
+        assert_eq!(key.type_id(), slot.item().get().item_type_id());
+        debug_assert!(slot.prefix().prefix_of(key.index().0));
         Self { key, slot, access }
     }
 
-    pub fn key(&self) -> AnyKey {
+    pub fn key(&self) -> Key<T> {
         self.key
     }
 
     pub fn context(&self) -> AnySlotContext<'a> {
         self.slot.context()
     }
-}
 
-impl<'a, R: RefAccess, A: ItemAccess> AnySlot<'a, R, A> {
-    pub fn item(&self) -> &dyn AnyItem {
-        // SAFETY: We have at least read access to the item. R
-        unsafe { &*self.slot.item().get() }
+    pub fn upcast<U: Pointee + AnyItem + ?Sized>(self) -> DynSlot<'a, U, R, A>
+    where
+        T: Unsize<U>,
+    {
+        DynSlot {
+            key: self.key.upcast(),
+            slot: self.slot,
+            access: self.access,
+        }
     }
 
-    pub fn item_as<T: Item>(&self) -> Option<&T> {
-        (self.item() as &dyn Any).downcast_ref::<T>()
+    pub fn downcast<U: Item>(self) -> Result<DynSlot<'a, U, R, A>, Self> {
+        if let Some(key) = self.key.downcast::<U>() {
+            Ok(DynSlot {
+                key,
+                slot: self.slot,
+                access: self.access,
+            })
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl<'a, T: Pointee + AnyItem + ?Sized, R: RefAccess, A: ItemAccess> DynSlot<'a, T, R, A> {
+    pub fn item(&self) -> &T {
+        unsafe {
+            let ptr = self.slot.item().get();
+
+            // SAFETY: During construction we checked that the type of the item matches the type of the key.
+            let ptr = std::ptr::from_raw_parts(ptr as *const (), self.key.metadata());
+
+            // SAFETY: We have at least read access to the item. R
+            &*ptr
+        }
+    }
+
+    pub fn item_downcast<U: Item>(&self) -> Option<&U> {
+        (self.item() as &dyn Any).downcast_ref::<U>()
     }
 
     pub fn iter_references_any(&self) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
@@ -43,20 +81,27 @@ impl<'a, R: RefAccess, A: ItemAccess> AnySlot<'a, R, A> {
     }
 
     /// Can panic if context isn't for this type.
-    pub fn duplicate(&self, to: AnySlotContext) -> Option<Box<dyn Any>> {
+    pub fn duplicate(&self, to: AnySlotContext) -> Option<Box<dyn AnyItem>> {
         let context = self.context();
         self.item().duplicate_any(context, to)
     }
 }
 
-impl<'a, A: ItemAccess> AnySlot<'a, permit::Mut, A> {
-    pub fn item_mut(&mut self) -> &mut dyn AnyItem {
-        // SAFETY: We have mut access to the item.
-        unsafe { &mut *self.slot.item().get() }
+impl<'a, T: Pointee + AnyItem + ?Sized, A: ItemAccess> DynSlot<'a, T, permit::Mut, A> {
+    pub fn item_mut(&mut self) -> &mut T {
+        unsafe {
+            let ptr = self.slot.item().get();
+
+            // SAFETY: During construction we checked that the type of the item matches the type of the key.
+            let ptr = std::ptr::from_raw_parts_mut(ptr as *mut (), self.key.metadata());
+
+            // SAFETY: We have mut access to the item.
+            &mut *ptr
+        }
     }
 
-    pub fn item_mut_as<T: Item>(&mut self) -> Option<&mut T> {
-        (self.item_mut() as &mut dyn Any).downcast_mut::<T>()
+    pub fn item_mut_downcast<U: Item>(&mut self) -> Option<&mut U> {
+        (self.item_mut() as &mut dyn Any).downcast_mut::<U>()
     }
 
     pub fn remove_reference(&mut self, other: AnyKey) -> bool {
@@ -85,24 +130,24 @@ impl<'a, A: ItemAccess> AnySlot<'a, permit::Mut, A> {
     }
 }
 
-impl<'a, R: RefAccess, A: ShellAccess> AnySlot<'a, R, A> {
+impl<'a, T: Pointee + AnyItem + ?Sized, R: RefAccess, A: ShellAccess> DynSlot<'a, T, R, A> {
     pub fn shell(&self) -> &dyn AnyShell {
         // SAFETY: We have at least read access to the shell. R
         unsafe { &*self.slot.shell().get() }
     }
 
-    pub fn shell_as<S: Shell>(&self) -> Option<&S> {
+    pub fn shell_downcast<S: Shell>(&self) -> Option<&S> {
         (self.shell() as &dyn Any).downcast_ref::<S>()
     }
 }
 
-impl<'a, A: ShellAccess> AnySlot<'a, permit::Mut, A> {
+impl<'a, T: Pointee + AnyItem + ?Sized, A: ShellAccess> DynSlot<'a, T, permit::Mut, A> {
     pub fn shell_mut(&mut self) -> &mut dyn AnyShell {
         // SAFETY: We have mut access to the shell.
         unsafe { &mut *self.slot.shell().get() }
     }
 
-    pub fn shell_mut_as<S: Shell>(&mut self) -> Option<&mut S> {
+    pub fn shell_mut_downcast<S: Shell>(&mut self) -> Option<&mut S> {
         (self.shell_mut() as &mut dyn Any).downcast_mut::<S>()
     }
 
@@ -131,7 +176,7 @@ impl<'a, A: ShellAccess> AnySlot<'a, permit::Mut, A> {
     }
 }
 
-impl<'a> AnySlot<'a, permit::Mut, permit::Slot> {
+impl<'a, T: Pointee + AnyItem + ?Sized> DynSlot<'a, T, permit::Mut, permit::Slot> {
     pub fn split(&mut self) -> (&mut dyn AnyItem, &mut dyn AnyShell) {
         // SAFETY: We have mut access to the item and shell.
         unsafe { (&mut *self.slot.item().get(), &mut *self.slot.shell().get()) }
@@ -140,18 +185,18 @@ impl<'a> AnySlot<'a, permit::Mut, permit::Slot> {
     pub fn split_slot(
         self,
     ) -> (
-        AnySlot<'a, permit::Mut, permit::Item>,
-        AnySlot<'a, permit::Mut, permit::Shell>,
+        DynSlot<'a, T, permit::Mut, permit::Item>,
+        DynSlot<'a, T, permit::Mut, permit::Shell>,
     ) {
         let (item_access, shell_access) = self.access.split();
 
         (
-            AnySlot {
+            DynSlot {
                 key: self.key,
                 slot: self.slot,
                 access: item_access,
             },
-            AnySlot {
+            DynSlot {
                 key: self.key,
                 slot: self.slot,
                 access: shell_access,
@@ -160,9 +205,9 @@ impl<'a> AnySlot<'a, permit::Mut, permit::Slot> {
     }
 }
 
-impl<'a, R, A> Copy for AnySlot<'a, R, A> where Permit<R, A>: Copy {}
+impl<'a, T: Pointee + AnyItem + ?Sized, R, A> Copy for DynSlot<'a, T, R, A> where Permit<R, A>: Copy {}
 
-impl<'a, R, A> Clone for AnySlot<'a, R, A>
+impl<'a, T: Pointee + AnyItem + ?Sized, R, A> Clone for DynSlot<'a, T, R, A>
 where
     Permit<R, A>: Clone,
 {
@@ -175,35 +220,35 @@ where
     }
 }
 
-impl<'a, R: RefAccess> Deref for AnySlot<'a, R, permit::Item> {
-    type Target = dyn AnyItem;
+impl<'a, T: Pointee + AnyItem + ?Sized, R: RefAccess> Deref for DynSlot<'a, T, R, permit::Item> {
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
         self.item()
     }
 }
 
-impl<'a> DerefMut for AnySlot<'a, permit::Mut, permit::Item> {
+impl<'a, T: Pointee + AnyItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::Item> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
     }
 }
 
-impl<'a, R: RefAccess> Deref for AnySlot<'a, R, permit::Slot> {
-    type Target = dyn AnyItem;
+impl<'a, T: Pointee + AnyItem + ?Sized, R: RefAccess> Deref for DynSlot<'a, T, R, permit::Slot> {
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
         self.item()
     }
 }
 
-impl<'a> DerefMut for AnySlot<'a, permit::Mut, permit::Slot> {
+impl<'a, T: Pointee + AnyItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::Slot> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
     }
 }
 
-impl<'a, R: RefAccess> Deref for AnySlot<'a, R, permit::Shell> {
+impl<'a, T: Pointee + AnyItem + ?Sized, R: RefAccess> Deref for DynSlot<'a, T, R, permit::Shell> {
     type Target = dyn AnyShell;
 
     fn deref(&self) -> &Self::Target {
@@ -211,7 +256,7 @@ impl<'a, R: RefAccess> Deref for AnySlot<'a, R, permit::Shell> {
     }
 }
 
-impl<'a> DerefMut for AnySlot<'a, permit::Mut, permit::Shell> {
+impl<'a, T: Pointee + AnyItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::Shell> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.shell_mut()
     }

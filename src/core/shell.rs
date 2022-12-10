@@ -4,7 +4,7 @@ use super::{AnyKey, AnyRef, AnySlotContext, Index, Item, Key, Ref};
 use std::any::{Any, TypeId};
 
 /// A shell of an item. In which references are recorded.
-pub trait Shell: Any + Sync + Send {
+pub trait Shell: Sized + Any {
     type T: Item;
 
     type Iter<'a>: Iterator<Item = AnyRef> + 'a
@@ -14,6 +14,8 @@ pub trait Shell: Any + Sync + Send {
     type IterOf<'a, I: Item>: Iterator<Item = Ref<I>> + 'a
     where
         Self: 'a;
+
+    fn new(alloc: &<Self::T as Item>::Alloc) -> Self;
 
     fn iter(&self) -> AscendingIterator<Self::Iter<'_>>;
 
@@ -25,12 +27,12 @@ pub trait Shell: Any + Sync + Send {
     }
 
     /// Additive if called for same `from` multiple times.
-    fn add(&mut self, from: AnyKey, alloc: &<Self::T as Item>::Alloc);
+    fn add(&mut self, from: impl Into<AnyKey>, alloc: &<Self::T as Item>::Alloc);
 
-    fn replace(&mut self, from: AnyKey, to: Index, alloc: &<Self::T as Item>::Alloc);
+    fn replace(&mut self, from: impl Into<AnyKey>, to: Index, alloc: &<Self::T as Item>::Alloc);
 
     /// Subtracts if called for same `from` multiple times.
-    fn remove(&mut self, from: AnyKey);
+    fn remove(&mut self, from: impl Into<AnyKey>);
 
     /// Should clear itself and shrink.
     /// Must not have any remaining local allocation.
@@ -38,7 +40,7 @@ pub trait Shell: Any + Sync + Send {
 }
 
 /// Methods correspond 1 to 1 to Item methods.
-pub trait AnyShell: Any + Sync + Send {
+pub trait AnyShell: Any {
     fn iter_any(&self) -> Option<AscendingIterator<Box<dyn Iterator<Item = AnyRef> + '_>>>;
 
     fn add_any(&mut self, from: AnyKey, context: AnySlotContext);

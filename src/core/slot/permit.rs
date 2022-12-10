@@ -4,7 +4,12 @@ use crate::core::{
     self, collection::Result, container, AnyContainer, AnyKey, Container, Key, KeyPrefix,
     UnsafeSlot,
 };
-use std::{any::TypeId, collections::HashSet, marker::PhantomData};
+use std::{
+    any::{Any, TypeId},
+    collections::HashSet,
+    marker::{PhantomData, Unsize},
+    ptr::Pointee,
+};
 
 pub struct Ref;
 pub struct Mut;
@@ -87,7 +92,7 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
 
     pub fn get(self, key: Key<T>) -> Result<core::Slot<'a, T, C::Shell, R, A>> {
         self.container
-            .get_slot(key.into())
+            .get_slot(key)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { core::Slot::new(key, slot, self.access()) })
             .ok_or_else(|| key.into())
@@ -106,9 +111,7 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
-            .map(move |(index, slot)| unsafe {
-                core::Slot::new(slot.prefix().key(index), slot, self.access())
-            })
+            .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, self.access()) })
     }
 
     /// Splits iterator into max 2^chunk_count_pow2 chunks.
@@ -138,8 +141,8 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
                     .flat_map(|iter| iter)
                     // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
                     //         That whole access we split across mutually exclusive prefixes.
-                    .map(move |(index, slot)| unsafe {
-                        core::Slot::new(slot.prefix().key(index), slot, Permit::<R, A>::new())
+                    .map(move |(key, slot)| unsafe {
+                        core::Slot::new(key, slot, Permit::<R, A>::new())
                     })
             })
             .collect()
@@ -249,11 +252,21 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
         }
     }
 
-    pub fn get(self, key: AnyKey) -> Result<core::AnySlot<'a, R, A>> {
+    pub fn get<T: core::Item>(self, key: Key<T>) -> Result<core::Slot<'a, T, C::Shell, R, A>>
+    where
+        C: Container<T>,
+    {
+        self.of().get(key)
+    }
+
+    pub fn get_dyn<T: core::AnyItem + Unsize<dyn core::AnyItem> + ?Sized>(
+        self,
+        key: Key<T>,
+    ) -> Result<core::DynSlot<'a, T, R, A>> {
         self.container
-            .get_slot_any(key.into())
+            .get_slot_any(key.upcast())
             // SAFETY: Type level logic of AnyPermit ensures that it has sufficient access for 'a to this slot.
-            .map(|slot| unsafe { core::AnySlot::new(key, slot, self.access()) })
+            .map(|slot| unsafe { core::DynSlot::new(key, slot, self.access()) })
             .ok_or_else(|| key.into())
     }
 
@@ -261,7 +274,7 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
         let container = self.container;
         std::iter::successors(self.first(key), move |&key| self.next(key)).map(move |key| {
             container
-                .get_slot_any(key.into())
+                .get_slot_any(key)
                 // SAFETY: Type level logic of AnyPermit ensures that it has sufficient access for 'a to all slots.
                 //         Furthermore first-next iteration ensures that we don't access the same slot twice.
                 .map(|slot| unsafe { core::AnySlot::new(key, slot, Permit::<R, A>::new()) })
@@ -277,7 +290,7 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
     /// Returns following key after given in ascending order
     /// for the same type.
     pub fn next(&self, key: AnyKey) -> Option<AnyKey> {
-        self.container.next(key.into())
+        self.container.next(key)
     }
 
     /// Returns last key for given type
@@ -303,12 +316,12 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
                 container: self.container,
                 _marker: PhantomData,
             }
-            .get(a)?;
+            .get_dyn(a)?;
             let b = Self {
                 container: self.container,
                 _marker: PhantomData,
             }
-            .get(b)?;
+            .get_dyn(b)?;
             Ok(Some((a, b)))
         }
     }
@@ -430,7 +443,7 @@ impl<'a, A, C> KeySplitPermit<'a, A, C> {
     where
         C: Container<T>,
     {
-        if self.splitted.insert(key.into()) {
+        if self.splitted.insert(key.upcast()) {
             TypePermit {
                 container: self.container,
                 _marker: PhantomData,
@@ -442,16 +455,19 @@ impl<'a, A, C> KeySplitPermit<'a, A, C> {
         }
     }
 
-    pub fn get_any(&mut self, key: AnyKey) -> Result<Option<core::AnySlot<'a, Mut, A>>>
+    pub fn get_dyn<T: core::AnyItem + Unsize<dyn core::AnyItem> + ?Sized>(
+        &mut self,
+        key: Key<T>,
+    ) -> Result<Option<core::DynSlot<'a, T, Mut, A>>>
     where
         C: AnyContainer,
     {
-        if self.splitted.insert(key.into()) {
+        if self.splitted.insert(key.upcast()) {
             AnyPermit {
                 container: self.container,
                 _marker: PhantomData,
             }
-            .get(key)
+            .get_dyn(key)
             .map(Some)
         } else {
             Ok(None)

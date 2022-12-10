@@ -1,7 +1,8 @@
+use crate::core::Item;
+
 use super::{Index, Key};
 use std::{any::TypeId, num::NonZeroU64};
 
-// TODO: Interweave this with Index and Sub keys.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct KeyPrefix {
     prefix_len: u32,
@@ -25,7 +26,7 @@ impl KeyPrefix {
         // unimplemented!()
     }
 
-    pub fn key<T: ?Sized + 'static>(self, index: Index) -> Key<T> {
+    pub fn key<T: Item>(self, index: Index) -> Key<T> {
         Key::new(index.with_prefix(self.prefix_len, self.prefix))
     }
 

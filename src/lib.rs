@@ -15,6 +15,10 @@
 #![feature(sync_unsafe_cell)]
 #![feature(ptr_as_uninit)]
 #![feature(box_into_inner)]
+#![feature(unsize)]
+#![feature(coerce_unsized)]
+#![feature(specialization)]
+#![feature(arbitrary_self_types)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs

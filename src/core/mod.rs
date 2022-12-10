@@ -53,54 +53,34 @@ pub enum CollectionError {
 impl CollectionError {
     pub fn out_of_keys<T: Item>(locality: T::LocalityKey) -> Self {
         Self::OutOfKeys {
-            ty: TypeInfo::of::<T>(),
+            ty: TypeInfo::of::<T>(None),
             locality: format!("{:?}", locality),
         }
     }
 
-    pub fn invalid_op<T: Item>(key: Key<T>, op: &'static str) -> Self {
+    pub fn invalid_op<T: AnyItem + ?Sized>(key: Key<T>, op: &'static str) -> Self {
         Self::InvalidOperation {
-            ty: TypeInfo::of::<T>(),
+            ty: TypeInfo::of::<T>(Some(key.type_id())),
             key: key.index(),
             op,
         }
     }
 
-    pub fn invalid_op_any(key: AnyKey, op: &'static str) -> Self {
-        Self::InvalidOperation {
-            ty: TypeInfo::any(key.type_id()),
-            key: key.index(),
-            op,
-        }
-    }
-
-    pub fn is_invalid_key(&self, key: impl Into<AnyKey>) -> bool {
+    pub fn is_invalid_key<T: AnyItem + ?Sized>(&self, key: Key<T>) -> bool {
         match self {
             Self::InvalidKey {
                 ty: TypeInfo { ty, .. },
                 key: index,
-            } => {
-                let key = key.into();
-                key.type_id() == *ty && key.index() == *index
-            }
+            } => key.type_id() == *ty && key.index() == *index,
             _ => false,
         }
     }
 }
 
-impl<T: Any> From<Key<T>> for CollectionError {
+impl<T: AnyItem + ?Sized> From<Key<T>> for CollectionError {
     fn from(key: Key<T>) -> Self {
         Self::InvalidKey {
-            ty: TypeInfo::of::<T>(),
-            key: key.index(),
-        }
-    }
-}
-
-impl From<AnyKey> for CollectionError {
-    fn from(key: AnyKey) -> Self {
-        Self::InvalidKey {
-            ty: TypeInfo::any(key.type_id()),
+            ty: TypeInfo::of::<T>(Some(key.type_id())),
             key: key.index(),
         }
     }
@@ -133,13 +113,9 @@ pub struct TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn any(ty: TypeId) -> Self {
-        Self { ty, ty_name: "Any" }
-    }
-
-    pub fn of<T: Any>() -> Self {
+    pub fn of<T: AnyItem + ?Sized>(ty: Option<TypeId>) -> Self {
         Self {
-            ty: TypeId::of::<T>(),
+            ty: ty.unwrap_or_else(|| TypeId::of::<T>()),
             ty_name: std::any::type_name::<T>(),
         }
     }

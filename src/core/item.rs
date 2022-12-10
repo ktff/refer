@@ -4,10 +4,11 @@ use std::{
     alloc::Allocator,
     any::{Any, TypeId},
     fmt::Debug,
+    marker::Unsize,
 };
 
 /// An item of a model.
-pub trait Item: Sized + Any + Sync + Send {
+pub trait Item: Sized + Any {
     type Alloc: Allocator + Any + Clone + 'static;
 
     /// Locality of item.
@@ -89,7 +90,9 @@ pub trait Item: Sized + Any + Sync + Send {
 }
 
 /// Methods correspond 1 to 1 to Item methods.
-pub trait AnyItem: Any + Sync + Send {
+pub trait AnyItem: Any + Unsize<dyn Any> {
+    fn item_type_id(self: *const Self) -> TypeId;
+
     fn iter_references_any(
         &self,
         context: AnySlotContext<'_>,
@@ -117,12 +120,17 @@ pub trait AnyItem: Any + Sync + Send {
         &self,
         _from: AnySlotContext<'_>,
         _to: AnySlotContext<'_>,
-    ) -> Option<Box<dyn Any>>;
+    ) -> Option<Box<dyn AnyItem>>;
 
     fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>);
 }
 
 impl<T: Item> AnyItem for T {
+    // NOTE: This must never be overwritten since it's used for type checking.
+    fn item_type_id(self: *const Self) -> TypeId {
+        TypeId::of::<T>()
+    }
+
     fn iter_references_any(
         &self,
         context: AnySlotContext<'_>,
@@ -165,9 +173,9 @@ impl<T: Item> AnyItem for T {
         &self,
         from: AnySlotContext<'_>,
         to: AnySlotContext<'_>,
-    ) -> Option<Box<dyn Any>> {
+    ) -> Option<Box<dyn AnyItem>> {
         self.duplicate(from.downcast(), to.downcast())
-            .map(|x| Box::new(x) as Box<dyn Any>)
+            .map(|x| Box::new(x) as Box<dyn AnyItem>)
     }
 
     fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>) {

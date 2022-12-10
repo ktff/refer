@@ -60,16 +60,12 @@ impl<T: Item> Ref<T> {
 }
 
 impl<T: Item> Key<T> {
-    pub fn connect_from(
-        self,
-        from: impl Into<AnyKey>,
-        collection: MutShells<T, impl Container<T>>,
-    ) -> Ref<T> {
-        Ref::connect(from.into(), self, collection)
+    pub fn connect_from(self, from: AnyKey, collection: MutShells<T, impl Container<T>>) -> Ref<T> {
+        Ref::connect(from, self, collection)
     }
 
     pub fn connect_to(self, to: Key<T>, collection: MutShells<T, impl Container<T>>) -> Ref<T> {
-        Ref::connect(self.into(), to, collection)
+        Ref::connect(self.upcast(), to, collection)
     }
 }
 
@@ -121,7 +117,7 @@ impl<T: Item> fmt::Debug for Ref<T> {
 
 impl<T: Item> PartialEq<AnyKey> for Ref<T> {
     fn eq(&self, other: &AnyKey) -> bool {
-        AnyKey::from(self.0) == *other
+        &self.0 == other
     }
 }
 
@@ -144,7 +140,7 @@ impl AnyRef {
     /// Panics if to doesn't exist.
     pub fn connect(from: AnyKey, to: AnyKey, collection: MutAnyShells<impl AnyContainer>) -> Self {
         collection
-            .get(to)
+            .get_dyn(to)
             .map_err(|error| {
                 error!("Failed to connect {} - {}, error: {}", from, to, error);
                 error
@@ -157,7 +153,7 @@ impl AnyRef {
 
     pub fn disconnect_from(self, from: AnyKey, collection: MutAnyShells<impl AnyContainer>) {
         collection
-            .get(self.key())
+            .get_dyn(self.key())
             .map_err(|error| {
                 error!(
                     "Failed to disconnect {} - {}, error: {}",
@@ -171,7 +167,7 @@ impl AnyRef {
     }
 
     pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> AnySlot<R, S> {
-        coll.get(self.key())
+        coll.get_dyn(self.key())
             .map_err(|error| {
                 error!("Failed to fetch {}, error: {}", self.0, error);
                 error
@@ -181,12 +177,8 @@ impl AnyRef {
 }
 
 impl AnyKey {
-    pub fn connect_from(
-        self,
-        from: impl Into<AnyKey>,
-        collection: MutAnyShells<impl AnyContainer>,
-    ) -> AnyRef {
-        AnyRef::connect(from.into(), self, collection)
+    pub fn connect_from(self, from: AnyKey, collection: MutAnyShells<impl AnyContainer>) -> AnyRef {
+        AnyRef::connect(from, self, collection)
     }
 
     pub fn connect_to<T: Item>(
@@ -200,6 +192,6 @@ impl AnyKey {
 
 impl<T: Item> From<Ref<T>> for AnyRef {
     fn from(ref_: Ref<T>) -> Self {
-        AnyRef(ref_.0.into())
+        AnyRef(ref_.0.upcast())
     }
 }

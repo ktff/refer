@@ -17,6 +17,7 @@ pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
 impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
     pub unsafe fn new(key: Key<T>, slot: UnsafeSlot<'a, T, S>, access: Permit<R, A>) -> Self {
+        debug_assert!(slot.prefix().prefix_of(key.index().0));
         Self { key, slot, access }
     }
 
@@ -30,7 +31,7 @@ impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
 
     pub fn upcast(self) -> AnySlot<'a, R, A> {
         // SAFETY: We have the same access to the slot.
-        unsafe { AnySlot::new(self.key.into(), self.slot.upcast(), self.access) }
+        unsafe { AnySlot::new(self.key.upcast(), self.slot.upcast(), self.access) }
     }
 }
 
