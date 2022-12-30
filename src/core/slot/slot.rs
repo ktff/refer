@@ -1,6 +1,6 @@
 use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
 use crate::core::{
-    AnyKey, AnyShell, AnySlot, AnySlotContext, Index, Item, Key, KeyPrefix, Shell, SlotContext,
+    AnyKey, AnyShell, AnySlot, AnySlotContext, Index, Item, Key, Path, Shell, SlotContext,
     UnsafeSlot,
 };
 use std::{
@@ -17,7 +17,7 @@ pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
 impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
     pub unsafe fn new(key: Key<T>, slot: UnsafeSlot<'a, T, S>, access: Permit<R, A>) -> Self {
-        debug_assert!(slot.prefix().prefix_of(key.index().0));
+        debug_assert!(slot.prefix().start_of_key(key));
         Self { key, slot, access }
     }
 
@@ -63,12 +63,12 @@ impl<'a, T: Item, S: Shell<T = T>, A: ItemAccess> Slot<'a, T, S, permit::Mut, A>
         self.item_mut().replace_reference(context, other, to);
     }
 
-    pub fn displace_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
+    pub fn displace_reference(&mut self, other: AnyKey, to: Index) -> Option<Path> {
         let context = self.context();
         self.item_mut().displace_reference(context, other, to)
     }
 
-    pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> Option<KeyPrefix> {
+    pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> Option<Path> {
         let context = self.context();
         self.item_mut().duplicate_reference(context, other, to)
     }
@@ -92,19 +92,23 @@ impl<'a, T: Item, S: Shell<T = T>, A: ShellAccess> Slot<'a, T, S, permit::Mut, A
         unsafe { &mut *self.slot.shell().get() }
     }
 
-    pub fn add_to_shell(&mut self, from: AnyKey) {
+    pub fn shell_add(&mut self, from: AnyKey) {
         let alloc = self.slot.allocator();
         self.shell_mut().add(from, alloc);
     }
 
-    pub fn add_to_shell_many(&mut self, from: AnyKey, count: usize) {
+    pub fn shell_add_many(&mut self, from: AnyKey, count: usize) {
         let context = self.context();
         self.shell_mut().add_many_any(from, count, context.upcast());
     }
 
-    pub fn replace_in_shell(&mut self, from: AnyKey, to: Index) {
+    pub fn shell_replace(&mut self, from: AnyKey, to: Index) {
         let alloc = self.slot.allocator();
         self.shell_mut().replace(from, to, alloc);
+    }
+
+    pub fn shell_remove(&mut self, from: AnyKey) {
+        self.shell_mut().remove(from);
     }
 }
 

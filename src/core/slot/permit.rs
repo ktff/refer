@@ -1,9 +1,10 @@
 use bitvec::access;
 
 use crate::core::{
-    self, collection::Result, container, AnyContainer, AnyKey, Container, Key, KeyPrefix,
-    UnsafeSlot,
+    self, collection::Result, container, AnyContainer, AnyItem, AnyKey, AnyShell as AnyShellTrait,
+    Container, Key, KeyPath, Shell as ShellTrait, UnsafeSlot,
 };
+use log::*;
 use std::{
     any::{Any, TypeId},
     collections::HashSet,
@@ -72,10 +73,123 @@ impl<A> Clone for Permit<Ref, A> {
     }
 }
 
+// TODO: Make each level of struct contain the higher struct. And reuse their derives/impls
+
+pub struct PathPermit<'a, T: core::Item, R, A, C> {
+    container: &'a C,
+    path: KeyPath<T>,
+    _marker: PhantomData<(R, T, A)>,
+}
+
+impl<'a, R, T: core::Item, A, C: Container<T>> PathPermit<'a, T, R, A, C> {
+    /// SAFETY: Caller must ensure that it has the correct R & S access to all T in C under path for the given 'a.
+    pub unsafe fn new(container: &'a C, path: KeyPath<T>) -> Self {
+        Self {
+            container,
+            path,
+            _marker: PhantomData,
+        }
+    }
+
+    fn access(&self) -> Permit<R, A> {
+        Permit::new()
+    }
+
+    pub fn path(&self) -> KeyPath<T> {
+        self.path
+    }
+
+    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
+        self.container
+            .iter_slot(self.path)
+            .into_iter()
+            .flat_map(|iter| iter)
+            // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
+            .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, self.access()) })
+    }
+
+    /// Splits on lower level, or returns self if level is higher.
+    pub fn split_level(
+        self,
+        level: u32,
+    ) -> Box<dyn ExactSizeIterator<Item = PathPermit<'a, T, R, A, C>> + 'a>
+    // TODO: Move this somewhere else or eliminate need for it.
+    where
+        R: 'static,
+        A: 'static,
+    {
+        if let Some(iter) = self.path.iter_level(level) {
+            Box::new(iter.map(move |path| Self {
+                container: self.container,
+                path,
+                _marker: PhantomData,
+            }))
+        } else {
+            Box::new(std::iter::once(self))
+        }
+    }
+}
+
+impl<'a, T: core::Item, A, C: Container<T>> PathPermit<'a, T, Mut, A, C> {
+    pub fn borrow(&self) -> PathPermit<T, Ref, A, C> {
+        PathPermit {
+            container: self.container,
+            path: self.path,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn borrow_mut(&mut self) -> PathPermit<T, Mut, A, C> {
+        PathPermit {
+            container: self.container,
+            path: self.path,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, R, T: core::Item, C: Container<T>> PathPermit<'a, T, R, Slot, C> {
+    pub fn split_slot(
+        self,
+    ) -> (
+        PathPermit<'a, T, R, Item, C>,
+        PathPermit<'a, T, R, Shell, C>,
+    ) {
+        (
+            PathPermit {
+                container: self.container,
+                path: self.path,
+                _marker: PhantomData,
+            },
+            PathPermit {
+                container: self.container,
+                path: self.path,
+                _marker: PhantomData,
+            },
+        )
+    }
+}
+
+impl<'a, T: core::Item, A, C> Copy for PathPermit<'a, T, Ref, A, C> {}
+
+impl<'a, T: core::Item, A, C> Clone for PathPermit<'a, T, Ref, A, C> {
+    fn clone(&self) -> Self {
+        Self {
+            container: self.container,
+            path: self.path,
+            _marker: PhantomData,
+        }
+    }
+}
+
 pub struct TypePermit<'a, T, R, A, C> {
     container: &'a C,
     _marker: PhantomData<(R, T, A)>,
 }
+
+// // There is no need for TypePermit to be Sync, since the only safe usage of it is Ref which
+// // can be freely cloned hence shared amongst threads.
+// impl<'a, T, R, A, C> !Sync for TypePermit<'a, T, R, A, C> {}
 
 impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
     /// SAFETY: Caller must ensure that it has the correct R & S access to all T in C for the given 'a.
@@ -98,54 +212,26 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
             .ok_or_else(|| key.into())
     }
 
-    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
-        self.iter_sub(KeyPrefix::default())
+    pub fn sub(self, path: KeyPath<T>) -> PathPermit<'a, T, R, A, C> {
+        PathPermit {
+            container: self.container,
+            path,
+            _marker: PhantomData,
+        }
     }
 
-    pub fn iter_sub(
-        self,
-        prefix: KeyPrefix,
-    ) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
-        self.container
-            .iter_slot(prefix)
-            .into_iter()
-            .flat_map(|iter| iter)
-            // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
-            .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, self.access()) })
-    }
-
-    /// Splits iterator into max 2^chunk_count_pow2 chunks.
-    pub fn iter_chunked(
-        self,
-        chunk_count_pow2: u32,
-    ) -> Vec<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
+    // Sub over all T in the container.
+    pub fn all(self) -> PathPermit<'a, T, R, A, C> {
         // Compute common prefix of all keys in the iterator.
         let first = self.container.first(TypeId::of::<T>());
         let last = self.container.last(TypeId::of::<T>());
         let (first, last) = match (first, last) {
             (Some(first), Some(last)) => (first, last),
-            _ => return Vec::new(),
+            _ => return self.sub(KeyPath::default()),
         };
-        let common = first
-            .index()
-            .as_prefix()
-            .intersect(last.index().as_prefix());
+        let common = first.path().intersect(last.path()).of();
 
-        // Split access into chunks under common.
-        common
-            .iter_sub(chunk_count_pow2)
-            .map(move |prefix| {
-                self.container
-                    .iter_slot(prefix)
-                    .into_iter()
-                    .flat_map(|iter| iter)
-                    // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T.
-                    //         That whole access we split across mutually exclusive prefixes.
-                    .map(move |(key, slot)| unsafe {
-                        core::Slot::new(key, slot, Permit::<R, A>::new())
-                    })
-            })
-            .collect()
+        self.sub(common)
     }
 
     // None if a == b
@@ -174,6 +260,37 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
             .get(b)?;
             Ok(Some((a, b)))
         }
+    }
+}
+
+impl<'a, T: core::Item, A: ShellAccess, C: Container<T>> TypePermit<'a, T, Mut, A, C> {
+    pub fn connect(&mut self, from: AnyKey, to: Key<T>) -> core::Ref<T> {
+        self.borrow_mut()
+            .get(to)
+            .map_err(|error| {
+                error!("Failed to connect {:?} -> {:?}, error: {}", from, to, error);
+                error
+            })
+            .expect("Failed to connect")
+            .shell_add(from);
+
+        core::Ref::new(to)
+    }
+
+    pub fn disconnect(&mut self, from: AnyKey, to: core::Ref<T>) {
+        self.borrow_mut()
+            .get(to.key())
+            .map_err(|error| {
+                error!(
+                    "Failed to disconnect {:?} -> {:?}, error: {}",
+                    from,
+                    to.key(),
+                    error
+                );
+                error
+            })
+            .expect("Failed to disconnect")
+            .shell_remove(from)
     }
 }
 
@@ -259,7 +376,7 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
         self.of().get(key)
     }
 
-    pub fn get_dyn<T: core::AnyItem + Unsize<dyn core::AnyItem> + ?Sized>(
+    pub fn get_dyn<T: core::DynItem + ?Sized>(
         self,
         key: Key<T>,
     ) -> Result<core::DynSlot<'a, T, R, A>> {
@@ -324,6 +441,41 @@ impl<'a, R, A, C: AnyContainer> AnyPermit<'a, R, A, C> {
             .get_dyn(b)?;
             Ok(Some((a, b)))
         }
+    }
+}
+
+impl<'a, A: ShellAccess, C: AnyContainer> AnyPermit<'a, Mut, A, C> {
+    pub fn connect_dyn<T: core::DynItem + ?Sized>(
+        &mut self,
+        from: AnyKey,
+        to: Key<T>,
+    ) -> core::DynRef<T> {
+        self.borrow_mut()
+            .get_dyn(to)
+            .map_err(|error| {
+                error!("Failed to connect {:?} -> {:?}, error: {}", from, to, error);
+                error
+            })
+            .expect("Failed to connect")
+            .shell_add(from);
+
+        core::DynRef::new(to)
+    }
+
+    pub fn disconnect_dyn<T: core::DynItem + ?Sized>(&mut self, from: AnyKey, to: core::DynRef<T>) {
+        self.borrow_mut()
+            .get_dyn(to.key())
+            .map_err(|error| {
+                error!(
+                    "Failed to disconnect {:?} -> {:?}, error: {}",
+                    from,
+                    to.key(),
+                    error
+                );
+                error
+            })
+            .expect("Failed to disconnect")
+            .shell_remove(from)
     }
 }
 
@@ -455,7 +607,7 @@ impl<'a, A, C> KeySplitPermit<'a, A, C> {
         }
     }
 
-    pub fn get_dyn<T: core::AnyItem + Unsize<dyn core::AnyItem> + ?Sized>(
+    pub fn get_dyn<T: core::DynItem + ?Sized>(
         &mut self,
         key: Key<T>,
     ) -> Result<Option<core::DynSlot<'a, T, Mut, A>>>

@@ -396,7 +396,7 @@ mod tests {
 
         let mut shells = container.shells_mut();
         let (shell, alloc) = shells.get_mut(key).unwrap();
-        shell.add_from(key.into(), alloc);
+        shell.shell_add(key.into(), alloc);
 
         assert_eq!(shell.from_count(), 1);
         assert_eq!(shell.from::<usize>().collect::<Vec<_>>(), vec![key]);

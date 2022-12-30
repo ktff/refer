@@ -1,6 +1,6 @@
 use super::{
-    AnyItem, AnyKey, AnyKeyPrefix, AnySlotContext, AnyUnsafeSlot, Context, Index, Item, Key,
-    KeyPrefix, Shell, SlotContext, UnsafeSlot,
+    AnyItem, AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, Context, Index, Item, Key, KeyPath,
+    Shell, SlotContext, UnsafeSlot,
 };
 use std::{
     alloc::Allocator,
@@ -35,7 +35,7 @@ pub trait Container<T: Item>: AnyContainer {
 
     /// Iterates in ascending order of key for keys under/with given prefix.
     /// No slot is returned twice in returned iterator.
-    fn iter_slot(&self, top_key: KeyPrefix) -> Option<Self::SlotIter<'_>>;
+    fn iter_slot(&self, top_key: KeyPath<T>) -> Option<Self::SlotIter<'_>>;
 
     /// None if there is no more place in locality.
     fn fill_slot(&mut self, key: T::LocalityKey, item: T) -> Result<Key<T>, T>;
@@ -51,7 +51,7 @@ pub trait AnyContainer: Any + Sync + Send {
     fn get_slot_any(&self, sub_key: AnyKey) -> Option<AnyUnsafeSlot>;
 
     /// None if such locality doesn't exist.
-    fn get_locality_any(&self, key: AnyKeyPrefix) -> Option<AnySlotContext>;
+    fn get_locality_any(&self, key: AnyPath) -> Option<AnySlotContext>;
 
     /// Returns first key for given type
     fn first(&self, key: TypeId) -> Option<AnyKey>;
@@ -71,10 +71,10 @@ pub trait AnyContainer: Any + Sync + Send {
     /// - type is unknown
     /// - locality is undefined
     /// - type mismatch
-    fn fill_slot_any(&mut self, key: AnyKeyPrefix, item: Box<dyn Any>) -> Result<AnyKey, String>;
+    fn fill_slot_any(&mut self, key: AnyPath, item: Box<dyn Any>) -> Result<AnyKey, String>;
 
     /// Fills some locality under given prefix, or enclosing locality.
-    fn fill_locality_any(&mut self, top_key: AnyKeyPrefix) -> AnyKeyPrefix;
+    fn fill_locality_any(&mut self, top_key: AnyPath) -> AnyPath;
 
     fn unfill_slot_any(&mut self, sub_key: AnyKey);
 }

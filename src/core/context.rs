@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, Index, Item, KeyPrefix};
+use super::{AnyKey, AnyPath, AnyRef, ContainerPath, Index, Item, KeyPath};
 use getset::{CopyGetters, Getters};
 use std::{
     alloc::Allocator,
@@ -9,15 +9,15 @@ use std::{
 #[derive(Getters)]
 #[getset(get = "pub")]
 pub struct Context<T: Item> {
-    prefix: KeyPrefix,
+    path: ContainerPath,
     data: T::LocalityData,
     allocator: T::Alloc,
 }
 
 impl<T: Item> Context<T> {
-    pub fn new(prefix: KeyPrefix, data: T::LocalityData, allocator: T::Alloc) -> Self {
+    pub fn new(path: ContainerPath, data: T::LocalityData, allocator: T::Alloc) -> Self {
         Self {
-            prefix,
+            path,
             data,
             allocator,
         }
@@ -25,7 +25,7 @@ impl<T: Item> Context<T> {
 
     pub fn slot_context(&self) -> SlotContext<'_, T> {
         SlotContext {
-            prefix: self.prefix,
+            prefix: self.path.into(),
             data: &self.data,
             allocator: &self.allocator,
         }
@@ -35,13 +35,13 @@ impl<T: Item> Context<T> {
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct SlotContext<'a, T: Item> {
-    prefix: KeyPrefix,
+    prefix: KeyPath<T>,
     data: &'a T::LocalityData,
     allocator: &'a T::Alloc,
 }
 
 impl<'a, T: Item> SlotContext<'a, T> {
-    pub fn new(prefix: KeyPrefix, data: &'a T::LocalityData, allocator: &'a T::Alloc) -> Self {
+    pub fn new(prefix: KeyPath<T>, data: &'a T::LocalityData, allocator: &'a T::Alloc) -> Self {
         Self {
             prefix,
             data,
@@ -51,8 +51,7 @@ impl<'a, T: Item> SlotContext<'a, T> {
 
     pub fn upcast(self) -> AnySlotContext<'a> {
         AnySlotContext {
-            ty: TypeId::of::<T>(),
-            prefix: self.prefix,
+            prefix: self.prefix.upcast(),
             data: self.data,
             allocator: self.allocator,
             alloc_any: self.allocator,
@@ -75,9 +74,7 @@ impl<'a, T: Item> Clone for SlotContext<'a, T> {
 #[derive(Clone, Copy, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct AnySlotContext<'a> {
-    #[getset(skip)]
-    ty: TypeId,
-    prefix: KeyPrefix,
+    prefix: AnyPath,
     #[getset(skip)]
     data: &'a dyn Any,
     allocator: &'a dyn std::alloc::Allocator,
@@ -87,14 +84,12 @@ pub struct AnySlotContext<'a> {
 
 impl<'a> AnySlotContext<'a> {
     pub fn new(
-        ty: TypeId,
-        prefix: KeyPrefix,
+        prefix: AnyPath,
         data: &'a dyn Any,
         allocator: &'a dyn std::alloc::Allocator,
         alloc_any: &'a dyn Any,
     ) -> Self {
         Self {
-            ty,
             prefix,
             data,
             allocator,
@@ -107,9 +102,9 @@ impl<'a> AnySlotContext<'a> {
     }
 
     pub fn downcast_try<I: Item>(self) -> Option<SlotContext<'a, I>> {
-        if self.ty == TypeId::of::<I>() {
+        if let Some(prefix) = self.prefix.downcast::<I>() {
             Some(SlotContext {
-                prefix: self.prefix,
+                prefix,
                 data: self
                     .data
                     .downcast_ref()

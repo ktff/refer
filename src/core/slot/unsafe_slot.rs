@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{Item, KeyPrefix, Shell, SlotContext};
+use crate::core::{Item, Shell, SlotContext};
 use getset::CopyGetters;
 use std::{any::Any, cell::SyncUnsafeCell};
 

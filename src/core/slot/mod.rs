@@ -14,6 +14,8 @@ pub use unsafe_slot::UnsafeSlot;
 
 use crate::core::{AnyItem, Shell};
 
+use super::KeyPath;
+
 // TODO: Test permit system, test compile failures?
 
 // *************************** Useful aliases *************************** //

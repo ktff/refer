@@ -28,7 +28,7 @@ impl<C: AnyContainer> Owned<C> {
     {
         self.0
             .get_locality(to)
-            .map(|context| key.of(context.prefix()))
+            .map(|context| context.prefix().start_of_key(key))
             .unwrap_or(false)
     }
 
@@ -65,11 +65,11 @@ impl<C: AnyContainer> Owned<C> {
 
     /// Clones under given prefix.
     /// Panics if item can't be cloned, or item doesn't exist.
-    fn clone_any_item(&mut self, original_key: AnyKey, prefix: KeyPrefix) -> AnyKey {
+    fn clone_any_item(&mut self, original_key: AnyKey, prefix: Path) -> AnyKey {
         // Placement
         let locality_prefix = self
             .0
-            .fill_locality_any(AnyKeyPrefix::new(original_key.type_id(), prefix));
+            .fill_locality_any(AnyPath::new_with(prefix, original_key.metadata()));
 
         // Build duplicate
         let original = self
@@ -248,7 +248,7 @@ impl<T: Item, C: Container<T>> Collection<T> for Owned<C> {
                 // Has been moved?
                 if moved.insert(from) {
                     // Does current place satisfy prefix?
-                    if !prefix.prefix_of(from.index().0) {
+                    if !prefix.start_of_index(from.index()) {
                         // Move
 
                         // Clone & fill
@@ -407,7 +407,7 @@ impl<C: AnyContainer> Drop for Owned<C> {
                     match self.access_mut().get_dyn(key) {
                         Ok(mut slot) => {
                             // Drop local
-                            slot.clear_shell();
+                            slot.shell_clear();
                             slot.displace();
 
                             // Unfill
@@ -472,13 +472,13 @@ fn attach_item_loop<C: AnyContainer, I: Iterator<Item = AnyRef>>(
     // item --> others
     for (i, rf) in iter().enumerate() {
         match shells.borrow_mut().get_dyn(rf.key()) {
-            Ok(mut shell_slot) => shell_slot.add_from(key),
+            Ok(mut shell_slot) => shell_slot.shell_add(key),
             Err(error) => {
                 // Reference doesn't exist
 
                 // Rollback and return error
                 for rf in iter().take(i) {
-                    rf.disconnect_from(key, shells.borrow_mut());
+                    shells.disconnect_dyn(key, rf);
                 }
 
                 return Err(error);
@@ -500,7 +500,7 @@ fn replace_item_key<T: Item, C: Container<T>>(
     for other_rf in other.iter_references() {
         other_rf
             .get(shells.borrow_mut())
-            .replace_in_shell(from.upcast(), to.index());
+            .shell_replace(from.upcast(), to.index());
     }
 }
 
@@ -516,7 +516,7 @@ fn replace_any_item_key<C: AnyContainer>(
         for other_rf in references {
             other_rf
                 .get(shells.borrow_mut())
-                .replace_in_shell(from, to.index());
+                .shell_replace(from, to.index());
         }
     };
 }
@@ -545,21 +545,21 @@ fn replace_item_references<T: Item, C: Container<T>>(
                 let _ = shells
                     .borrow_mut()
                     .get_dyn(rf.key())
-                    .map(|mut slot| slot.remove_in_shell(key.upcast()));
+                    .map(|mut slot| slot.shell_remove(key.upcast()));
             }
             (None, Some(rf)) => {
                 match shells.borrow_mut().get_dyn(rf.key()) {
-                    Ok(mut shell_slot) => shell_slot.add_from(key.upcast()),
+                    Ok(mut shell_slot) => shell_slot.shell_add(key.upcast()),
                     Err(error) => {
                         // Rollback and return error
                         for cmp in crate::util::pair_up(&old, &new).take(i) {
                             match cmp {
                                 (Some(_), Some(_)) | (None, None) => (),
                                 (Some(rf), None) => {
-                                    rf.key().connect_from(key.upcast(), shells.borrow_mut());
+                                    shells.connect_dyn(key.upcast(), rf.key());
                                 }
-                                (None, Some(rf)) => {
-                                    rf.disconnect_from(key.upcast(), shells.borrow_mut());
+                                (None, Some(&rf)) => {
+                                    shells.disconnect_dyn(key.upcast(), rf);
                                 }
                             }
                         }
@@ -583,7 +583,7 @@ fn displace_shell_references<C: AnyContainer>(
     (mut items, shells): (MutAnyItems<C>, MutAnyShells<C>),
     from: AnyKey,
     to: AnyKey,
-    moves: &mut BTreeMap<AnyKey, KeyPrefix>,
+    moves: &mut BTreeMap<AnyKey, Path>,
     moved: impl Fn(AnyKey) -> bool,
 ) -> Result<(), CollectionError> {
     // Fetch shells
@@ -618,12 +618,12 @@ fn displace_shell_references<C: AnyContainer>(
                 }
             }
 
-            to_shell.add_in_shell_many(other_rf.key(), count);
+            to_shell.shell_add_many(other_rf.key(), count);
         }
     }
 
     //Finish
-    from_shell.clear_shell();
+    from_shell.shell_clear();
 
     Ok(())
 }
@@ -640,7 +640,7 @@ fn duplicate_shell_references<C: AnyContainer>(
     (mut items, shells): (MutAnyItems<C>, MutAnyShells<C>),
     from: AnyKey,
     to: AnyKey,
-    duplicates: &mut HashMap<AnyKey, Result<AnyKey, (KeyPrefix, Vec<(AnyKey, Index)>)>>,
+    duplicates: &mut HashMap<AnyKey, Result<AnyKey, (Path, Vec<(AnyKey, Index)>)>>,
     add_duplicate: &mut Vec<AnyKey>,
     attached: impl Fn(AnyKey) -> bool,
 ) -> Result<(), CollectionError> {
@@ -675,7 +675,7 @@ fn duplicate_shell_references<C: AnyContainer>(
 
                                 if attached(*duplicate_key) {
                                     // Duplicate is attached
-                                    to_shell.add_in_shell_many(*duplicate_key, count);
+                                    to_shell.shell_add_many(*duplicate_key, count);
                                 }
                             }
                             Err((prefix, vec)) => {
@@ -687,7 +687,7 @@ fn duplicate_shell_references<C: AnyContainer>(
                 }
             } else {
                 // Original reference duplicate
-                to_shell.add_in_shell_many(other_ref.key(), count);
+                to_shell.shell_add_many(other_ref.key(), count);
 
                 // If duplicate was created, duplicate it's references.
                 if let Some(Ok(&mut duplicate_key)) =
@@ -705,7 +705,7 @@ fn duplicate_shell_references<C: AnyContainer>(
 
                     if attached(duplicate_key) {
                         // Duplicate is attached
-                        to_shell.add_in_shell_many(duplicate_key, count);
+                        to_shell.shell_add_many(duplicate_key, count);
                     }
                 }
             }
@@ -725,7 +725,7 @@ fn detach_item<C: AnyContainer>(
     let mut item_slot = items.borrow_mut().get_dyn(key)?;
     if let Some(references) = item_slot.iter_references_any() {
         for rf in references {
-            rf.disconnect_from(key, shells.borrow_mut());
+            shells.disconnect_dyn(key, rf);
         }
     }
     // Clear local data
@@ -755,7 +755,7 @@ fn detach_shell<C: AnyContainer>(
         }
     }
     // Clear local data
-    shell_slot.clear_shell();
+    shell_slot.shell_clear();
 
     Ok(())
 }

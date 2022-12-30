@@ -1,4 +1,4 @@
-use super::{Index, KeyPrefix};
+use super::{Index, KeyPath, Path, INDEX_BASE_BITS};
 use std::{
     any::{self, TypeId},
     fmt::{self},
@@ -26,8 +26,8 @@ impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> Key<T> {
     }
 }
 
-impl<T: Pointee<Metadata = DynMetadata<T>> + AnyItem + ?Sized> Key<T> {
-    pub fn new_dyn(index: Index, metadata: DynMetadata<T>) -> Self {
+impl<T: Pointee + AnyItem + ?Sized> Key<T> {
+    pub fn new_with(index: Index, metadata: T::Metadata) -> Self {
         Key(index, metadata)
     }
 }
@@ -35,6 +35,10 @@ impl<T: Pointee<Metadata = DynMetadata<T>> + AnyItem + ?Sized> Key<T> {
 impl<T: Pointee + AnyItem + ?Sized> Key<T> {
     pub fn type_id(&self) -> TypeId {
         self.key_type_id()
+    }
+
+    pub fn path(&self) -> Path {
+        Path::new(self.0.get(), INDEX_BASE_BITS.get())
     }
 
     pub fn index(&self) -> Index {
@@ -63,10 +67,10 @@ impl<T: Pointee + AnyItem + ?Sized> Key<T> {
         }
     }
 
-    /// True if has given prefix.
-    pub fn of(self, prefix: impl Into<KeyPrefix>) -> bool {
-        prefix.into().prefix_of((self.0).0)
-    }
+    // /// True if has given prefix.
+    // pub fn of(self, prefix: impl Into<KeyPrefix>) -> bool {
+    //     prefix.into().prefix_of((self.0).0)
+    // }
 }
 
 impl<T: Pointee + AnyItem + ?Sized> Eq for Key<T> {}
@@ -137,12 +141,6 @@ impl<T: Pointee + AnyItem + ?Sized> fmt::Debug for Key<T> {
             self.0,
             self.type_id()
         )
-    }
-}
-
-impl<T: Pointee + AnyItem + ?Sized> fmt::Display for Key<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", any::type_name::<T>())
     }
 }
 

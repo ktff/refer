@@ -1,4 +1,4 @@
-use crate::core::{AnyItem, AnyShell, AnySlotContext, Container, Item, KeyPrefix};
+use crate::core::{AnyItem, AnyShell, AnySlotContext, Container, Item};
 use getset::CopyGetters;
 use std::{any::Any, cell::SyncUnsafeCell};
 

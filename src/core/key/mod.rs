@@ -1,36 +1,17 @@
-mod index;
+mod container;
 mod key;
-mod prefix;
+mod key_path;
+mod path;
 
-use std::{
-    any::{self, Any, TypeId},
-    fmt::{self},
-    hash::{Hash, Hasher},
-    marker::{PhantomData, Unsize},
-    ops::CoerceUnsized,
-    ptr::{DynMetadata, Pointee},
-};
-
-pub use index::*;
+pub use container::*;
 pub use key::{AnyKey, Key};
-pub use prefix::*;
+pub use key_path::*;
+pub use path::Path;
 
-use crate::core::{AnyContainer, AnyPermit, AnySlot};
+// NOTE: Base must be greater than usize
+pub type IndexBase = u64;
+pub type Index = std::num::NonZeroU64;
+pub const INDEX_BASE_BITS: std::num::NonZeroU32 =
+    std::num::NonZeroU32::new(std::mem::size_of::<IndexBase>() as u32 * 8).expect("Zero bits");
 
 // TODO: Test this whole stack
-
-// TODO: Revisit, refactor, Any X {Key,Prefix,SubKey} and Index concepts, interaction, etc.
-// // TODO: BottomKey ?
-
-// ? Index - underlying storage - operacije se nebi trebale moci izvoditi na njemu vec samo kada mu se pridjele uloge, Key/Top
-// ? Key - 1 to 1 mapping to Slot
-
-// ! Izgradnje:
-// ? ∅ -> ContainerKey -> ContainerKey[ContainerKey] -> ... -> Context
-// ? ... -> Top -> Top -> ∅ => (Top Xor ContainerKey) >> bottom_offset, if (Top And ContainerKey.mask) == 0
-// // ? ... -> Bottom[Bottom] -> Bottom -> NonZeroUsize => (Key Xor Top) >> bottom_offset
-// ? Key - ContainerKey -> NonZeroUsize => (Key Xor ContainerKey) >> ContainerKey.bottom_offset
-// ? ContainerKey + NonZeroUsize -> Key => ContainerKey | NonZeroUsize
-// // ? Key -> Bottom
-// ? Key -> Top
-// ? Top can have zero set bits, bit bellow lowest set is set to 1, may at minimal represent two slots.

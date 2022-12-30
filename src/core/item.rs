@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, AnySlotContext, Index, KeyPrefix, SlotContext};
+use super::{AnyKey, AnyRef, AnySlotContext, Index, Path, SlotContext};
 use getset::{CopyGetters, Getters};
 use std::{
     alloc::Allocator,
@@ -44,7 +44,7 @@ pub trait Item: Sized + Any {
         context: SlotContext<'_, Self>,
         other: AnyKey,
         to: Index,
-    ) -> Option<KeyPrefix> {
+    ) -> Option<Path> {
         self.replace_reference(context, other, to);
         None
     }
@@ -62,7 +62,7 @@ pub trait Item: Sized + Any {
         context: SlotContext<'_, Self>,
         other: AnyKey,
         to: Index,
-    ) -> Option<KeyPrefix>;
+    ) -> Option<Path>;
 
     /// Clone this item from context to context.
     /// None if it can't be duplicated/cloned.
@@ -89,6 +89,10 @@ pub trait Item: Sized + Any {
     fn displace(&mut self, from: SlotContext<'_, Self>, to: Option<SlotContext<'_, Self>>);
 }
 
+/// Marker trait for dyn compliant traits of items.
+pub trait DynItem: AnyItem + Unsize<dyn AnyItem> {}
+impl<T: AnyItem + Unsize<dyn AnyItem> + ?Sized> DynItem for T {}
+
 /// Methods correspond 1 to 1 to Item methods.
 pub trait AnyItem: Any + Unsize<dyn Any> {
     fn item_type_id(self: *const Self) -> TypeId;
@@ -107,14 +111,14 @@ pub trait AnyItem: Any + Unsize<dyn Any> {
         context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
-    ) -> Option<KeyPrefix>;
+    ) -> Option<Path>;
 
     fn duplicate_reference_any(
         &mut self,
         context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
-    ) -> Option<KeyPrefix>;
+    ) -> Option<Path>;
 
     fn duplicate_any(
         &self,
@@ -156,7 +160,7 @@ impl<T: Item> AnyItem for T {
         context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
-    ) -> Option<KeyPrefix> {
+    ) -> Option<Path> {
         self.displace_reference(context.downcast(), other, to)
     }
 
@@ -165,7 +169,7 @@ impl<T: Item> AnyItem for T {
         context: AnySlotContext<'_>,
         other: AnyKey,
         to: Index,
-    ) -> Option<KeyPrefix> {
+    ) -> Option<Path> {
         self.duplicate_reference(context.downcast(), other, to)
     }
 
