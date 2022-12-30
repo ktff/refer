@@ -1,7 +1,7 @@
 use crate::util::AscendingIterator;
 
-use super::{AnyKey, AnyRef, AnySlotContext, Index, Item, Key, Ref};
-use std::any::{Any, TypeId};
+use super::{AnyKey, AnyRef, AnySlotContext, Index, Item, Ref};
+use std::any::Any;
 
 /// A shell of an item. In which references are recorded.
 pub trait Shell: Sized + Any {

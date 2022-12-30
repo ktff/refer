@@ -1,7 +1,7 @@
 use super::*;
 use crate::core::{Item, Shell, SlotContext};
 use getset::CopyGetters;
-use std::{any::Any, cell::SyncUnsafeCell};
+use std::cell::SyncUnsafeCell;
 
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]

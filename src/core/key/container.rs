@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{AnyContainer, AnyItem, AnyPermit, AnySlot, IndexBase, Item};
+use crate::core::{AnyItem, IndexBase, Item};
 use std::{
     num::{NonZeroU16, NonZeroUsize},
     ptr::Pointee,
@@ -22,7 +22,7 @@ impl ContainerPath {
     }
 
     pub fn path(&self) -> Path {
-        Path::new(self.path, self.bit_len as u32)
+        Path::new_top(self.path, self.bit_len as u32)
     }
 
     pub fn region(self, bit_len: NonZeroU16) -> ContainerRegion {
@@ -45,8 +45,8 @@ impl ContainerPath {
     }
 
     /// Remaining bits for index
-    pub fn index_bit_len(&self) -> NonZeroU16 {
-        NonZeroU16::new((INDEX_BASE_BITS.get() as u16) - self.bit_len)
+    pub fn index_bit_len(&self) -> NonZeroU32 {
+        NonZeroU32::new(INDEX_BASE_BITS.get() - self.bit_len as u32)
             .expect("Should have at least one bit left")
     }
 

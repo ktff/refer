@@ -1,12 +1,10 @@
 use super::{
-    AnyItem, AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, Context, Index, Item, Key, KeyPath,
+    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot,  Item, Key, KeyPath,
     Shell, SlotContext, UnsafeSlot,
 };
 use std::{
-    alloc::Allocator,
     any::{Any, TypeId},
     collections::HashSet,
-    fmt::Debug,
     path::Prefix,
 };
 

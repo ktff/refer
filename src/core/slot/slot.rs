@@ -1,12 +1,8 @@
 use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
 use crate::core::{
-    AnyKey, AnyShell, AnySlot, AnySlotContext, Index, Item, Key, Path, Shell, SlotContext,
-    UnsafeSlot,
+    AnyKey, AnyShell, AnySlot, Index, Item, Key, Path, Shell, SlotContext, UnsafeSlot,
 };
-use std::{
-    any::Any,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
     key: Key<T>,

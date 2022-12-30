@@ -1,5 +1,5 @@
 use super::{
-    permit, AnyContainer, AnyPermit, CollectionError, Container, Item, Key, MutSlot, RefSlot, Slot,
+    permit, AnyContainer, AnyPermit, CollectionError, Container, Item, Key, MutSlot, RefSlot,
     SlotContext,
 };
 

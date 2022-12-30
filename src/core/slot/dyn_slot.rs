@@ -7,7 +7,6 @@ use std::{
     any::Any,
     marker::Unsize,
     ops::{Deref, DerefMut},
-    ptr::Pointee,
 };
 
 pub type AnySlot<'a, R, A> = DynSlot<'a, dyn AnyItem, R, A>;

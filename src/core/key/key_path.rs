@@ -1,15 +1,13 @@
-use super::{ContainerPath, Index, Key, Path};
+use super::{ContainerPath, Key, Path};
 use std::{
     any::{self, TypeId},
     fmt::{self},
     hash::{Hash, Hasher},
-    marker::{PhantomData, Unsize},
-    num::NonZeroU64,
-    ops::CoerceUnsized,
-    ptr::{DynMetadata, Pointee},
+    marker::Unsize,
+    ptr::Pointee,
 };
 
-use crate::core::{AnyContainer, AnyItem, AnyPermit, AnySlot, Item};
+use crate::core::AnyItem;
 
 pub type AnyPath = KeyPath<dyn AnyItem>;
 
@@ -163,7 +161,6 @@ trait KeyTypeId {
 
 impl<T: Pointee + AnyItem + ?Sized> KeyTypeId for KeyPath<T> {
     default fn key_type_id(&self) -> TypeId {
-        let tmp_data: bool = false;
         let ptr = std::ptr::from_raw_parts::<T>(std::ptr::null(), self.1);
         ptr.item_type_id()
     }

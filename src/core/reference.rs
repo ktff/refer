@@ -3,11 +3,9 @@ use log::*;
 use std::{
     fmt,
     hash::{Hash, Hasher},
-    marker::Unsize,
-    ptr::Pointee,
 };
 
-// TODO: Try to unify Ref and DynRef through traits and impls on permits
+// TODO: Try to unify Ref and DynRef through traits and impl on permits
 
 pub struct Ref<T: Item>(Key<T>);
 

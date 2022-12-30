@@ -1,5 +1,4 @@
 use super::{AnyKey, AnyRef, AnySlotContext, Index, Path, SlotContext};
-use getset::{CopyGetters, Getters};
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},

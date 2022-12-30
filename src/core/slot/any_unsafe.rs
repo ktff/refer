@@ -1,8 +1,6 @@
-use crate::core::{AnyItem, AnyShell, AnySlotContext, Container, Item};
+use crate::core::{AnyItem, AnyShell, AnySlotContext};
 use getset::CopyGetters;
-use std::{any::Any, cell::SyncUnsafeCell};
-
-use super::UnsafeSlot;
+use std::cell::SyncUnsafeCell;
 
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]

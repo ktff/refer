@@ -760,193 +760,193 @@ fn detach_shell<C: AnyContainer>(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        container::{all::AllContainer, vec::VecContainerFamily},
-        item::{edge::Edge, vertice::Vertice},
-    };
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::{
+//         container::{all::AllContainer, vec::VecContainerFamily},
+//         item::{edge::Edge, vertice::Vertice},
+//     };
 
-    #[test]
-    fn reference_add() {
-        let n = 10;
-        let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
+//     #[test]
+//     fn reference_add() {
+//         let n = 10;
+//         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let nodes = (0usize..n)
-            .map(|i| collection.add_with(i, ()).unwrap())
-            .collect::<Vec<_>>();
+//         let nodes = (0usize..n)
+//             .map(|i| collection.add_with(i, ()).unwrap())
+//             .collect::<Vec<_>>();
 
-        let center = collection
-            .add_with(
-                Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
-                (),
-            )
-            .ok()
-            .unwrap();
+//         let center = collection
+//             .add_with(
+//                 Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
+//                 (),
+//             )
+//             .ok()
+//             .unwrap();
 
-        for node in nodes {
-            assert_eq!(
-                collection
-                    .get(node)
-                    .unwrap()
-                    .1
-                    .from::<Vertice<usize>>()
-                    .collect::<Vec<_>>(),
-                vec![center]
-            );
-        }
-    }
+//         for node in nodes {
+//             assert_eq!(
+//                 collection
+//                     .get(node)
+//                     .unwrap()
+//                     .1
+//                     .from::<Vertice<usize>>()
+//                     .collect::<Vec<_>>(),
+//                 vec![center]
+//             );
+//         }
+//     }
 
-    #[test]
-    fn reference_add_abort() {
-        let n = 10;
-        let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
+//     #[test]
+//     fn reference_add_abort() {
+//         let n = 10;
+//         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let nodes = (0usize..n)
-            .map(|i| collection.add_with(i, ()).unwrap())
-            .collect::<Vec<_>>();
+//         let nodes = (0usize..n)
+//             .map(|i| collection.add_with(i, ()).unwrap())
+//             .collect::<Vec<_>>();
 
-        collection.remove(nodes[n - 1]).unwrap();
+//         collection.remove(nodes[n - 1]).unwrap();
 
-        assert!(collection
-            .add_with(
-                Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
-                ()
-            )
-            .is_err());
+//         assert!(collection
+//             .add_with(
+//                 Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
+//                 ()
+//             )
+//             .is_err());
 
-        for &node in nodes.iter().take(n - 1) {
-            assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
-        }
-    }
+//         for &node in nodes.iter().take(n - 1) {
+//             assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
+//         }
+//     }
 
-    #[test]
-    fn reference_set() {
-        let n = 10;
-        let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
+//     #[test]
+//     fn reference_set() {
+//         let n = 10;
+//         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let nodes = (0usize..n)
-            .map(|i| collection.add(i).unwrap())
-            .collect::<Vec<_>>();
+//         let nodes = (0usize..n)
+//             .map(|i| collection.add(i).unwrap())
+//             .collect::<Vec<_>>();
 
-        let center = collection
-            .add_with(
-                Vertice::new(nodes.iter().take(5).copied().map(Ref::new).collect()),
-                (),
-            )
-            .ok()
-            .unwrap();
+//         let center = collection
+//             .add_with(
+//                 Vertice::new(nodes.iter().take(5).copied().map(Ref::new).collect()),
+//                 (),
+//             )
+//             .ok()
+//             .unwrap();
 
-        collection
-            .set(
-                center,
-                Vertice::new(nodes.iter().skip(5).copied().map(Ref::new).collect()),
-            )
-            .ok()
-            .unwrap();
+//         collection
+//             .set(
+//                 center,
+//                 Vertice::new(nodes.iter().skip(5).copied().map(Ref::new).collect()),
+//             )
+//             .ok()
+//             .unwrap();
 
-        for &node in nodes.iter().take(5) {
-            assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
-        }
+//         for &node in nodes.iter().take(5) {
+//             assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
+//         }
 
-        for &node in nodes.iter().skip(5) {
-            assert_eq!(
-                collection
-                    .get(node)
-                    .unwrap()
-                    .1
-                    .from::<Vertice<usize>>()
-                    .collect::<Vec<_>>(),
-                vec![center]
-            );
-        }
-    }
+//         for &node in nodes.iter().skip(5) {
+//             assert_eq!(
+//                 collection
+//                     .get(node)
+//                     .unwrap()
+//                     .1
+//                     .from::<Vertice<usize>>()
+//                     .collect::<Vec<_>>(),
+//                 vec![center]
+//             );
+//         }
+//     }
 
-    #[test]
-    fn reference_set_abort() {
-        let n = 10;
-        let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
+//     #[test]
+//     fn reference_set_abort() {
+//         let n = 10;
+//         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let nodes = (0usize..n)
-            .map(|i| collection.add(i).unwrap())
-            .collect::<Vec<_>>();
+//         let nodes = (0usize..n)
+//             .map(|i| collection.add(i).unwrap())
+//             .collect::<Vec<_>>();
 
-        collection.remove(nodes[n - 1]).unwrap();
+//         collection.remove(nodes[n - 1]).unwrap();
 
-        let center = collection
-            .add_with(
-                Vertice::new(nodes.iter().take(5).copied().map(Ref::new).collect()),
-                (),
-            )
-            .ok()
-            .unwrap();
+//         let center = collection
+//             .add_with(
+//                 Vertice::new(nodes.iter().take(5).copied().map(Ref::new).collect()),
+//                 (),
+//             )
+//             .ok()
+//             .unwrap();
 
-        assert!(collection
-            .add_with(
-                Vertice::new(nodes.iter().skip(5).copied().map(Ref::new).collect()),
-                ()
-            )
-            .is_err());
+//         assert!(collection
+//             .add_with(
+//                 Vertice::new(nodes.iter().skip(5).copied().map(Ref::new).collect()),
+//                 ()
+//             )
+//             .is_err());
 
-        for &node in nodes.iter().take(5) {
-            assert_eq!(
-                collection
-                    .get(node)
-                    .unwrap()
-                    .1
-                    .from::<Vertice<usize>>()
-                    .collect::<Vec<_>>(),
-                vec![center]
-            );
-        }
+//         for &node in nodes.iter().take(5) {
+//             assert_eq!(
+//                 collection
+//                     .get(node)
+//                     .unwrap()
+//                     .1
+//                     .from::<Vertice<usize>>()
+//                     .collect::<Vec<_>>(),
+//                 vec![center]
+//             );
+//         }
 
-        for &node in nodes.iter().skip(5).take(4) {
-            assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
-        }
-    }
+//         for &node in nodes.iter().skip(5).take(4) {
+//             assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
+//         }
+//     }
 
-    #[test]
-    fn reference_remove() {
-        let n = 10;
-        let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
+//     #[test]
+//     fn reference_remove() {
+//         let n = 10;
+//         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let nodes = (0usize..n)
-            .map(|i| collection.add_with(i, ()).unwrap())
-            .collect::<Vec<_>>();
+//         let nodes = (0usize..n)
+//             .map(|i| collection.add_with(i, ()).unwrap())
+//             .collect::<Vec<_>>();
 
-        let center = collection
-            .add_with(
-                Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
-                (),
-            )
-            .ok()
-            .unwrap();
+//         let center = collection
+//             .add_with(
+//                 Vertice::new(nodes.iter().copied().map(Ref::new).collect()),
+//                 (),
+//             )
+//             .ok()
+//             .unwrap();
 
-        let _ = collection.remove(center).unwrap();
+//         let _ = collection.remove(center).unwrap();
 
-        for node in nodes {
-            assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
-        }
-    }
+//         for node in nodes {
+//             assert_eq!(collection.get(node).unwrap().1.from_count(), 0);
+//         }
+//     }
 
-    #[test]
-    fn cascading_remove() {
-        let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
+//     #[test]
+//     fn cascading_remove() {
+//         let mut collection = Owned::new(AllContainer::<VecContainerFamily>::default());
 
-        let a = collection.add_with(0, ()).unwrap();
-        let b = collection.add_with(1, ()).unwrap();
-        let edge = collection
-            .add_with(Edge::new([Ref::new(a), Ref::new(b)]), ())
-            .unwrap();
+//         let a = collection.add_with(0, ()).unwrap();
+//         let b = collection.add_with(1, ()).unwrap();
+//         let edge = collection
+//             .add_with(Edge::new([Ref::new(a), Ref::new(b)]), ())
+//             .unwrap();
 
-        assert_eq!(collection.get(a).unwrap().1.from_count(), 1);
-        assert_eq!(collection.get(b).unwrap().1.from_count(), 1);
+//         assert_eq!(collection.get(a).unwrap().1.from_count(), 1);
+//         assert_eq!(collection.get(b).unwrap().1.from_count(), 1);
 
-        let _ = collection.remove(a).unwrap();
-        assert!(collection.get(edge).is_none());
-        assert!(collection.get(a).is_none());
-        assert!(collection.get(b).unwrap().0 == (&1, &()));
-        assert_eq!(collection.get(b).unwrap().1.from_count(), 0);
-    }
-}
+//         let _ = collection.remove(a).unwrap();
+//         assert!(collection.get(edge).is_none());
+//         assert!(collection.get(a).is_none());
+//         assert!(collection.get(b).unwrap().0 == (&1, &()));
+//         assert_eq!(collection.get(b).unwrap().1.from_count(), 0);
+//     }
+// }

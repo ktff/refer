@@ -1,15 +1,13 @@
-use super::{Index, KeyPath, Path, INDEX_BASE_BITS};
+use super::{Index, Path, INDEX_BASE_BITS};
 use std::{
     any::{self, TypeId},
     fmt::{self},
     hash::{Hash, Hasher},
-    marker::{PhantomData, Unsize},
-    num::NonZeroU64,
-    ops::CoerceUnsized,
-    ptr::{DynMetadata, Pointee},
+    marker::Unsize,
+    ptr::Pointee,
 };
 
-use crate::core::{AnyContainer, AnyItem, AnyPermit, AnySlot, Item};
+use crate::core::AnyItem;
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -38,7 +36,7 @@ impl<T: Pointee + AnyItem + ?Sized> Key<T> {
     }
 
     pub fn path(&self) -> Path {
-        Path::new(self.0.get(), INDEX_BASE_BITS.get())
+        Path::new_top(self.0.get(), INDEX_BASE_BITS.get())
     }
 
     pub fn index(&self) -> Index {
@@ -66,11 +64,6 @@ impl<T: Pointee + AnyItem + ?Sized> Key<T> {
             None
         }
     }
-
-    // /// True if has given prefix.
-    // pub fn of(self, prefix: impl Into<KeyPrefix>) -> bool {
-    //     prefix.into().prefix_of((self.0).0)
-    // }
 }
 
 impl<T: Pointee + AnyItem + ?Sized> Eq for Key<T> {}
@@ -150,7 +143,6 @@ trait KeyTypeId {
 
 impl<T: Pointee + AnyItem + ?Sized> KeyTypeId for Key<T> {
     default fn key_type_id(&self) -> TypeId {
-        let tmp_data: bool = false;
         let ptr = std::ptr::from_raw_parts::<T>(std::ptr::null(), self.1);
         ptr.item_type_id()
     }

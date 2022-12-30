@@ -7,10 +7,7 @@ mod reference;
 mod shell;
 mod slot;
 
-use std::{
-    any::{Any, TypeId},
-    fmt::Display,
-};
+use std::{any::TypeId, fmt::Display};
 
 pub use collection::{Access, Collection};
 pub use container::*;

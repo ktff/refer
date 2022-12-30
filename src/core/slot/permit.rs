@@ -1,16 +1,6 @@
-use bitvec::access;
-
-use crate::core::{
-    self, collection::Result, container, AnyContainer, AnyItem, AnyKey, AnyShell as AnyShellTrait,
-    Container, Key, KeyPath, Shell as ShellTrait, UnsafeSlot,
-};
+use crate::core::{self, collection::Result, AnyContainer, AnyKey, Container, Key, KeyPath};
 use log::*;
-use std::{
-    any::{Any, TypeId},
-    collections::HashSet,
-    marker::{PhantomData, Unsize},
-    ptr::Pointee,
-};
+use std::{any::TypeId, collections::HashSet, marker::PhantomData};
 
 pub struct Ref;
 pub struct Mut;
@@ -73,7 +63,7 @@ impl<A> Clone for Permit<Ref, A> {
     }
 }
 
-// TODO: Make each level of struct contain the higher struct. And reuse their derives/impls
+// TODO: Make each level of struct contain the higher struct. And reuse their derives/impl
 
 pub struct PathPermit<'a, T: core::Item, R, A, C> {
     container: &'a C,
