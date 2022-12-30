@@ -1,12 +1,10 @@
-mod container;
 mod key;
 mod key_path;
 mod path;
 
-pub use container::*;
 pub use key::{AnyKey, Key};
 pub use key_path::*;
-pub use path::Path;
+pub use path::{Path, PathLeaf, PathRegion};
 
 // NOTE: Base must be greater than usize
 pub type IndexBase = u64;

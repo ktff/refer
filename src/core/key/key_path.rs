@@ -1,4 +1,4 @@
-use super::{ContainerPath, Key, Path};
+use super::{Key, Path, PathLeaf};
 use std::{
     any::{self, TypeId},
     fmt::{self},
@@ -149,8 +149,8 @@ impl<T: Pointee + AnyItem + ?Sized> From<Key<T>> for KeyPath<T> {
     }
 }
 
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> From<ContainerPath> for KeyPath<T> {
-    fn from(path: ContainerPath) -> Self {
+impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> From<PathLeaf> for KeyPath<T> {
+    fn from(path: PathLeaf) -> Self {
         Self(path.path(), ())
     }
 }

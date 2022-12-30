@@ -1,7 +1,9 @@
-use crate::core::{AnyItem, Index};
-
-use super::{IndexBase, KeyPath, INDEX_BASE_BITS};
-use std::ptr::Pointee;
+use super::*;
+use crate::core::{AnyItem, Item};
+use std::{
+    num::{NonZeroU16, NonZeroU32, NonZeroUsize},
+    ptr::Pointee,
+};
 
 /// Path in container
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
@@ -22,25 +24,40 @@ impl Path {
         Self::new_top(path.rotate_right(level), level)
     }
 
-    pub fn level(&self) -> u32 {
+    pub fn level(self) -> u32 {
         (INDEX_BASE_BITS.get() - 1) - self.0.trailing_zeros()
     }
 
-    fn top(&self) -> IndexBase {
+    pub fn top(self) -> IndexBase {
         self.0.get() ^ self.bit()
     }
 
     #[cfg(test)]
-    fn bottom(&self) -> IndexBase {
+    fn bottom(self) -> IndexBase {
         self.top().rotate_left(self.level())
     }
 
-    fn bit(&self) -> IndexBase {
+    fn bit(self) -> IndexBase {
         1 << self.0.trailing_zeros()
+    }
+
+    /// Remaining bits for index
+    pub fn remaining_len(self) -> NonZeroU32 {
+        NonZeroU32::new(INDEX_BASE_BITS.get() - self.level())
+            .expect("Should have at least one bit left")
     }
 
     pub fn of<T: Pointee<Metadata = ()> + AnyItem + ?Sized>(self) -> KeyPath<T> {
         KeyPath::new(self)
+    }
+
+    /// None if len is too large.
+    pub fn region(self, len: NonZeroU32) -> Option<PathRegion> {
+        PathRegion::new(self, len)
+    }
+
+    pub fn leaf(self) -> PathLeaf {
+        PathLeaf::new(self)
     }
 
     /// Leaves only common prefix.
@@ -100,6 +117,122 @@ impl std::fmt::Display for Path {
 impl Default for Path {
     fn default() -> Self {
         Self::new_bottom(0, 0)
+    }
+}
+
+/// Path end optimized for leaf containers.
+/// Has path and non zero region extending from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PathLeaf {
+    /// Path of indices
+    path: IndexBase,
+    /// Level of path
+    level: u32,
+
+    remaining_len: NonZeroU32,
+}
+
+impl PathLeaf {
+    pub fn new(path: Path) -> Self {
+        Self {
+            path: path.top(),
+            level: path.level(),
+            remaining_len: path.remaining_len(),
+        }
+    }
+
+    pub fn path(&self) -> Path {
+        Path::new_top(self.path, self.level)
+    }
+
+    pub fn level(self) -> u32 {
+        self.level
+    }
+
+    pub fn top(self) -> IndexBase {
+        self.path
+    }
+
+    /// Remaining bits for index
+    pub fn remaining_len(&self) -> NonZeroU32 {
+        self.remaining_len
+    }
+
+    /// Panics if index is out of range.
+    pub fn key_of<T: Item>(&self, index: NonZeroUsize) -> Key<T> {
+        assert_eq!(
+            index.get() >> self.remaining_len.get(),
+            0,
+            "Index has too many bits"
+        );
+
+        let index = self.path | (index.get() as IndexBase);
+        // SAFETY: This is safe since argument `index` is NonZero and
+        //         applying `or` operation with path will not result in zero.
+        let index = unsafe { Index::new_unchecked(index) };
+        Key::new(index)
+    }
+
+    /// May panic/return invalid index if key isn't of this path.
+    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> NonZeroUsize {
+        let key: Index = key.index();
+        // ^ is intentional so to catch keys that don't correspond to this path
+        let index = key.get() ^ self.path;
+        NonZeroUsize::new(index as usize).expect("Index must be non zero")
+    }
+}
+
+/// Region of paths that starts at some path and has non zero length.
+#[derive(Debug, Clone)]
+pub struct PathRegion {
+    /// Path of indices
+    path: IndexBase,
+    /// Path level
+    level: u16,
+    /// Region length
+    len: NonZeroU16,
+    /// Remaining sub region length
+    remaining_len: NonZeroU16,
+}
+
+impl PathRegion {
+    /// None if len is too large
+    pub fn new(path: Path, len: NonZeroU32) -> Option<Self> {
+        if len.get() > std::mem::size_of::<usize>() as u32 * 8 {
+            return None;
+        }
+
+        let level = path.level();
+        Some(PathRegion {
+            path: path.top(),
+            level: level as u16,
+            len: NonZeroU16::new(len.get() as u16)?,
+            remaining_len: NonZeroU16::new(
+                INDEX_BASE_BITS.get().checked_sub(level + len.get())? as u16
+            )?,
+        })
+    }
+
+    /// Panics if index is out of range.
+    pub fn path_of(&self, index: usize) -> Path {
+        // Constructed by adding index at the end of the path
+        assert!(
+            index
+                .checked_shr(self.len.get() as u32)
+                .map(|r| r == 0)
+                .unwrap_or(true),
+            "Index has too many bits"
+        );
+
+        Path::new_top(
+            self.path | ((index as IndexBase) << self.remaining_len.get()),
+            (self.level + self.len.get()) as u32,
+        )
+    }
+
+    /// May panic/return invalid index if key isn't of this path.
+    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> usize {
+        ((key.index().get() ^ self.path) >> self.remaining_len.get()) as usize
     }
 }
 

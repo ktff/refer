@@ -1,17 +1,17 @@
-use super::{AnyPath, ContainerPath, Item, KeyPath};
+use super::{AnyPath, Item, KeyPath, PathLeaf};
 use getset::{CopyGetters, Getters};
 use std::any::Any;
 
 #[derive(Getters)]
 #[getset(get = "pub")]
 pub struct Context<T: Item> {
-    path: ContainerPath,
+    path: PathLeaf,
     data: T::LocalityData,
     allocator: T::Alloc,
 }
 
 impl<T: Item> Context<T> {
-    pub fn new(path: ContainerPath, data: T::LocalityData, allocator: T::Alloc) -> Self {
+    pub fn new(path: PathLeaf, data: T::LocalityData, allocator: T::Alloc) -> Self {
         Self {
             path,
             data,
