@@ -4,6 +4,8 @@ use crate::core::{
 };
 use std::ops::{Deref, DerefMut};
 
+// TODO: Borrow and BorrowMut
+
 pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
     key: Key<T>,
     slot: UnsafeSlot<'a, T, S>,

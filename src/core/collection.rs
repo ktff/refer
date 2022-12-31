@@ -54,11 +54,11 @@ pub trait Collection<T: Item>: Access<Self::Model> {
     fn duplicate_shell(&mut self, from: Key<T>, to: Key<T>) -> Result<()>;
 
     fn get(&self, key: Key<T>) -> Result<RefSlot<T, <Self::Model as Container<T>>::Shell>> {
-        self.access().get(key)
+        self.access().slot(key).get()
     }
 
     fn get_mut(&mut self, key: Key<T>) -> Result<MutSlot<T, <Self::Model as Container<T>>::Shell>> {
-        self.access_mut().get(key)
+        self.access_mut().slot(key).get()
     }
 
     fn context(&mut self, locality: T::LocalityKey) -> SlotContext<T>;

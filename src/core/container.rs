@@ -1,6 +1,6 @@
 use super::{
-    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot,  Item, Key, KeyPath,
-    Shell, SlotContext, UnsafeSlot,
+    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, Item, Key, KeyPath, MutAnySlots, Shell,
+    SlotContext, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
@@ -75,4 +75,9 @@ pub trait AnyContainer: Any + Sync + Send {
     fn fill_locality_any(&mut self, top_key: AnyPath) -> AnyPath;
 
     fn unfill_slot_any(&mut self, sub_key: AnyKey);
+
+    fn access_mut(&mut self) -> MutAnySlots<'_, Self> {
+        // SAFETY: This is safe since we have &mut self which gives us exclusive access.
+        unsafe { MutAnySlots::new(self) }
+    }
 }

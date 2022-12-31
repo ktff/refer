@@ -24,7 +24,8 @@ impl<T: Item> Ref<T> {
         self,
         coll: TypePermit<T, R, S, C>,
     ) -> Slot<T, C::Shell, R, S> {
-        coll.get(self.key())
+        coll.slot(self.key())
+            .get()
             .map_err(|error| {
                 error!("Failed to fetch {:?}, error: {}", self.0, error);
                 error
@@ -103,7 +104,8 @@ impl<T: DynItem + ?Sized> DynRef<T> {
     }
 
     pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> DynSlot<T, R, S> {
-        coll.get_dyn(self.0)
+        coll.slot(self.0)
+            .get_dyn()
             .map_err(|error| {
                 error!("Failed to fetch {:?}, error: {}", self.0, error);
                 error

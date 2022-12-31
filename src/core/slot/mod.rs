@@ -8,7 +8,7 @@ mod unsafe_slot;
 
 pub use any_unsafe::AnyUnsafeSlot;
 pub use dyn_slot::{AnySlot, DynSlot};
-pub use permit::{AnyPermit, KeySplitPermit, Permit, TypePermit, TypeSplitPermit};
+pub use permit::{AnyPermit, Permit, SlotSplitPermit, TypePermit, TypeSplitPermit};
 pub use slot::Slot;
 pub use unsafe_slot::UnsafeSlot;
 

@@ -9,6 +9,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+// TODO: Borrow and BorrowMut
+
 pub type AnySlot<'a, R, A> = DynSlot<'a, dyn AnyItem, R, A>;
 
 pub struct DynSlot<'a, T: DynItem + ?Sized, R, A> {
