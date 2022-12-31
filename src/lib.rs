@@ -75,7 +75,7 @@ pub mod collection;
 pub mod core;
 // pub mod dispatcher;
 // #[macro_use]
-// pub mod item;
+pub mod item;
 // pub mod components;
 // pub mod model;
 // pub mod shell;

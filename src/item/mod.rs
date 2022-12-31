@@ -1,42 +1,42 @@
 // pub mod attach;
-pub mod data;
-pub mod edge;
-pub mod tagged_edge;
-pub mod vertice;
+// pub mod data;
+// pub mod edge;
+// pub mod tagged_edge;
+// pub mod vertice;
 
-#[macro_export]
-macro_rules! delegate_item {
-    (impl for $t:ty => $d:ty = $e:tt) => {
-        impl $crate::core::Item for $t {
-            type I<'a> = <$d as $crate::core::Item>::I<'a>;
+// #[macro_export]
+// macro_rules! delegate_item {
+//     (impl for $t:ty => $d:ty = $e:tt) => {
+//         impl $crate::core::Item for $t {
+//             type I<'a> = <$d as $crate::core::Item>::I<'a>;
 
-            fn references(&self, this: $crate::core::Index) -> Self::I<'_> {
-                self.$e.references(this)
-            }
-        }
+//             fn references(&self, this: $crate::core::Index) -> Self::I<'_> {
+//                 self.$e.references(this)
+//             }
+//         }
 
-        impl $crate::core::AnyItem for $t {
-            fn references_any<'a>(
-                &'a self,
-                this: $crate::core::Index,
-            ) -> Option<Box<dyn Iterator<Item = $crate::core::AnyRef> + 'a>> {
-                self.$e.references_any(this)
-            }
+//         impl $crate::core::AnyItem for $t {
+//             fn references_any<'a>(
+//                 &'a self,
+//                 this: $crate::core::Index,
+//             ) -> Option<Box<dyn Iterator<Item = $crate::core::AnyRef> + 'a>> {
+//                 self.$e.references_any(this)
+//             }
 
-            fn item_removed(
-                &mut self,
-                this: $crate::core::Index,
-                key: $crate::core::AnyKey,
-            ) -> bool {
-                self.$e.item_removed(this, key)
-            }
+//             fn item_removed(
+//                 &mut self,
+//                 this: $crate::core::Index,
+//                 key: $crate::core::AnyKey,
+//             ) -> bool {
+//                 self.$e.item_removed(this, key)
+//             }
 
-            fn item_moved(&mut self, from: $crate::core::AnyKey, to: $crate::core::AnyKey) {
-                self.$e.item_moved(from, to)
-            }
-        }
-    };
-}
+//             fn item_moved(&mut self, from: $crate::core::AnyKey, to: $crate::core::AnyKey) {
+//                 self.$e.item_moved(from, to)
+//             }
+//         }
+//     };
+// }
 
 // ***************************************** Default impl ********************************************* //
 
@@ -45,26 +45,54 @@ macro_rules! delegate_item {
 macro_rules! impl_item {
     ($ty:ty) => {
         impl $crate::core::Item for $ty {
-            type I<'a> = std::iter::Empty<$crate::core::AnyRef>;
+            type Alloc = std::alloc::Global;
+            type LocalityKey = ();
+            type LocalityData = ();
+            type Iter<'a> = std::iter::Empty<$crate::core::AnyRef>;
 
-            fn references(&self, _: $crate::core::Index) -> Self::I<'_> {
+            fn iter_references(&self, _: $crate::core::SlotContext<'_, Self>) -> Self::Iter<'_> {
                 std::iter::empty()
             }
-        }
 
-        impl $crate::core::AnyItem for $ty {
-            fn references_any(
-                &self,
+            fn remove_reference(
+                &mut self,
+                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::AnyKey,
+            ) -> bool {
+                false
+            }
+
+            fn replace_reference(
+                &mut self,
+                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::AnyKey,
                 _: $crate::core::Index,
-            ) -> Option<Box<dyn Iterator<Item = $crate::core::AnyRef> + '_>> {
+            ) {
+            }
+
+            fn duplicate_reference(
+                &mut self,
+                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::AnyKey,
+                _: $crate::core::Index,
+            ) -> Option<$crate::core::Path> {
                 None
             }
 
-            fn item_removed(&mut self, _: $crate::core::Index, _: $crate::core::AnyKey) -> bool {
-                true
+            fn duplicate(
+                &self,
+                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::SlotContext<'_, Self>,
+            ) -> Option<Self> {
+                Some(self.clone())
             }
 
-            fn item_moved(&mut self, _: $crate::core::AnyKey, _: $crate::core::AnyKey) {}
+            fn displace(
+                &mut self,
+                _: $crate::core::SlotContext<'_, Self>,
+                _: Option<$crate::core::SlotContext<'_, Self>>,
+            ) {
+            }
         }
     };
 }
