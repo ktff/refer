@@ -1,4 +1,4 @@
-use super::permit::{self, ItemAccess, Permit, RefAccess, ShellAccess};
+use super::permit::{self, Permit};
 use crate::core::{
     AnyItem, AnyKey, AnyRef, AnyShell, AnySlotContext, AnyUnsafeSlot, DynItem, Index, Item, Key,
     Path, Shell,
@@ -58,9 +58,20 @@ impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
             Err(self)
         }
     }
+
+    pub fn downgrade<F, B>(self) -> DynSlot<'a, T, F, B>
+    where
+        Permit<R, A>: Into<Permit<F, B>>,
+    {
+        DynSlot {
+            key: self.key,
+            slot: self.slot,
+            access: self.access.into(),
+        }
+    }
 }
 
-impl<'a, T: DynItem + ?Sized, R: RefAccess, A: ItemAccess> DynSlot<'a, T, R, A> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>, A: Into<permit::Item>> DynSlot<'a, T, R, A> {
     pub fn item(&self) -> &T {
         unsafe {
             let ptr = self.slot.item().get();
@@ -88,7 +99,7 @@ impl<'a, T: DynItem + ?Sized, R: RefAccess, A: ItemAccess> DynSlot<'a, T, R, A> 
     }
 }
 
-impl<'a, T: DynItem + ?Sized, A: ItemAccess> DynSlot<'a, T, permit::Mut, A> {
+impl<'a, T: DynItem + ?Sized, A: Into<permit::Item>> DynSlot<'a, T, permit::Mut, A> {
     pub fn item_mut(&mut self) -> &mut T {
         unsafe {
             let ptr = self.slot.item().get();
@@ -131,7 +142,7 @@ impl<'a, T: DynItem + ?Sized, A: ItemAccess> DynSlot<'a, T, permit::Mut, A> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: RefAccess, A: ShellAccess> DynSlot<'a, T, R, A> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>, A: Into<permit::Shell>> DynSlot<'a, T, R, A> {
     pub fn shell(&self) -> &dyn AnyShell {
         // SAFETY: We have at least read access to the shell. R
         unsafe { &*self.slot.shell().get() }
@@ -142,7 +153,7 @@ impl<'a, T: DynItem + ?Sized, R: RefAccess, A: ShellAccess> DynSlot<'a, T, R, A>
     }
 }
 
-impl<'a, T: DynItem + ?Sized, A: ShellAccess> DynSlot<'a, T, permit::Mut, A> {
+impl<'a, T: DynItem + ?Sized, A: Into<permit::Shell>> DynSlot<'a, T, permit::Mut, A> {
     pub fn shell_mut(&mut self) -> &mut dyn AnyShell {
         // SAFETY: We have mut access to the shell.
         unsafe { &mut *self.slot.shell().get() }
@@ -221,7 +232,7 @@ where
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: RefAccess> Deref for DynSlot<'a, T, R, permit::Item> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R, permit::Item> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -235,7 +246,7 @@ impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::I
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: RefAccess> Deref for DynSlot<'a, T, R, permit::Slot> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R, permit::Slot> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -249,7 +260,7 @@ impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::S
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: RefAccess> Deref for DynSlot<'a, T, R, permit::Shell> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R, permit::Shell> {
     type Target = dyn AnyShell;
 
     fn deref(&self) -> &Self::Target {

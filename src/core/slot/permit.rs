@@ -1,24 +1,31 @@
 use crate::core::{self, collection::Result, AnyContainer, AnyKey, Container, Key, KeyPath};
 use log::*;
-use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref, ptr::Pointee};
+use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
+
+pub struct Mut;
 
 pub struct Ref;
-pub struct Mut;
+impl From<Mut> for Ref {
+    fn from(_: Mut) -> Self {
+        Ref
+    }
+}
+
 pub struct Slot;
+
 pub struct Item;
+impl From<Slot> for Item {
+    fn from(_: Slot) -> Self {
+        Item
+    }
+}
+
 pub struct Shell;
-
-pub trait ItemAccess {}
-impl ItemAccess for Item {}
-impl ItemAccess for Slot {}
-
-pub trait ShellAccess {}
-impl ShellAccess for Shell {}
-impl ShellAccess for Slot {}
-
-pub trait RefAccess {}
-impl RefAccess for Ref {}
-impl RefAccess for Mut {}
+impl From<Slot> for Shell {
+    fn from(_: Slot) -> Self {
+        Shell
+    }
+}
 
 pub struct Permit<R, A> {
     _marker: PhantomData<(R, A)>,
@@ -61,13 +68,37 @@ impl<A> Copy for Permit<Ref, A> {}
 
 impl<A> Clone for Permit<Ref, A> {
     fn clone(&self) -> Self {
-        Self {
+        Permit {
             _marker: PhantomData,
         }
     }
 }
 
-pub struct SlotPermit<'a, T: core::AnyItem + Pointee + ?Sized, R, A, C: ?Sized> {
+impl<A: Into<B>, B> From<Permit<Mut, A>> for Permit<Ref, B> {
+    fn from(_: Permit<Mut, A>) -> Self {
+        Permit {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<R> From<Permit<R, Slot>> for Permit<R, Item> {
+    fn from(_: Permit<R, Slot>) -> Self {
+        Permit {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<R> From<Permit<R, Slot>> for Permit<R, Shell> {
+    fn from(_: Permit<R, Slot>) -> Self {
+        Permit {
+            _marker: PhantomData,
+        }
+    }
+}
+
+pub struct SlotPermit<'a, T: core::AnyItem + ?Sized, R, A, C: ?Sized> {
     permit: TypePermit<'a, T, R, A, C>,
     key: Key<T>,
 }
@@ -94,7 +125,7 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> SlotPermit<'
     }
 }
 
-impl<'a, T: core::AnyItem + Pointee + ?Sized, A, C: ?Sized> SlotPermit<'a, T, Mut, A, C> {
+impl<'a, T: core::AnyItem + ?Sized, A, C: ?Sized> SlotPermit<'a, T, Mut, A, C> {
     pub fn borrow(&self) -> SlotPermit<T, Ref, A, C> {
         SlotPermit {
             permit: self.permit.borrow(),
@@ -110,9 +141,9 @@ impl<'a, T: core::AnyItem + Pointee + ?Sized, A, C: ?Sized> SlotPermit<'a, T, Mu
     }
 }
 
-impl<'a, T: core::AnyItem + Pointee + ?Sized, A, C: ?Sized> Copy for SlotPermit<'a, T, Ref, A, C> {}
+impl<'a, T: core::AnyItem + ?Sized, A, C: ?Sized> Copy for SlotPermit<'a, T, Ref, A, C> {}
 
-impl<'a, T: core::AnyItem + Pointee + ?Sized, A, C: ?Sized> Clone for SlotPermit<'a, T, Ref, A, C> {
+impl<'a, T: core::AnyItem + ?Sized, A, C: ?Sized> Clone for SlotPermit<'a, T, Ref, A, C> {
     fn clone(&self) -> Self {
         Self { ..*self }
     }
@@ -257,7 +288,7 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
     }
 }
 
-impl<'a, T: core::Item, A: ShellAccess, C: Container<T>> TypePermit<'a, T, Mut, A, C> {
+impl<'a, T: core::Item, A: Into<Shell>, C: Container<T>> TypePermit<'a, T, Mut, A, C> {
     pub fn connect(&mut self, from: AnyKey, to: Key<T>) -> core::Ref<T> {
         self.borrow_mut()
             .slot(to)
@@ -293,14 +324,14 @@ impl<'a, T: core::Item, A: ShellAccess, C: Container<T>> TypePermit<'a, T, Mut, 
 impl<'a, T: ?Sized, A, C: ?Sized> TypePermit<'a, T, Mut, A, C> {
     pub fn borrow(&self) -> TypePermit<T, Ref, A, C> {
         TypePermit {
-            permit: self.permit.borrow(),
+            permit: (&self.permit).into(),
             _marker: PhantomData,
         }
     }
 
     pub fn borrow_mut(&mut self) -> TypePermit<T, Mut, A, C> {
         TypePermit {
-            permit: self.permit.borrow_mut(),
+            permit: (&mut self.permit).into(),
             _marker: PhantomData,
         }
     }
@@ -320,6 +351,61 @@ impl<'a, T: ?Sized, A, C: ?Sized> Clone for TypePermit<'a, T, Ref, A, C> {
     fn clone(&self) -> Self {
         Self {
             permit: self.permit,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, T, A: Into<B>, B, C: ?Sized> From<TypePermit<'a, T, Mut, A, C>>
+    for TypePermit<'a, T, Ref, B, C>
+{
+    fn from(TypePermit { permit, .. }: TypePermit<'a, T, Mut, A, C>) -> Self {
+        Self {
+            permit: permit.into(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, T, R, C: ?Sized> From<TypePermit<'a, T, R, Slot, C>> for TypePermit<'a, T, R, Item, C> {
+    fn from(TypePermit { permit, .. }: TypePermit<'a, T, R, Slot, C>) -> Self {
+        Self {
+            permit: permit.into(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, T, R, C: ?Sized> From<TypePermit<'a, T, R, Slot, C>> for TypePermit<'a, T, R, Shell, C> {
+    fn from(TypePermit { permit, .. }: TypePermit<'a, T, R, Slot, C>) -> Self {
+        Self {
+            permit: permit.into(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a: 'b, 'b, T, R, A, B, C: ?Sized> From<&'b TypePermit<'a, T, R, A, C>>
+    for TypePermit<'b, T, Ref, B, C>
+where
+    Permit<R, A>: Into<Permit<Ref, B>>,
+{
+    fn from(permit: &'b TypePermit<'a, T, R, A, C>) -> Self {
+        Self {
+            permit: (&permit.permit).into(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a: 'b, 'b, T, A, B, C: ?Sized> From<&'b mut TypePermit<'a, T, Mut, A, C>>
+    for TypePermit<'b, T, Mut, B, C>
+where
+    Permit<Mut, A>: Into<Permit<Mut, B>>,
+{
+    fn from(permit: &'b mut TypePermit<'a, T, Mut, A, C>) -> Self {
+        Self {
+            permit: (&mut permit.permit).into(),
             _marker: PhantomData,
         }
     }
@@ -453,7 +539,7 @@ impl<'a, R, A, C: AnyContainer + ?Sized> AnyPermit<'a, R, A, C> {
     }
 }
 
-impl<'a, A: ShellAccess, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
+impl<'a, A: Into<Shell>, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
     pub fn connect_dyn<T: core::DynItem + ?Sized>(
         &mut self,
         from: AnyKey,
@@ -527,17 +613,11 @@ impl<'a, A, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
 
 impl<'a, A, C: ?Sized> AnyPermit<'a, Mut, A, C> {
     pub fn borrow(&self) -> AnyPermit<Ref, A, C> {
-        AnyPermit {
-            permit: self.permit.borrow(),
-            container: self.container,
-        }
+        self.into()
     }
 
     pub fn borrow_mut(&mut self) -> AnyPermit<Mut, A, C> {
-        AnyPermit {
-            permit: Permit { ..self.permit },
-            container: self.container,
-        }
+        self.into()
     }
 }
 
@@ -556,6 +636,58 @@ impl<'a, A, C: ?Sized> Clone for AnyPermit<'a, Ref, A, C> {
         Self {
             permit: Permit { ..self.permit },
             ..*self
+        }
+    }
+}
+
+impl<'a, A: Into<B>, B, C: ?Sized> From<AnyPermit<'a, Mut, A, C>> for AnyPermit<'a, Ref, B, C> {
+    fn from(AnyPermit { permit, container }: AnyPermit<'a, Mut, A, C>) -> Self {
+        Self {
+            permit: permit.into(),
+            container,
+        }
+    }
+}
+
+impl<'a, R, C: ?Sized> From<AnyPermit<'a, R, Slot, C>> for AnyPermit<'a, R, Item, C> {
+    fn from(AnyPermit { permit, container }: AnyPermit<'a, R, Slot, C>) -> Self {
+        Self {
+            permit: permit.into(),
+            container,
+        }
+    }
+}
+
+impl<'a, R, C: ?Sized> From<AnyPermit<'a, R, Slot, C>> for AnyPermit<'a, R, Shell, C> {
+    fn from(AnyPermit { permit, container }: AnyPermit<'a, R, Slot, C>) -> Self {
+        Self {
+            permit: permit.into(),
+            container,
+        }
+    }
+}
+
+impl<'a: 'b, 'b, R, A, B, C: ?Sized> From<&'b AnyPermit<'a, R, A, C>> for AnyPermit<'b, Ref, B, C>
+where
+    Permit<R, A>: Into<Permit<Ref, B>>,
+{
+    fn from(permit: &'b AnyPermit<'a, R, A, C>) -> Self {
+        Self {
+            permit: permit.permit.access().into(),
+            container: permit.container,
+        }
+    }
+}
+
+impl<'a: 'b, 'b, A, B, C: ?Sized> From<&'b mut AnyPermit<'a, Mut, A, C>>
+    for AnyPermit<'b, Mut, B, C>
+where
+    Permit<Mut, A>: Into<Permit<Mut, B>>,
+{
+    fn from(permit: &'b mut AnyPermit<'a, Mut, A, C>) -> Self {
+        Self {
+            permit: permit.permit.access().into(),
+            container: permit.container,
         }
     }
 }
