@@ -245,6 +245,7 @@ mod tests {
         let path = Path::new_bottom(0b1010, 4);
         assert_eq!(path.level(), 4);
         assert_eq!(path.bottom(), 0b1010);
+        assert_eq!(path.remaining_len().get(), INDEX_BASE_BITS.get() - 4);
         assert_eq!(format!("{}", path), "a:4");
     }
 
@@ -326,5 +327,63 @@ mod tests {
         assert!(!path2.start_of_path(path3));
         assert!(path1.start_of_path(path2));
         assert!(path1.start_of_path(path3));
+    }
+
+    #[test]
+    fn path_region() {
+        let path = Path::new_bottom(0b1010, 4);
+        let region = PathRegion::new(path, NonZeroU32::new(2).unwrap()).unwrap();
+        assert_eq!(region.path_of(0b00), Path::new_bottom(0b101000, 6));
+        assert_eq!(region.path_of(0b01), Path::new_bottom(0b101001, 6));
+        assert_eq!(region.path_of(0b10), Path::new_bottom(0b101010, 6));
+        assert_eq!(region.path_of(0b11), Path::new_bottom(0b101011, 6));
+    }
+
+    #[test]
+    #[should_panic]
+    fn index_to_large() {
+        Path::new_bottom(0b1010, 4)
+            .region(NonZeroU32::new(3).unwrap())
+            .unwrap()
+            .path_of(0b1000);
+    }
+
+    #[test]
+    fn test_leaf() {
+        let path = Path::new_bottom(0b100110, 6);
+        let leaf = path.leaf();
+        assert_eq!(leaf.path().bottom(), 0b100110);
+        assert_eq!(leaf.remaining_len(), path.remaining_len());
+    }
+
+    #[test]
+    fn key() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 4);
+        let leaf = path.leaf();
+        let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
+        assert!(path.start_of_index(key.index()));
+        assert_eq!(leaf.index_of(key), NonZeroUsize::new(1).unwrap());
+    }
+
+    #[test]
+    #[should_panic]
+    fn key_index_to_large() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 4);
+        let leaf = path.leaf();
+        leaf.key_of::<()>(NonZeroUsize::new(0b10000).unwrap());
+    }
+
+    #[test]
+    fn one_container_level() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let region = path.region(NonZeroU32::new(4).unwrap()).unwrap();
+        let container_path = region.path_of(0b1000);
+        let leaf = container_path.leaf();
+        let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
+
+        assert!(container_path.start_of_index(key.index()));
+        assert_eq!(leaf.index_of(key), NonZeroUsize::new(1).unwrap());
+        assert!(path.start_of_index(key.index()));
+        assert_eq!(region.index_of(key), 0b1000);
     }
 }
