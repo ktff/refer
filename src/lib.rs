@@ -74,13 +74,12 @@ pub mod collection;
 // pub mod container;
 pub mod core;
 // pub mod dispatcher;
-// #[macro_use]
+#[macro_use]
 pub mod item;
-// pub mod components;
 // pub mod model;
-// pub mod shell;
+pub mod shell;
 
 // pub use crate::core::*;
 
 // Generic things
-mod util;
+pub mod util;

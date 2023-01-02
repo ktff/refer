@@ -4,13 +4,10 @@ use std::{
     ptr::NonNull,
 };
 
-// TODO: LocalBox<T>
-
 /// Same as Box but doesn't remember it's allocator.
-// TODO: Some better name, family name for this kind of constructs.
-pub struct AllocBox<T>(NonNull<T>);
+pub struct ShardBox<T>(NonNull<T>);
 
-impl<T> AllocBox<T> {
+impl<T> ShardBox<T> {
     pub fn new(value: T, allocator: &impl Allocator) -> Self {
         let uninit = allocator
             .allocate(Layout::for_value(&value))
@@ -45,10 +42,10 @@ impl<T> AllocBox<T> {
 }
 
 // This are safe since AllocBox has ownership of T.
-unsafe impl<T: Sync> Sync for AllocBox<T> {}
-unsafe impl<T: Send> Send for AllocBox<T> {}
+unsafe impl<T: Sync> Sync for ShardBox<T> {}
+unsafe impl<T: Send> Send for ShardBox<T> {}
 
-impl<T> Deref for AllocBox<T> {
+impl<T> Deref for ShardBox<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -56,7 +53,7 @@ impl<T> Deref for AllocBox<T> {
     }
 }
 
-impl<T> DerefMut for AllocBox<T> {
+impl<T> DerefMut for ShardBox<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { self.0.as_mut() }
     }

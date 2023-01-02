@@ -1,59 +1,48 @@
-use std::{any::TypeId, marker::PhantomData};
-
-use crate::*;
+use crate::core::*;
+use log::*;
+use std::marker::PhantomData;
 
 /// No shell.
 /// Panics if anything tries to add reference.
 #[derive(Debug, Clone, Copy)]
-pub struct NoShell<T: AnyItem>(PhantomData<T>);
+pub struct NoShell<T: Item>(PhantomData<T>);
 
 /// A shell of an item. In which references are recorded.
-impl<T: AnyItem> Shell for NoShell<T> {
+impl<T: Item> Shell for NoShell<T> {
     type T = T;
-    type Iter<'a, F: ?Sized + 'static> = impl Iterator<Item = Key<F>> + 'a
+
+    type Iter<'a> = impl Iterator<Item = AnyRef> + 'a
     where
         Self: 'a;
-    type AnyIter<'a>= impl Iterator<Item = AnyKey> + 'a
+
+    type IterOf<'a, I: Item>=impl Iterator<Item = Ref<I>> + 'a
     where
         Self: 'a;
 
-    fn from<F: ?Sized + 'static>(&self) -> Self::Iter<'_, F> {
-        None.into_iter()
+    fn new(_: &<Self::T as Item>::Alloc) -> Self {
+        Self::default()
     }
 
-    fn iter(&self) -> Self::AnyIter<'_> {
-        None.into_iter()
-    }
-}
-impl<T: AnyItem> AnyShell for NoShell<T> {
-    fn item_ty(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn iter(&self) -> AscendingIterator<Self::Iter<'_>> {
+        AscendingIterator::ascending(std::iter::empty())
     }
 
-    fn from_any(&self) -> Box<dyn Iterator<Item = AnyKey> + '_> {
-        Box::new(None.into_iter())
+    fn iter_of<I: Item>(&self) -> AscendingIterator<Self::IterOf<'_, I>> {
+        AscendingIterator::ascending(std::iter::empty())
     }
 
-    fn from_count(&self) -> usize {
-        0
+    fn add(&mut self, from: impl Into<AnyKey>, _: &<Self::T as Item>::Alloc) {
+        error!("NoShell::add(from: {:?}) called", from.into());
     }
 
-    fn add_from(&mut self, from: AnyKey, _: &impl std::alloc::Allocator)
-    where
-        Self: Sized,
-    {
-        panic!("NoShell::add_from called for {:?}", from);
-    }
+    fn replace(&mut self, _: impl Into<AnyKey>, _: Index, _: &<Self::T as Item>::Alloc) {}
 
-    fn add_from_any(&mut self, from: AnyKey, _: &dyn std::alloc::Allocator) {
-        panic!("NoShell::add_from_any called for {:?}", from);
-    }
+    fn remove(&mut self, _: impl Into<AnyKey>) {}
 
-    fn remove_from(&mut self, _: AnyKey) {}
+    fn clear(&mut self, _: &<Self::T as Item>::Alloc) {}
 }
 
-/// Default
-impl<T: AnyItem> Default for NoShell<T> {
+impl<T: Item> Default for NoShell<T> {
     fn default() -> Self {
         Self(PhantomData)
     }

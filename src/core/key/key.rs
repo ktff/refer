@@ -16,6 +16,8 @@ use crate::core::AnyItem;
 
 pub type AnyKey = Key<dyn AnyItem>;
 
+// TODO: Swap places of Index and Metadata to reflect order of cmp.
+
 pub struct Key<T: Pointee + AnyItem + ?Sized>(Index, T::Metadata);
 
 impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> Key<T> {

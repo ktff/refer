@@ -73,12 +73,12 @@ use std::{
 /// Alignment is that of T.
 ///
 /// !!! WARNING !!! will leek any allocated memory on drop. Call `clear_dealloc` before dropping it.
-pub struct InlineVec<T: Copy, const N: usize> {
+pub struct ShardVec<T: Copy, const N: usize> {
     payload: Payload<T, N>,
     header: InlineHeader,
 }
 
-impl<T: Copy, const N: usize> InlineVec<T, N> {
+impl<T: Copy, const N: usize> ShardVec<T, N> {
     pub fn new() -> Self {
         debug_assert!(N < 0xf);
         Self {
@@ -336,6 +336,36 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
         other.clear(allocator);
     }
 
+    pub fn remove(&mut self, index: usize) -> T {
+        #[cold]
+        #[inline(never)]
+        #[track_caller]
+        fn assert_failed(index: usize, len: usize) -> ! {
+            panic!("removal index (is {index}) should be < len (is {len})");
+        }
+
+        let len = self.len();
+        if index >= len {
+            assert_failed(index, len);
+        }
+        unsafe {
+            // infallible
+            let ret;
+            {
+                // the place we are taking from.
+                let ptr = self.as_slice_mut().as_mut_ptr().add(index);
+                // copy it out, unsafely having a copy of the value on
+                // the stack and in the vector at the same time.
+                ret = ptr::read(ptr);
+
+                // Shift everything down to fill in that spot.
+                ptr::copy(ptr.add(1), ptr, len - index - 1);
+            }
+            self.set_len(len - 1);
+            ret
+        }
+    }
+
     // Panics if out of range
     pub fn remove_range(&mut self, range: impl RangeBounds<usize>) {
         let len = self.len();
@@ -533,16 +563,16 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
     }
 }
 
-impl<T: Eq + Copy, const N: usize> Eq for InlineVec<T, N> {}
+impl<T: Eq + Copy, const N: usize> Eq for ShardVec<T, N> {}
 
-impl<T: PartialEq + Copy, const N: usize> PartialEq for InlineVec<T, N> {
+impl<T: PartialEq + Copy, const N: usize> PartialEq for ShardVec<T, N> {
     fn eq(&self, other: &Self) -> bool {
         self.as_slice() == other.as_slice()
     }
 }
 
 // Indexing
-impl<T: Copy, const N: usize> std::ops::Index<usize> for InlineVec<T, N> {
+impl<T: Copy, const N: usize> std::ops::Index<usize> for ShardVec<T, N> {
     type Output = T;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -550,19 +580,19 @@ impl<T: Copy, const N: usize> std::ops::Index<usize> for InlineVec<T, N> {
     }
 }
 
-impl<T: Copy, const N: usize> std::ops::IndexMut<usize> for InlineVec<T, N> {
+impl<T: Copy, const N: usize> std::ops::IndexMut<usize> for ShardVec<T, N> {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.as_slice_mut()[index]
     }
 }
 
 /// Default
-impl<T: Copy, const N: usize> Default for InlineVec<T, N> {
+impl<T: Copy, const N: usize> Default for ShardVec<T, N> {
     fn default() -> Self {
         Self::new()
     }
 }
-impl<T: Copy + fmt::Debug, const N: usize> fmt::Debug for InlineVec<T, N> {
+impl<T: Copy + fmt::Debug, const N: usize> fmt::Debug for ShardVec<T, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[")?;
         for e in self.iter() {
@@ -616,7 +646,7 @@ mod tests {
     #[test]
     fn push() {
         let alloc = MiniAllocator::new();
-        let mut vec = InlineVec::<u32, 2>::new();
+        let mut vec = ShardVec::<u32, 2>::new();
         vec.push(1, &alloc);
         vec.push(2, &alloc);
         vec.push(3, &alloc);
@@ -629,7 +659,7 @@ mod tests {
     #[test]
     fn push_pop() {
         let alloc = MiniAllocator::new();
-        let mut vec = InlineVec::<u32, 2>::new();
+        let mut vec = ShardVec::<u32, 2>::new();
         vec.push(1, &alloc);
         vec.push(2, &alloc);
         vec.push(3, &alloc);
@@ -642,7 +672,7 @@ mod tests {
     #[test]
     fn push_pop_push() {
         let alloc = MiniAllocator::new();
-        let mut vec = InlineVec::<u32, 2>::new();
+        let mut vec = ShardVec::<u32, 2>::new();
         vec.push(1, &alloc);
         vec.push(2, &alloc);
         vec.push(3, &alloc);
@@ -657,7 +687,7 @@ mod tests {
     #[test]
     fn remove_range() {
         let alloc = MiniAllocator::new();
-        let mut vec = InlineVec::<u32, 2>::new();
+        let mut vec = ShardVec::<u32, 2>::new();
 
         vec.push(1, &alloc);
         vec.push(2, &alloc);
@@ -676,7 +706,7 @@ mod tests {
     #[test]
     fn retain_mut() {
         let alloc = MiniAllocator::new();
-        let mut vec = InlineVec::<u32, 2>::new();
+        let mut vec = ShardVec::<u32, 2>::new();
 
         vec.push(1, &alloc);
         vec.push(2, &alloc);
@@ -694,7 +724,7 @@ mod tests {
     #[test]
     fn insert() {
         let alloc = MiniAllocator::new();
-        let mut vec = InlineVec::<u32, 2>::new();
+        let mut vec = ShardVec::<u32, 2>::new();
 
         vec.push(1, &alloc);
         vec.push(2, &alloc);
@@ -717,7 +747,7 @@ mod tests {
         let ops = 100000;
 
         let alloc = MiniAllocator::new();
-        let mut vec = InlineVec::<u32, 2>::new();
+        let mut vec = ShardVec::<u32, 2>::new();
         let mut dopl = Vec::new();
         let mut rand = thread_rng();
         for _ in 0..ops {

@@ -60,7 +60,7 @@ const PAGE_LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(BLOCK_SIZ
 ///
 /// Can handle allocations from different MiniAllocator instances. Effectively moving memory between them.
 #[repr(align(64))]
-pub struct MiniAllocator {
+pub struct ShardAllocator {
     /// Lists to free blocks of exponentially increasing size.
     /// [0] -> [[u64;2];1]
     /// [1] -> [[u64;2];2]
@@ -72,7 +72,7 @@ pub struct MiniAllocator {
     allocated: std::sync::atomic::AtomicUsize,
 }
 
-impl MiniAllocator {
+impl ShardAllocator {
     pub const fn new() -> Self {
         Self {
             lists: [
@@ -212,7 +212,7 @@ impl MiniAllocator {
     }
 }
 
-unsafe impl Allocator for MiniAllocator {
+unsafe impl Allocator for ShardAllocator {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         let i = Self::index(layout.size(), layout.align());
@@ -303,11 +303,11 @@ unsafe impl Allocator for MiniAllocator {
 // TODO: Impl Drop for MiniAllocator by reconstructing pages and then deallocating them. Logging any leaked unconstructed pages.
 
 #[derive(Clone)]
-pub struct SharedMiniAllocator(Arc<MiniAllocator>);
+pub struct SharedMiniAllocator(Arc<ShardAllocator>);
 
 impl SharedMiniAllocator {
     pub fn new() -> Self {
-        Self(Arc::new(MiniAllocator::new()))
+        Self(Arc::new(ShardAllocator::new()))
     }
 }
 
@@ -354,14 +354,14 @@ unsafe impl Allocator for SharedMiniAllocator {
     }
 }
 
-impl Borrow<MiniAllocator> for SharedMiniAllocator {
-    fn borrow(&self) -> &MiniAllocator {
+impl Borrow<ShardAllocator> for SharedMiniAllocator {
+    fn borrow(&self) -> &ShardAllocator {
         &self.0
     }
 }
 
 impl Deref for SharedMiniAllocator {
-    type Target = MiniAllocator;
+    type Target = ShardAllocator;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -374,7 +374,7 @@ mod tests {
 
     use super::*;
 
-    fn add_slices(allocator: &MiniAllocator, n: usize, start: u8) -> Vec<(NonNull<[u8]>, Layout)> {
+    fn add_slices(allocator: &ShardAllocator, n: usize, start: u8) -> Vec<(NonNull<[u8]>, Layout)> {
         let mut slices = Vec::new();
         let mut sum = start;
 
@@ -405,7 +405,7 @@ mod tests {
         }
     }
 
-    fn deallocate_slices(allocator: &MiniAllocator, slices: Vec<(NonNull<[u8]>, Layout)>) {
+    fn deallocate_slices(allocator: &ShardAllocator, slices: Vec<(NonNull<[u8]>, Layout)>) {
         // Deallocate slices
         for (slice_ptr, layout) in slices {
             unsafe { allocator.deallocate(slice_ptr.cast(), layout) };
@@ -413,13 +413,13 @@ mod tests {
     }
 
     /// Expects that everything has been deallocated.
-    fn check_for_memory_leaks(allocator: &mut MiniAllocator) {
+    fn check_for_memory_leaks(allocator: &mut ShardAllocator) {
         assert_eq!(allocator.allocated(), allocator.capacity());
     }
 
     #[test]
     fn test() {
-        let mut allocator = MiniAllocator::new();
+        let mut allocator = ShardAllocator::new();
         let mut ptrs = Vec::new();
         for i in 0..100 {
             let size = i + 1;
@@ -437,7 +437,7 @@ mod tests {
     /// Then check that all data is correct.
     #[test]
     fn test_overlap() {
-        let mut allocator = MiniAllocator::new();
+        let mut allocator = ShardAllocator::new();
 
         let slices = add_slices(&allocator, 100, 0);
         validate_slices(&slices, 0);
@@ -451,7 +451,7 @@ mod tests {
         let threads = 16;
         let repetitions = 100;
         let size = 2_000_000;
-        let allocator = Arc::new(MiniAllocator::new());
+        let allocator = Arc::new(ShardAllocator::new());
 
         let mut handles = Vec::new();
         for i in 0..threads {

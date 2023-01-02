@@ -1,6 +1,5 @@
-use crate::util::AscendingIterator;
-
 use super::{AnyKey, AnyRef, AnySlotContext, Index, Item, Ref};
+pub use crate::util::ord_iter::AscendingIterator;
 use std::any::Any;
 
 /// A shell of an item. In which references are recorded.
