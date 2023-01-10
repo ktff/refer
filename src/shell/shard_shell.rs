@@ -36,7 +36,7 @@ impl<T: Item + Referable> ShardShell<T> {
 
             let key = from.index().get();
             assert_eq!(key >> 45, 0, "Key is too large to fit in AnyRef");
-            r.set_index(key);
+            r.set_index(key as u64);
 
             r
         } else {
@@ -51,7 +51,7 @@ impl<T: Item + Referable> ShardShell<T> {
     fn iter_all(&self) -> impl Iterator<Item = AnyRef> + '_ {
         self.from.iter().map(|r| {
             let metadata = T::from_index(r.ty_index()).expect("Should be a valid type index");
-            let index = Index::new(r.index()).expect("Shouldn't be zero");
+            let index = Index::new(r.index() as IndexBase).expect("Shouldn't be zero");
             AnyRef::new(AnyKey::new_with(index, metadata))
         })
     }

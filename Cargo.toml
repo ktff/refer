@@ -22,3 +22,8 @@ getset = "0.1.2"
 
 [dev-dependencies]
 rand = "*"
+
+[features]
+default = ["base_u64"]
+base_u64 = []
+base_u128 = []
