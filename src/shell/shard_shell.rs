@@ -12,7 +12,7 @@ pub trait Referable: Send + Sync {
     fn from_index(index: u8) -> Option<<dyn AnyItem as Pointee>::Metadata>;
 }
 
-/// Meant for small shells for smallish keys.
+/// Meant for small shells for smallish keys of max used lower 45 bits.
 pub struct ShardShell<T: Item + Referable> {
     from: ShardVec<ShardAnyRef, 1>,
     _data: PhantomData<T>,
@@ -68,7 +68,7 @@ impl<T: Item + Referable> Shell for ShardShell<T> {
     where
         Self: 'a;
 
-    fn new(_: &<Self::T as Item>::Alloc) -> Self {
+    fn new_in(_: &<Self::T as Item>::Alloc) -> Self {
         Self::default()
     }
 

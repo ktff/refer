@@ -1,6 +1,6 @@
-use super::permit::{self, Permit};
 use crate::core::{
-    AnyKey, AnyShell, AnySlot, Index, Item, Key, Path, Shell, SlotContext, UnsafeSlot,
+    permit, AnyKey, AnyShell, AnySlot, Index, Item, Key, Path, Permit, Shell, SlotContext,
+    UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 

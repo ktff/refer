@@ -14,7 +14,7 @@ pub trait Shell: Sized + Any {
     where
         Self: 'a;
 
-    fn new(alloc: &<Self::T as Item>::Alloc) -> Self;
+    fn new_in(alloc: &<Self::T as Item>::Alloc) -> Self;
 
     fn iter(&self) -> AscendingIterator<Self::Iter<'_>>;
 

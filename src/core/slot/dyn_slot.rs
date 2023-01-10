@@ -1,7 +1,6 @@
-use super::permit::{self, Permit};
 use crate::core::{
-    AnyItem, AnyKey, AnyRef, AnyShell, AnySlotContext, AnyUnsafeSlot, DynItem, Index, Item, Key,
-    Path, Shell,
+    permit, AnyItem, AnyKey, AnyRef, AnyShell, AnySlotContext, AnyUnsafeSlot, DynItem, Index, Item,
+    Key, Path, Permit, Shell,
 };
 use std::{
     any::Any,

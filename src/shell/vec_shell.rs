@@ -16,7 +16,7 @@ impl<T: Item> Shell for SizedShell<T> {
     where
         Self: 'a;
 
-    fn new(alloc: &<Self::T as Item>::Alloc) -> Self {
+    fn new_in(alloc: &<Self::T as Item>::Alloc) -> Self {
         Self {
             from: Vec::new_in(alloc.clone()),
         }

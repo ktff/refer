@@ -19,7 +19,7 @@ impl<T: Item> Shell for NoShell<T> {
     where
         Self: 'a;
 
-    fn new(_: &<Self::T as Item>::Alloc) -> Self {
+    fn new_in(_: &<Self::T as Item>::Alloc) -> Self {
         Self::default()
     }
 
