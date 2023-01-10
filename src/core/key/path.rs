@@ -85,15 +85,15 @@ impl Path {
         }))
     }
 
-    pub fn start_of_index(self, index: Index) -> bool {
+    pub fn includes_index(self, index: Index) -> bool {
         let diff = self.0.get() ^ index.get();
         let same_bits = diff.leading_zeros();
         self.level() <= same_bits
     }
 
-    pub fn start_of_path(self, other: Self) -> bool {
+    pub fn includes_path(self, other: Self) -> bool {
         if self.level() <= other.level() {
-            self.start_of_index(other.0)
+            self.includes_index(other.0)
         } else {
             false
         }
@@ -173,12 +173,10 @@ impl PathLeaf {
         Key::new(index)
     }
 
-    /// May panic/return invalid index if key isn't of this path.
-    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> NonZeroUsize {
-        let key: Index = key.index();
-        // ^ is intentional so to catch keys that don't correspond to this path
-        let index = key.get() ^ self.path;
-        NonZeroUsize::new(index as usize).expect("Index must be non zero")
+    /// May panic/return out of path index if key isn't of this path.
+    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> usize {
+        // Xor is intentional so to catch keys that don't correspond to this path
+        (key.index().get() ^ self.path) as usize
     }
 }
 
@@ -307,13 +305,13 @@ mod tests {
     fn start_of_path() {
         let path1 = Path::new_bottom(0b101, 3);
         let path2 = Path::new_bottom(0b1010, 4);
-        assert!(path1.start_of_path(path2));
+        assert!(path1.includes_path(path2));
     }
 
     #[test]
     fn start_of_path_eq() {
         let path1 = Path::new_bottom(0b101, 3);
-        assert!(path1.start_of_path(path1));
+        assert!(path1.includes_path(path1));
     }
 
     #[test]
@@ -321,12 +319,12 @@ mod tests {
         let path1 = Path::new_bottom(0b101, 3);
         let path2 = Path::new_bottom(0b1010, 4);
         let path3 = Path::new_bottom(0b1011, 4);
-        assert!(!path2.start_of_path(path1));
-        assert!(!path3.start_of_path(path1));
-        assert!(!path3.start_of_path(path2));
-        assert!(!path2.start_of_path(path3));
-        assert!(path1.start_of_path(path2));
-        assert!(path1.start_of_path(path3));
+        assert!(!path2.includes_path(path1));
+        assert!(!path3.includes_path(path1));
+        assert!(!path3.includes_path(path2));
+        assert!(!path2.includes_path(path3));
+        assert!(path1.includes_path(path2));
+        assert!(path1.includes_path(path3));
     }
 
     #[test]
@@ -361,8 +359,8 @@ mod tests {
         let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 4);
         let leaf = path.leaf();
         let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
-        assert!(path.start_of_index(key.index()));
-        assert_eq!(leaf.index_of(key), NonZeroUsize::new(1).unwrap());
+        assert!(path.includes_index(key.index()));
+        assert_eq!(leaf.index_of(key), 1);
     }
 
     #[test]
@@ -381,9 +379,9 @@ mod tests {
         let leaf = container_path.leaf();
         let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
 
-        assert!(container_path.start_of_index(key.index()));
-        assert_eq!(leaf.index_of(key), NonZeroUsize::new(1).unwrap());
-        assert!(path.start_of_index(key.index()));
+        assert!(container_path.includes_index(key.index()));
+        assert_eq!(leaf.index_of(key), 1);
+        assert!(path.includes_index(key.index()));
         assert_eq!(region.index_of(key), 0b1000);
     }
 }

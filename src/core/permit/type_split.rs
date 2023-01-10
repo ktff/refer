@@ -2,12 +2,12 @@ use super::*;
 use crate::core::Container;
 use std::any::TypeId;
 
-pub struct TypeSplitPermit<'a, A, C> {
+pub struct TypeSplitPermit<'a, A, C: ?Sized> {
     permit: AnyPermit<'a, Mut, A, C>,
     splitted: Vec<TypeId>,
 }
 
-impl<'a, A, C> TypeSplitPermit<'a, A, C> {
+impl<'a, A, C: ?Sized> TypeSplitPermit<'a, A, C> {
     pub fn new(permit: AnyPermit<'a, Mut, A, C>) -> Self {
         Self {
             permit,

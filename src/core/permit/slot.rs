@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{AnyContainer, Container, Key, Result};
+use crate::core::{AnyContainer, Container, Key, ReferError, Result};
 
 pub struct SlotPermit<'a, T: core::AnyItem + ?Sized, R, A, C: ?Sized> {
     permit: TypePermit<'a, T, R, A, C>,
@@ -17,18 +17,18 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> SlotPermit<'
             .get_slot_any(key.upcast())
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { core::DynSlot::new(key, slot, permit.access()) })
-            .ok_or_else(|| key.into())
+            .ok_or_else(|| ReferError::invalid_key(key, permit.container_path()))
     }
 }
 
-impl<'a, R, T: core::Item, A, C: Container<T>> SlotPermit<'a, T, R, A, C> {
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> SlotPermit<'a, T, R, A, C> {
     pub fn get(self) -> Result<core::Slot<'a, T, C::Shell, R, A>> {
         let Self { permit, key } = self;
         permit
             .get_slot(key)
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { core::Slot::new(key, slot, permit.access()) })
-            .ok_or_else(|| key.into())
+            .ok_or_else(|| ReferError::invalid_key(key, permit.container_path()))
     }
 }
 

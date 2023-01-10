@@ -20,7 +20,7 @@ impl<T: Item> Ref<T> {
 }
 
 impl<T: Item> Ref<T> {
-    pub fn get<R, S, C: Container<T>>(
+    pub fn get<R, S, C: Container<T> + ?Sized>(
         self,
         coll: TypePermit<T, R, S, C>,
     ) -> Slot<T, C::Shell, R, S> {
@@ -103,7 +103,7 @@ impl<T: DynItem + ?Sized> DynRef<T> {
         self.0.downcast().map(Ref)
     }
 
-    pub fn get<R, S, C: AnyContainer>(self, coll: AnyPermit<R, S, C>) -> DynSlot<T, R, S> {
+    pub fn get<R, S, C: AnyContainer + ?Sized>(self, coll: AnyPermit<R, S, C>) -> DynSlot<T, R, S> {
         coll.slot(self.0)
             .get_dyn()
             .map_err(|error| {

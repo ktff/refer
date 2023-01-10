@@ -1,12 +1,14 @@
 use super::{
-    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, Item, Key, KeyPath, MutAnySlots, Shell,
-    SlotContext, UnsafeSlot,
+    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, ExclusivePermit, Item, Key, KeyPath, Path,
+    Shell, SlotContext, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
     collections::HashSet,
     path::Prefix,
 };
+
+// TODO: Container returning inner Containers, & simplifications that can be done with it.
 
 /// A family of containers.
 pub trait ContainerFamily: Send + Sync + 'static {
@@ -15,8 +17,10 @@ pub trait ContainerFamily: Send + Sync + 'static {
     fn new_container<T: Item>(key: Prefix) -> Self::Container<T>;
 }
 
-/// It's responsibility is to allocate/contain/deallocate items and shells, not to manage access to them or
-/// to call their methods.
+/// It's responsibility is to:
+/// - allocate/contain/deallocate items and shells, not to manage access to them or to call their methods.
+/// - expose internal containers as & and &mut.
+/// - clear it self up during drop.
 ///
 /// May panic if argument keys don't correspond to this container.
 pub trait Container<T: Item>: AnyContainer {
@@ -29,7 +33,7 @@ pub trait Container<T: Item>: AnyContainer {
 
     fn get_slot(&self, sub_key: Key<T>) -> Option<UnsafeSlot<T, Self::Shell>>;
 
-    fn get_locality(&self, key: T::LocalityKey) -> Option<SlotContext<T>>;
+    fn get_context(&self, key: T::LocalityKey) -> Option<SlotContext<T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
     /// No slot is returned twice in returned iterator.
@@ -39,17 +43,20 @@ pub trait Container<T: Item>: AnyContainer {
     fn fill_slot(&mut self, key: T::LocalityKey, item: T) -> Result<Key<T>, T>;
 
     /// Fills locality
-    fn fill_locality(&mut self, key: T::LocalityKey);
+    fn fill_context(&mut self, key: T::LocalityKey);
 
     /// Removes from container.
     fn unfill_slot(&mut self, sub_key: Key<T>) -> Option<(T, Self::Shell, SlotContext<T>)>;
 }
 
 pub trait AnyContainer: Any + Sync + Send {
+    /// Path of container shared for all items in the container.
+    fn container_path(&self) -> Path;
+
     fn get_slot_any(&self, sub_key: AnyKey) -> Option<AnyUnsafeSlot>;
 
     /// None if such locality doesn't exist.
-    fn get_locality_any(&self, key: AnyPath) -> Option<AnySlotContext>;
+    fn get_context_any(&self, key: AnyPath) -> Option<AnySlotContext>;
 
     /// Returns first key for given type
     fn first(&self, key: TypeId) -> Option<AnyKey>;
@@ -72,12 +79,41 @@ pub trait AnyContainer: Any + Sync + Send {
     fn fill_slot_any(&mut self, key: AnyPath, item: Box<dyn Any>) -> Result<AnyKey, String>;
 
     /// Fills some locality under given prefix, or enclosing locality.
-    fn fill_locality_any(&mut self, top_key: AnyPath) -> AnyPath;
+    fn fill_context_any(&mut self, top_key: AnyPath) -> AnyPath;
 
     fn unfill_slot_any(&mut self, sub_key: AnyKey);
 
-    fn access_mut(&mut self) -> MutAnySlots<'_, Self> {
-        // SAFETY: This is safe since we have &mut self which gives us exclusive access.
-        unsafe { MutAnySlots::new(self) }
+    fn access(&mut self) -> ExclusivePermit<'_, Self> {
+        ExclusivePermit::new(self)
     }
 }
+
+// impl<'a, C: AnyContainer> Drop for Owned<'a, C> {
+//     fn drop(&mut self) {
+//         for ty in self.0.types() {
+//             if let Some(mut key) = self.0.first(ty) {
+//                 loop {
+//                     // Drop slot
+//                     match self.access_mut().slot(key).get_dyn() {
+//                         Ok(mut slot) => {
+//                             // Drop local
+//                             slot.shell_clear();
+//                             slot.displace();
+
+//                             // Unfill
+//                             self.0.unfill_slot_any(key);
+//                         }
+//                         Err(error) => warn!("Invalid key: {}", error),
+//                     }
+
+//                     // Next
+//                     if let Some(next) = self.0.next(key) {
+//                         key = next;
+//                     } else {
+//                         break;
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }

@@ -1,13 +1,13 @@
 use super::*;
-use crate::core::{Container, KeyPath};
+use crate::core::{Container, KeyPath, ReferError, Result};
 use std::ops::Deref;
 
-pub struct PathPermit<'a, T: core::Item, R, A, C> {
+pub struct PathPermit<'a, T: core::Item, R, A, C: ?Sized> {
     permit: TypePermit<'a, T, R, A, C>,
     path: KeyPath<T>,
 }
 
-impl<'a, R, T: core::Item, A, C: Container<T>> PathPermit<'a, T, R, A, C> {
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, C> {
     pub fn new(permit: TypePermit<'a, T, R, A, C>, path: KeyPath<T>) -> Self {
         Self { permit, path }
     }
@@ -16,14 +16,18 @@ impl<'a, R, T: core::Item, A, C: Container<T>> PathPermit<'a, T, R, A, C> {
         self.path
     }
 
-    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
+    pub fn iter(self) -> Result<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
         let Self { permit, path } = self;
-        permit
-            .iter_slot(path)
-            .into_iter()
-            .flat_map(|iter| iter)
-            // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
-            .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, permit.access()) })
+        if permit.container_path().of().includes(path) {
+            Ok(permit
+                .iter_slot(path)
+                .into_iter()
+                .flat_map(|iter| iter)
+                // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
+                .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, permit.access()) }))
+        } else {
+            Err(ReferError::invalid_path(path, permit.container_path()))
+        }
     }
 
     /// Splits on lower level, or returns self if level is higher.
@@ -48,7 +52,7 @@ impl<'a, R, T: core::Item, A, C: Container<T>> PathPermit<'a, T, R, A, C> {
     }
 }
 
-impl<'a, T: core::Item, A, C: Container<T>> PathPermit<'a, T, Mut, A, C> {
+impl<'a, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, Mut, A, C> {
     pub fn borrow(&self) -> PathPermit<T, Ref, A, C> {
         PathPermit {
             permit: self.permit.borrow(),
@@ -64,7 +68,7 @@ impl<'a, T: core::Item, A, C: Container<T>> PathPermit<'a, T, Mut, A, C> {
     }
 }
 
-impl<'a, T: core::Item, R, A, C: Container<T>> Deref for PathPermit<'a, T, R, A, C> {
+impl<'a, T: core::Item, R, A, C: Container<T> + ?Sized> Deref for PathPermit<'a, T, R, A, C> {
     type Target = &'a C;
 
     fn deref(&self) -> &Self::Target {
@@ -72,9 +76,9 @@ impl<'a, T: core::Item, R, A, C: Container<T>> Deref for PathPermit<'a, T, R, A,
     }
 }
 
-impl<'a, T: core::Item, A, C> Copy for PathPermit<'a, T, Ref, A, C> {}
+impl<'a, T: core::Item, A, C: ?Sized> Copy for PathPermit<'a, T, Ref, A, C> {}
 
-impl<'a, T: core::Item, A, C> Clone for PathPermit<'a, T, Ref, A, C> {
+impl<'a, T: core::Item, A, C: ?Sized> Clone for PathPermit<'a, T, Ref, A, C> {
     fn clone(&self) -> Self {
         Self {
             permit: self.permit,

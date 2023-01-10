@@ -69,7 +69,6 @@
 //? - Focus is on processing.
 //? - Focus is on parallel processing through aliasing rules. That is to say, without atomics and locks.
 
-pub mod collection;
 // #[macro_use]
 // pub mod container;
 pub mod core;

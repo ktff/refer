@@ -30,7 +30,7 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> TypePermit<'
     }
 }
 
-impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> TypePermit<'a, T, R, A, C> {
     pub fn path(self, path: KeyPath<T>) -> PathPermit<'a, T, R, A, C> {
         PathPermit::new(self, path)
     }
@@ -40,13 +40,16 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
         // Compute common prefix of all keys in the iterator.
         let first = self.first(TypeId::of::<T>());
         let last = self.last(TypeId::of::<T>());
-        let (first, last) = match (first, last) {
-            (Some(first), Some(last)) => (first, last),
-            _ => return self.path(KeyPath::default()),
-        };
-        let common = first.path().intersect(last.path()).of();
-
-        self.path(common)
+        match (first, last) {
+            (Some(first), Some(last)) => {
+                let common = first.path().intersect(last.path()).of();
+                self.path(common)
+            }
+            _ => {
+                let path = self.container_path().of();
+                self.path(path)
+            }
+        }
     }
 
     // None if a == b
@@ -69,7 +72,7 @@ impl<'a, R, T: core::Item, A, C: Container<T>> TypePermit<'a, T, R, A, C> {
     }
 }
 
-impl<'a, T: core::Item, A: Into<Shell>, C: Container<T>> TypePermit<'a, T, Mut, A, C> {
+impl<'a, T: core::Item, A: Into<Shell>, C: Container<T> + ?Sized> TypePermit<'a, T, Mut, A, C> {
     pub fn connect(&mut self, from: AnyKey, to: Key<T>) -> core::Ref<T> {
         self.borrow_mut()
             .slot(to)

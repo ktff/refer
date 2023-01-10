@@ -1,4 +1,5 @@
 mod any;
+mod exclusive;
 mod path;
 mod slot;
 mod slot_split;
@@ -6,6 +7,7 @@ mod ty;
 mod type_split;
 
 pub use any::AnyPermit;
+pub use exclusive::ExclusivePermit;
 pub use path::PathPermit;
 pub use slot::SlotPermit;
 pub use slot_split::SlotSplitPermit;
@@ -16,6 +18,10 @@ use crate::core;
 use std::marker::PhantomData;
 
 // TODO: Test permit system, test compile failures?
+
+// TODO: Rename Permit to View?
+
+// Extension TODO: Like ExclusivePermit, SharedPermit could be constructed from ExclusivePermit for concurrent mutation.
 
 pub struct Mut;
 

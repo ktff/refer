@@ -23,7 +23,7 @@ impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
     pub unsafe fn new(key: Key<T>, slot: AnyUnsafeSlot<'a>, access: Permit<R, A>) -> Self {
         assert_eq!(key.type_id(), slot.item().get().item_type_id());
-        debug_assert!(slot.prefix().start_of_key(key.upcast()));
+        debug_assert!(slot.prefix().includes_key(key.upcast()));
         Self { key, slot, access }
     }
 
