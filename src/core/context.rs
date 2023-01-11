@@ -1,19 +1,19 @@
-use super::{AnyPath, Item, KeyPath, PathLeaf};
+use super::{AnyPath, Item, KeyPath, LeafPath};
 use getset::{CopyGetters, Getters};
 use std::any::Any;
 
 #[derive(Getters)]
 #[getset(get = "pub")]
 pub struct Context<T: Item> {
-    path: PathLeaf,
+    leaf_path: LeafPath,
     data: T::LocalityData,
     allocator: T::Alloc,
 }
 
 impl<T: Item> Context<T> {
-    pub fn new(path: PathLeaf, data: T::LocalityData, allocator: T::Alloc) -> Self {
+    pub fn new(leaf_path: LeafPath, data: T::LocalityData, allocator: T::Alloc) -> Self {
         Self {
-            path,
+            leaf_path,
             data,
             allocator,
         }
@@ -21,7 +21,7 @@ impl<T: Item> Context<T> {
 
     pub fn slot_context(&self) -> SlotContext<'_, T> {
         SlotContext {
-            prefix: self.path.into(),
+            prefix: self.leaf_path.into(),
             data: &self.data,
             allocator: &self.allocator,
         }

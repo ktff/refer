@@ -230,8 +230,8 @@ impl<T: Copy, const N: usize> ShardVec<T, N> {
             let layout = Layout::for_value::<HeapPayload<T>>(heap);
             self.header.set_len(0);
             self.header.set_capacity(N as u8);
-            // This is safe since MiniAllocator can handle
-            // allocations from different MiniAllocators.
+            // This is safe since ShardAllocator can handle
+            // allocations from different ShardAllocators.
             unsafe { allocator.deallocate(ptr, layout) }
         }
     }
@@ -439,8 +439,8 @@ impl<T: Copy, const N: usize> ShardVec<T, N> {
                 ptr
             }
             State::Heap => {
-                // This is safe since we MiniAllocator can handle
-                // allocations from different MiniAllocators.
+                // This is safe since we ShardAllocator can handle
+                // allocations from different ShardAllocators.
                 unsafe {
                     let payload = self.heap_payload_mut().expect("Heap payload should exist");
                     let layout = Layout::for_value::<HeapPayload<T>>(payload);
@@ -638,14 +638,14 @@ struct HeapPayload<T: Copy> {
 
 #[cfg(test)]
 mod tests {
-    use crate::components::alloc::MiniAllocator;
+    use crate::util::shard_alloc::ShardAllocator;
     use core::panic;
 
     use super::*;
 
     #[test]
     fn push() {
-        let alloc = MiniAllocator::new();
+        let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
         vec.push(1, &alloc);
         vec.push(2, &alloc);
@@ -658,7 +658,7 @@ mod tests {
 
     #[test]
     fn push_pop() {
-        let alloc = MiniAllocator::new();
+        let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
         vec.push(1, &alloc);
         vec.push(2, &alloc);
@@ -671,7 +671,7 @@ mod tests {
 
     #[test]
     fn push_pop_push() {
-        let alloc = MiniAllocator::new();
+        let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
         vec.push(1, &alloc);
         vec.push(2, &alloc);
@@ -686,7 +686,7 @@ mod tests {
 
     #[test]
     fn remove_range() {
-        let alloc = MiniAllocator::new();
+        let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
 
         vec.push(1, &alloc);
@@ -705,7 +705,7 @@ mod tests {
 
     #[test]
     fn retain_mut() {
-        let alloc = MiniAllocator::new();
+        let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
 
         vec.push(1, &alloc);
@@ -723,7 +723,7 @@ mod tests {
 
     #[test]
     fn insert() {
-        let alloc = MiniAllocator::new();
+        let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
 
         vec.push(1, &alloc);
@@ -746,7 +746,7 @@ mod tests {
         use rand::*;
         let ops = 100000;
 
-        let alloc = MiniAllocator::new();
+        let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
         let mut dopl = Vec::new();
         let mut rand = thread_rng();

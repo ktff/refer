@@ -4,7 +4,7 @@ mod path;
 
 pub use key::{AnyKey, Key};
 pub use key_path::*;
-pub use path::{Path, PathLeaf, PathRegion};
+pub use path::{LeafPath, Path, RegionPath};
 
 // NOTE: Base must be greater than usize
 pub use base::*;

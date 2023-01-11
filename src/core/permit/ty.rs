@@ -1,7 +1,14 @@
 use super::*;
-use crate::core::{AnyContainer, AnyKey, Container, Key, KeyPath};
+use crate::core::{
+    leaf::LeafContainer, region::RegionContainer, ty::TypeContainer, AnyContainer, AnyKey,
+    Container, Key,
+};
 use log::*;
-use std::{any::TypeId, marker::PhantomData, ops::Deref};
+use std::{
+    any::TypeId,
+    marker::PhantomData,
+    ops::{Deref, RangeBounds},
+};
 
 pub struct TypePermit<'a, T: ?Sized, R, A, C: ?Sized> {
     permit: AnyPermit<'a, R, A, C>,
@@ -30,26 +37,54 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> TypePermit<'
     }
 }
 
-impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> TypePermit<'a, T, R, A, C> {
-    pub fn path(self, path: KeyPath<T>) -> PathPermit<'a, T, R, A, C> {
-        PathPermit::new(self, path)
+impl<'a, R, T: core::Item, A, C: ?Sized> TypePermit<'a, T, R, A, C> {
+    pub fn step_down(self) -> Option<TypePermit<'a, T, R, A, C::Sub>>
+    where
+        C: TypeContainer<T>,
+    {
+        self.permit.step().map(TypePermit::new)
     }
 
-    // Sub over all T in the container.
-    pub fn all(self) -> PathPermit<'a, T, R, A, C> {
-        // Compute common prefix of all keys in the iterator.
-        let first = self.first(TypeId::of::<T>());
-        let last = self.last(TypeId::of::<T>());
-        match (first, last) {
-            (Some(first), Some(last)) => {
-                let common = first.path().intersect(last.path()).of();
-                self.path(common)
-            }
-            _ => {
-                let path = self.container_path().of();
-                self.path(path)
-            }
-        }
+    pub fn step_into(self, index: usize) -> Option<TypePermit<'a, T, R, A, C::Sub>>
+    where
+        C: RegionContainer<T>,
+    {
+        self.permit.step_into(index).map(TypePermit::new)
+    }
+
+    pub fn step_range(
+        self,
+        range: impl RangeBounds<usize>,
+    ) -> Option<impl Iterator<Item = TypePermit<'a, T, R, A, C::Sub>>>
+    where
+        C: RegionContainer<T>,
+    {
+        Some(self.permit.step_range(range)?.map(TypePermit::new))
+    }
+
+    pub fn step_iter(self) -> impl Iterator<Item = SlotPermit<'a, T, R, A, C>>
+    where
+        C: LeafContainer<T> + AnyContainer,
+    {
+        // SAFETY: Iterator ensures that we don't access the same slot twice.
+        self.keys()
+            .map(move |key| unsafe { self.unsafe_split(|permit| permit.slot(key)) })
+    }
+
+    /// Iterates over valid keys in ascending order.
+    pub fn keys(&self) -> impl Iterator<Item = Key<T>> + 'a
+    where
+        C: AnyContainer,
+    {
+        self.permit
+            .keys(TypeId::of::<T>())
+            .map(|key| key.downcast().expect("Key type mismatch"))
+    }
+}
+
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> TypePermit<'a, T, R, A, C> {
+    pub fn path(self) -> PathPermit<'a, T, R, A, C> {
+        PathPermit::new(self)
     }
 
     // None if a == b

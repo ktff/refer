@@ -1,7 +1,10 @@
 use super::*;
-use crate::core::{AnyContainer, AnyKey, Key};
+use crate::core::{region::RegionContainer, ty::TypeContainer, AnyContainer, AnyItem, AnyKey, Key};
 use log::*;
-use std::{any::TypeId, ops::Deref};
+use std::{
+    any::TypeId,
+    ops::{Deref, RangeBounds},
+};
 
 pub struct AnyPermit<'a, R, A, C: ?Sized> {
     permit: Permit<R, A>,
@@ -31,6 +34,10 @@ impl<'a, R, A, C: AnyContainer + ?Sized> AnyPermit<'a, R, A, C> {
         self.permit.access()
     }
 
+    pub fn container(&self) -> &'a C {
+        self.container
+    }
+
     pub fn slot<T: core::DynItem + ?Sized>(self, key: Key<T>) -> SlotPermit<'a, T, R, A, C>
     where
         C: AnyContainer,
@@ -45,18 +52,20 @@ impl<'a, R, A, C: AnyContainer + ?Sized> AnyPermit<'a, R, A, C> {
         TypePermit::new(self)
     }
 
-    pub fn iter(self, key: TypeId) -> impl Iterator<Item = core::AnySlot<'a, R, A>> {
-        let Self { container, permit } = self;
-        std::iter::successors(container.first(key), move |&key| container.next(key)).map(
-            move |key| {
-                container
-                    .get_slot_any(key)
-                    // SAFETY: Type level logic of AnyPermit ensures that it has sufficient access for 'a to all slots.
-                    //         Furthermore first-next iteration ensures that we don't access the same slot twice.
-                    .map(|slot| unsafe { core::AnySlot::new(key, slot, permit.access()) })
-                    .expect("Should be valid key")
-            },
-        )
+    /// Iterates over valid slot permit of type in ascending order.
+    pub fn iter(self, key: TypeId) -> impl Iterator<Item = SlotPermit<'a, dyn AnyItem, R, A, C>> {
+        self.keys(key).map(move |key| {
+            // SAFETY: First-next iteration ensures that we don't access the same slot twice.
+            unsafe { self.unsafe_split(|permit| permit.slot(key)) }
+        })
+    }
+
+    /// Iterates over valid keys of type in ascending order.
+    pub fn keys(&self, key: TypeId) -> impl Iterator<Item = AnyKey> + 'a {
+        let container = self.container;
+        std::iter::successors(container.first_key(key), move |&key| {
+            container.next_key(key)
+        })
     }
 
     // None if a == b
@@ -140,6 +149,42 @@ impl<'a, A, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
 
     pub fn split_slots(self) -> SlotSplitPermit<'a, A, C> {
         SlotSplitPermit::new(self)
+    }
+}
+
+impl<'a, R, A, C: ?Sized> AnyPermit<'a, R, A, C> {
+    pub fn step<T: core::Item>(self) -> Option<AnyPermit<'a, R, A, C::Sub>>
+    where
+        C: TypeContainer<T>,
+    {
+        let Self { container, permit } = self;
+        container
+            .get()
+            .map(|container| AnyPermit { container, permit })
+    }
+
+    pub fn step_into<T: core::Item>(self, index: usize) -> Option<AnyPermit<'a, R, A, C::Sub>>
+    where
+        C: RegionContainer<T>,
+    {
+        let Self { container, permit } = self;
+        container
+            .get(index)
+            .map(|container| AnyPermit { container, permit })
+    }
+
+    pub fn step_range<T: core::Item>(
+        self,
+        range: impl RangeBounds<usize>,
+    ) -> Option<impl Iterator<Item = AnyPermit<'a, R, A, C::Sub>>>
+    where
+        C: RegionContainer<T>,
+    {
+        let Self { container, permit } = self;
+        Some(container.iter(range)?.map(move |(_, container)| AnyPermit {
+            container,
+            permit: permit.access(),
+        }))
     }
 }
 

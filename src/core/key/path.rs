@@ -2,6 +2,7 @@ use super::*;
 use crate::core::{AnyItem, Item};
 use std::{
     num::{NonZeroU16, NonZeroU32, NonZeroUsize},
+    ops::RangeInclusive,
     ptr::Pointee,
 };
 
@@ -52,12 +53,12 @@ impl Path {
     }
 
     /// None if len is too large.
-    pub fn region(self, len: NonZeroU32) -> Option<PathRegion> {
-        PathRegion::new(self, len)
+    pub fn region(self, len: NonZeroU32) -> Option<RegionPath> {
+        RegionPath::new(self, len)
     }
 
-    pub fn leaf(self) -> PathLeaf {
-        PathLeaf::new(self)
+    pub fn leaf(self) -> LeafPath {
+        LeafPath::new(self)
     }
 
     /// Leaves only common prefix.
@@ -123,7 +124,7 @@ impl Default for Path {
 /// Path end optimized for leaf containers.
 /// Has path and non zero region extending from it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PathLeaf {
+pub struct LeafPath {
     /// Path of indices
     path: IndexBase,
     /// Level of path
@@ -132,7 +133,7 @@ pub struct PathLeaf {
     remaining_len: NonZeroU32,
 }
 
-impl PathLeaf {
+impl LeafPath {
     pub fn new(path: Path) -> Self {
         Self {
             path: path.top(),
@@ -178,11 +179,16 @@ impl PathLeaf {
         // Xor is intentional so to catch keys that don't correspond to this path
         (key.index().get() ^ self.path) as usize
     }
+
+    /// Returns range of indices that are included in this path.
+    pub fn range_of(&self, path: Path) -> Option<RangeInclusive<usize>> {
+        unimplemented!()
+    }
 }
 
 /// Region of paths that starts at some path and has non zero length.
 #[derive(Debug, Clone)]
-pub struct PathRegion {
+pub struct RegionPath {
     /// Path of indices
     path: IndexBase,
     /// Path level
@@ -193,7 +199,7 @@ pub struct PathRegion {
     remaining_len: NonZeroU16,
 }
 
-impl PathRegion {
+impl RegionPath {
     /// None if len is too large
     pub fn new(path: Path, len: NonZeroU32) -> Option<Self> {
         if len.get() > std::mem::size_of::<usize>() as u32 * 8 {
@@ -201,7 +207,7 @@ impl PathRegion {
         }
 
         let level = path.level();
-        Some(PathRegion {
+        Some(RegionPath {
             path: path.top(),
             level: level as u16,
             len: NonZeroU16::new(len.get() as u16)?,
@@ -231,6 +237,11 @@ impl PathRegion {
     /// May panic/return invalid index if key isn't of this path.
     pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> usize {
         ((key.index().get() ^ self.path) >> self.remaining_len.get()) as usize
+    }
+
+    /// Returns range of indices that are included in this path.
+    pub fn range_of(&self, path: Path) -> Option<RangeInclusive<usize>> {
+        unimplemented!()
     }
 }
 
@@ -330,7 +341,7 @@ mod tests {
     #[test]
     fn path_region() {
         let path = Path::new_bottom(0b1010, 4);
-        let region = PathRegion::new(path, NonZeroU32::new(2).unwrap()).unwrap();
+        let region = RegionPath::new(path, NonZeroU32::new(2).unwrap()).unwrap();
         assert_eq!(region.path_of(0b00), Path::new_bottom(0b101000, 6));
         assert_eq!(region.path_of(0b01), Path::new_bottom(0b101001, 6));
         assert_eq!(region.path_of(0b10), Path::new_bottom(0b101010, 6));

@@ -1,8 +1,6 @@
 use crate::core::{AnyItem, Index, Item, Key, Path};
 use std::{any::TypeId, fmt::Display};
 
-use super::KeyPath;
-
 /// Collection level errors.
 /// Non fatal in theory but can be fatal in practice.
 #[derive(Debug, Clone)]
@@ -15,12 +13,12 @@ pub enum ReferError {
         key: Index,
         container: Path,
     },
-    /// Path doesn't exist on given path.
-    InvalidPath {
-        ty: TypeInfo,
-        path: Path,
-        container: Path,
-    },
+    // /// Path doesn't exist on given path.
+    // InvalidPath {
+    //     ty: TypeInfo,
+    //     path: Path,
+    //     container: Path,
+    // },
     /// Item doesn't support operation.
     InvalidOperation {
         ty: TypeInfo,
@@ -45,13 +43,13 @@ impl ReferError {
         }
     }
 
-    pub fn invalid_path<T: AnyItem + ?Sized>(path: KeyPath<T>, container: Path) -> Self {
-        Self::InvalidPath {
-            ty: TypeInfo::of::<T>(Some(path.type_id())),
-            path: path.path(),
-            container,
-        }
-    }
+    // pub fn invalid_path<T: AnyItem + ?Sized>(path: KeyPath<T>, container: Path) -> Self {
+    //     Self::InvalidPath {
+    //         ty: TypeInfo::of::<T>(Some(path.type_id())),
+    //         path: path.path(),
+    //         container,
+    //     }
+    // }
 
     pub fn invalid_op<T: AnyItem + ?Sized>(key: Key<T>, op: &'static str) -> Self {
         Self::InvalidOperation {
@@ -90,15 +88,15 @@ impl Display for ReferError {
                 "Item for key {}#{} doesn't exist in container {}.",
                 ty, key, path
             ),
-            Self::InvalidPath {
-                ty,
-                path,
-                container,
-            } => write!(
-                f,
-                "Path {}#{} doesn't exist in container {}.",
-                path, ty, container
-            ),
+            // Self::InvalidPath {
+            //     ty,
+            //     path,
+            //     container,
+            // } => write!(
+            //     f,
+            //     "Path {}#{} doesn't exist in container {}.",
+            //     path, ty, container
+            // ),
             Self::InvalidOperation { ty, key, op } => {
                 write!(
                     f,

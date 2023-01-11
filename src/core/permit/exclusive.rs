@@ -8,6 +8,8 @@ use std::{
 
 // TODO: Panic on less occasions, instead return errors.
 
+// TODO: Check how/which Permit/Access and in what combinations are used and try to simplify them.
+
 pub struct ExclusivePermit<'a, C: AnyContainer + ?Sized> {
     permit: Permit<permit::Mut, permit::Slot>,
     container: &'a mut C,

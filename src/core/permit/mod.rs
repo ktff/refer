@@ -17,9 +17,9 @@ pub use type_split::TypeSplitPermit;
 use crate::core;
 use std::marker::PhantomData;
 
-// TODO: Test permit system, test compile failures?
+//? NOTE: Permit system is by no means complete, so it's fine to extend it.
 
-// TODO: Rename Permit to View?
+// TODO: Test permit system, test compile failures?
 
 // Extension TODO: Like ExclusivePermit, SharedPermit could be constructed from ExclusivePermit for concurrent mutation.
 

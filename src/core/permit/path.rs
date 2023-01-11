@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::{Container, KeyPath, ReferError, Result};
+use crate::core::{ty::TypeContainer, Container, KeyPath, Result};
 use std::ops::Deref;
 
 pub struct PathPermit<'a, T: core::Item, R, A, C: ?Sized> {
@@ -8,8 +8,11 @@ pub struct PathPermit<'a, T: core::Item, R, A, C: ?Sized> {
 }
 
 impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, C> {
-    pub fn new(permit: TypePermit<'a, T, R, A, C>, path: KeyPath<T>) -> Self {
-        Self { permit, path }
+    pub fn new(permit: TypePermit<'a, T, R, A, C>) -> Self {
+        Self {
+            path: permit.container_path().of(),
+            permit,
+        }
     }
 
     pub fn path(&self) -> KeyPath<T> {
@@ -18,16 +21,13 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
 
     pub fn iter(self) -> Result<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
         let Self { permit, path } = self;
-        if permit.container_path().of().includes(path) {
-            Ok(permit
-                .iter_slot(path)
-                .into_iter()
-                .flat_map(|iter| iter)
-                // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
-                .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, permit.access()) }))
-        } else {
-            Err(ReferError::invalid_path(path, permit.container_path()))
-        }
+        assert!(permit.container_path().of().includes(path));
+        Ok(permit
+            .iter_slot(path)
+            .into_iter()
+            .flat_map(|iter| iter)
+            // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
+            .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, permit.access()) }))
     }
 
     /// Splits on lower level, or returns self if level is higher.
@@ -43,12 +43,22 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
             Box::new(
                 // SAFETY: We depend on iter_level returning disjoint paths.
                 iter.map(move |path| unsafe {
-                    self.permit.unsafe_split(|permit| permit.path(path))
+                    self.permit.unsafe_split(|permit| Self { permit, path })
                 }),
             )
         } else {
             Box::new(std::iter::once(self))
         }
+    }
+}
+
+impl<'a, R, T: core::Item, A, C: ?Sized> PathPermit<'a, T, R, A, C> {
+    pub fn step_down(self) -> Option<PathPermit<'a, T, R, A, C::Sub>>
+    where
+        C: TypeContainer<T>,
+    {
+        let Self { permit, path } = self;
+        permit.step_down().map(|permit| PathPermit { permit, path })
     }
 }
 
@@ -84,5 +94,13 @@ impl<'a, T: core::Item, A, C: ?Sized> Clone for PathPermit<'a, T, Ref, A, C> {
             permit: self.permit,
             path: self.path,
         }
+    }
+}
+
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> From<TypePermit<'a, T, R, A, C>>
+    for PathPermit<'a, T, R, A, C>
+{
+    fn from(permit: TypePermit<'a, T, R, A, C>) -> Self {
+        Self::new(permit)
     }
 }
