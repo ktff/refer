@@ -1,4 +1,5 @@
 use crate::core::{region::RegionContainer, ty::TypeContainer, *};
+use log::*;
 use std::{
     collections::{btree_map, hash_map::Entry, BTreeMap, HashMap, HashSet},
     ops::{Deref, DerefMut, RangeBounds},
@@ -473,14 +474,24 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     ) -> Result<()> {
         // item --> others
         for (i, rf) in iter().enumerate() {
-            match shells.borrow_mut().slot(rf.key()).get_dyn() {
+            match shells.peek_dyn(rf.key()) {
                 Ok(mut shell_slot) => shell_slot.shell_add(key),
                 Err(error) => {
                     // Reference doesn't exist
 
                     // Rollback and return error
                     for rf in iter().take(i) {
-                        shells.disconnect_dyn(key, rf);
+                        shells
+                            .disconnect_dyn(key, rf)
+                            .map_err(|error| {
+                                panic!(
+                                    "Failed to disconnect {:?} -> {:?}, error: {}",
+                                    key,
+                                    rf.key(),
+                                    error
+                                );
+                            })
+                            .ok();
                     }
 
                     return Err(error);
@@ -547,13 +558,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                 (Some(&rf), None) => {
                     // We don't care so much about this reference missing.
                     let _ = shells
-                        .borrow_mut()
-                        .slot(rf.key())
-                        .get_dyn()
+                        .peek_dyn(rf.key())
                         .map(|mut slot| slot.shell_remove(key.upcast()));
                 }
                 (None, Some(rf)) => {
-                    match shells.borrow_mut().slot(rf.key()).get_dyn() {
+                    match shells.peek_dyn(rf.key()) {
                         Ok(mut shell_slot) => shell_slot.shell_add(key.upcast()),
                         Err(error) => {
                             // Rollback and return error
@@ -561,10 +570,30 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                                 match cmp {
                                     (Some(_), Some(_)) | (None, None) => (),
                                     (Some(rf), None) => {
-                                        shells.connect_dyn(key.upcast(), rf.key());
+                                        shells
+                                            .connect_dyn(key.upcast(), rf.key())
+                                            .map_err(|error| {
+                                                panic!(
+                                                    "Failed to connect {:?} -> {:?}, error: {}",
+                                                    key,
+                                                    rf.key(),
+                                                    error
+                                                )
+                                            })
+                                            .ok();
                                     }
                                     (None, Some(&rf)) => {
-                                        shells.disconnect_dyn(key.upcast(), rf);
+                                        shells
+                                            .disconnect_dyn(key.upcast(), rf)
+                                            .map_err(|error| {
+                                                panic!(
+                                                    "Failed to disconnect {:?} -> {:?}, error: {}",
+                                                    key,
+                                                    rf.key(),
+                                                    error
+                                                )
+                                            })
+                                            .ok();
                                     }
                                 }
                             }
@@ -677,9 +706,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                                 Ok(duplicate_key) => {
                                     // Duplicate references only duplicate
                                     let mut duplicate = items
-                                        .borrow_mut()
-                                        .slot(*duplicate_key)
-                                        .get_dyn()
+                                        .peek_dyn(*duplicate_key)
                                         .expect("Should be valid key");
                                     duplicate.replace_reference(from, to.index());
 
@@ -704,11 +731,8 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                         duplicates.get_mut(&other_ref.key()).map(|d| d.as_mut())
                     {
                         // Duplicate reference duplicate
-                        let mut duplicate = items
-                            .borrow_mut()
-                            .slot(duplicate_key)
-                            .get_dyn()
-                            .expect("Should be valid key");
+                        let mut duplicate =
+                            items.peek_dyn(duplicate_key).expect("Should be valid key");
                         assert!(
                             duplicate.duplicate_reference(from, to.index()).is_none(),
                             "Should be able to duplicate reference"
@@ -730,12 +754,23 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     ///
     /// Err if key doesn't exist.
     fn detach_item(&mut self, key: AnyKey) -> Result<()> {
-        let (items, mut shells) = self.access_mut().split();
+        let (mut items, mut shells) = self.access_mut().split();
 
-        let mut item_slot = items.slot(key).get_dyn()?;
+        let mut item_slot = items.peek_dyn(key)?;
+        // Disconnect from other shells
         if let Some(references) = item_slot.iter_references_any() {
             for rf in references {
-                shells.disconnect_dyn(key, rf);
+                shells
+                    .disconnect_dyn(key, rf)
+                    .map_err(|error| {
+                        warn!(
+                            "Failed to disconnect {:?} -> {:?}, error: {}",
+                            key,
+                            rf.key(),
+                            error
+                        );
+                    })
+                    .ok();
             }
         }
         // Clear local data
@@ -750,18 +785,21 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     ///
     /// Err if key doesn't exist.
     fn detach_shell(&mut self, key: AnyKey, remove: &mut Vec<AnyKey>) -> Result<()> {
-        let (mut items, shells) = self.access_mut().split();
+        let (mut items, mut shells) = self.access_mut().split();
 
-        let mut shell_slot = shells.slot(key).get_dyn()?;
-        if let Some(references) = shell_slot.shell().iter_any() {
-            for (_, other_rf) in references.dedup() {
-                if let Ok(mut other) = items.borrow_mut().slot(other_rf.key()).get_dyn() {
-                    if other.remove_reference(key) {
-                        remove.push(other_rf.key());
-                    }
-                }
-            }
+        let mut shell_slot = shells.peek_dyn(key)?;
+        if let Some(references) = shell_slot.iter_any() {
+            remove.extend(
+                references
+                    .dedup()
+                    .map(|(_, other_rf)| other_rf.key())
+                    .filter(|&other_key| match items.peek_dyn(other_key) {
+                        Ok(mut other) => other.remove_reference(key),
+                        Err(_) => false,
+                    }),
+            );
         }
+
         // Clear local data
         shell_slot.shell_clear();
 

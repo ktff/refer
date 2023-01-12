@@ -1,6 +1,8 @@
 use super::*;
-use crate::core::{region::RegionContainer, ty::TypeContainer, AnyContainer, AnyItem, AnyKey, Key};
-use log::*;
+use crate::core::{
+    region::RegionContainer, ty::TypeContainer, AnyContainer, AnyItem, AnyKey, Container, Key,
+    Result,
+};
 use std::{
     any::TypeId,
     ops::{Deref, RangeBounds},
@@ -91,35 +93,17 @@ impl<'a, A: Into<Shell>, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
         &mut self,
         from: AnyKey,
         to: Key<T>,
-    ) -> core::DynRef<T> {
-        self.borrow_mut()
-            .slot(to)
-            .get_dyn()
-            .map_err(|error| {
-                error!("Failed to connect {:?} -> {:?}, error: {}", from, to, error);
-                error
-            })
-            .expect("Failed to connect")
-            .shell_add(from);
-
-        core::DynRef::new(to)
+    ) -> Result<core::DynRef<T>> {
+        self.peek_dyn(to)?.shell_add(from);
+        Ok(core::DynRef::new(to))
     }
 
-    pub fn disconnect_dyn<T: core::DynItem + ?Sized>(&mut self, from: AnyKey, to: core::DynRef<T>) {
-        self.borrow_mut()
-            .slot(to.key())
-            .get_dyn()
-            .map_err(|error| {
-                error!(
-                    "Failed to disconnect {:?} -> {:?}, error: {}",
-                    from,
-                    to.key(),
-                    error
-                );
-                error
-            })
-            .expect("Failed to disconnect")
-            .shell_remove(from)
+    pub fn disconnect_dyn<T: core::DynItem + ?Sized>(
+        &mut self,
+        from: AnyKey,
+        to: core::DynRef<T>,
+    ) -> Result<()> {
+        Ok(self.peek_dyn(to.key())?.shell_remove(from))
     }
 }
 
@@ -195,6 +179,45 @@ impl<'a, A, C: ?Sized> AnyPermit<'a, Mut, A, C> {
 
     pub fn borrow_mut(&mut self) -> AnyPermit<Mut, A, C> {
         self.into()
+    }
+
+    pub fn peek<T: core::Item>(
+        &mut self,
+        key: Key<T>,
+    ) -> Result<core::Slot<'_, T, C::Shell, Mut, A>>
+    where
+        C: Container<T>,
+    {
+        self.borrow_mut().slot(key).get()
+    }
+
+    pub fn peek_dyn<T: core::DynItem + ?Sized>(
+        &mut self,
+        key: Key<T>,
+    ) -> Result<core::DynSlot<'_, T, Mut, A>>
+    where
+        C: AnyContainer,
+    {
+        self.borrow_mut().slot(key).get_dyn()
+    }
+}
+
+impl<'a, A, C: ?Sized> AnyPermit<'a, Ref, A, C> {
+    pub fn peek<T: core::Item>(self, key: Key<T>) -> Result<core::Slot<'a, T, C::Shell, Ref, A>>
+    where
+        C: Container<T>,
+    {
+        self.slot(key).get()
+    }
+
+    pub fn peek_dyn<T: core::DynItem + ?Sized>(
+        self,
+        key: Key<T>,
+    ) -> Result<core::DynSlot<'a, T, Ref, A>>
+    where
+        C: AnyContainer,
+    {
+        self.slot(key).get_dyn()
     }
 }
 
