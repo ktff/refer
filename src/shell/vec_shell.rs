@@ -1,11 +1,11 @@
 use crate::core::*;
 use std::alloc::Global;
 
-pub struct SizedShell<T: Item> {
+pub struct VecShell<T: Item> {
     from: Vec<AnyRef, T::Alloc>,
 }
 
-impl<T: Item> Shell for SizedShell<T> {
+impl<T: Item> Shell for VecShell<T> {
     type T = T;
 
     type Iter<'a>= impl Iterator<Item = AnyRef> + 'a
@@ -62,7 +62,7 @@ impl<T: Item> Shell for SizedShell<T> {
     }
 }
 
-impl<T: Item<Alloc = Global>> Default for SizedShell<T> {
+impl<T: Item<Alloc = Global>> Default for VecShell<T> {
     fn default() -> Self {
         Self { from: Vec::new() }
     }

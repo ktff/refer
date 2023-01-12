@@ -2,7 +2,7 @@ use super::{AnyPath, Item, KeyPath, LeafPath};
 use getset::{CopyGetters, Getters};
 use std::any::Any;
 
-#[derive(Getters)]
+#[derive(Getters, Debug)]
 #[getset(get = "pub")]
 pub struct Context<T: Item> {
     leaf_path: LeafPath,
@@ -16,6 +16,18 @@ impl<T: Item> Context<T> {
             leaf_path,
             data,
             allocator,
+        }
+    }
+
+    pub fn new_default(leaf_path: LeafPath) -> Self
+    where
+        T: Item<Alloc = std::alloc::Global>,
+        T::LocalityData: Default,
+    {
+        Self {
+            leaf_path,
+            data: T::LocalityData::default(),
+            allocator: std::alloc::Global,
         }
     }
 

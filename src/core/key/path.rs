@@ -79,9 +79,9 @@ impl Path {
     pub fn and(self, other: impl Into<Self>) -> Option<Self> {
         let other = other.into();
         match self.level().cmp(&other.level()) {
-            Ordering::Less if self.includes_index(other.0) => Some(other),
+            Ordering::Less if self.contains_index(other.0) => Some(other),
             Ordering::Equal if self == other => Some(self),
-            Ordering::Greater if other.includes_index(self.0) => Some(self),
+            Ordering::Greater if other.contains_index(self.0) => Some(self),
             _ => None,
         }
     }
@@ -102,15 +102,16 @@ impl Path {
         }))
     }
 
-    pub fn includes_index(self, index: Index) -> bool {
+    pub fn contains_index(self, index: Index) -> bool {
         let diff = self.0.get() ^ index.get();
         let same_bits = diff.leading_zeros();
         self.level() <= same_bits
     }
 
-    pub fn includes_path(self, other: Self) -> bool {
+    pub fn contains(self, other: impl Into<Self>) -> bool {
+        let other = other.into();
         if self.level() <= other.level() {
-            self.includes_index(other.0)
+            self.contains_index(other.0)
         } else {
             false
         }
@@ -205,7 +206,10 @@ impl LeafPath {
     #[inline(always)]
     pub fn key_of<T: Item>(&self, index: NonZeroUsize) -> Key<T> {
         assert_eq!(
-            index.get() >> self.remaining_len.get(),
+            index
+                .get()
+                .checked_shr(self.remaining_len.get())
+                .unwrap_or(0),
             0,
             "Index has too many bits"
         );
@@ -407,13 +411,13 @@ mod tests {
     fn start_of_path() {
         let path1 = Path::new_bottom(0b101, 3);
         let path2 = Path::new_bottom(0b1010, 4);
-        assert!(path1.includes_path(path2));
+        assert!(path1.contains(path2));
     }
 
     #[test]
     fn start_of_path_eq() {
         let path1 = Path::new_bottom(0b101, 3);
-        assert!(path1.includes_path(path1));
+        assert!(path1.contains(path1));
     }
 
     #[test]
@@ -421,12 +425,12 @@ mod tests {
         let path1 = Path::new_bottom(0b101, 3);
         let path2 = Path::new_bottom(0b1010, 4);
         let path3 = Path::new_bottom(0b1011, 4);
-        assert!(!path2.includes_path(path1));
-        assert!(!path3.includes_path(path1));
-        assert!(!path3.includes_path(path2));
-        assert!(!path2.includes_path(path3));
-        assert!(path1.includes_path(path2));
-        assert!(path1.includes_path(path3));
+        assert!(!path2.contains(path1));
+        assert!(!path3.contains(path1));
+        assert!(!path3.contains(path2));
+        assert!(!path2.contains(path3));
+        assert!(path1.contains(path2));
+        assert!(path1.contains(path3));
     }
 
     #[test]
@@ -461,7 +465,7 @@ mod tests {
         let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 4);
         let leaf = path.leaf().unwrap();
         let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
-        assert!(path.includes_index(key.index()));
+        assert!(path.contains_index(key.index()));
         assert_eq!(leaf.index_of(key), 1);
     }
 
@@ -481,9 +485,9 @@ mod tests {
         let leaf = container_path.leaf().unwrap();
         let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
 
-        assert!(container_path.includes_index(key.index()));
+        assert!(container_path.contains_index(key.index()));
         assert_eq!(leaf.index_of(key), 1);
-        assert!(path.includes_index(key.index()));
+        assert!(path.contains_index(key.index()));
         assert_eq!(region.index_of(key), 0b1000);
     }
 

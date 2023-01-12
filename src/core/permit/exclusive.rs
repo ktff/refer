@@ -5,8 +5,6 @@ use std::{
     ops::{Deref, DerefMut, RangeBounds},
 };
 
-// TODO: Try to simplify algorithms.
-
 pub struct ExclusivePermit<'a, C: AnyContainer + ?Sized> {
     permit: Permit<permit::Mut, permit::Slot>,
     container: &'a mut C,
@@ -80,7 +78,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         C: Container<T>,
     {
         self.get_context(to)
-            .map(|context| context.prefix().includes_key(key))
+            .map(|context| context.prefix().contains_key(key))
             .unwrap_or(false)
     }
 
@@ -287,7 +285,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                 // Has been moved?
                 if moved.insert(from) {
                     // Does current place satisfy prefix?
-                    if !prefix.includes_index(from.index()) {
+                    if !prefix.contains_index(from.index()) {
                         // Move
 
                         // Clone & fill

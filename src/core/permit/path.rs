@@ -22,7 +22,7 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
 
     /// Panics if the path is not a subpath of container.
     pub fn new_with(permit: TypePermit<'a, T, R, A, C>, path: KeyPath<T>) -> Self {
-        assert!(permit.container_path().of().includes(path));
+        assert!(permit.container_path().of().contains(path));
         Self { path, permit }
     }
 
@@ -40,7 +40,7 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
 
     pub fn iter(self) -> Result<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
         let Self { permit, path } = self;
-        assert!(permit.container_path().of().includes(path));
+        assert!(permit.container_path().of().contains(path));
         Ok(permit
             .iter_slot(path)
             .into_iter()

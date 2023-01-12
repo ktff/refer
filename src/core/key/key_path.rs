@@ -79,7 +79,7 @@ impl<T: Pointee + AnyItem + ?Sized> KeyPath<T> {
     pub fn downcast_key<U: AnyItem + ?Sized>(self, key: Key<U>) -> Option<Key<T>> {
         if self.type_id() == key.type_id() {
             let key = Key::new_with(key.index(), self.1);
-            if self.includes_key(key) {
+            if self.contains_key(key) {
                 Some(key)
             } else {
                 None
@@ -90,13 +90,13 @@ impl<T: Pointee + AnyItem + ?Sized> KeyPath<T> {
     }
 
     /// True if self start of given path.
-    pub fn includes(self, path: KeyPath<T>) -> bool {
-        self.0.includes_path(path.0)
+    pub fn contains(self, path: KeyPath<T>) -> bool {
+        self.0.contains(path.0)
     }
 
     /// True if self start of given key.
-    pub fn includes_key(self, key: Key<T>) -> bool {
-        self.0.includes_index(key.index())
+    pub fn contains_key(self, key: Key<T>) -> bool {
+        self.0.contains_index(key.index())
     }
 }
 

@@ -7,8 +7,8 @@ use std::{
 };
 
 /// An item of a model.
-pub trait Item: Sized + Any {
-    type Alloc: Allocator + Any + Clone + 'static;
+pub trait Item: Sized + Any + Sync {
+    type Alloc: Allocator + Any + Clone + 'static + Send + Sync;
 
     /// Locality of item.
     type LocalityKey: Debug + Copy;
@@ -93,7 +93,7 @@ pub trait DynItem: AnyItem + Unsize<dyn AnyItem> {}
 impl<T: AnyItem + Unsize<dyn AnyItem> + ?Sized> DynItem for T {}
 
 /// Methods correspond 1 to 1 to Item methods.
-pub trait AnyItem: Any + Unsize<dyn Any> {
+pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     fn item_type_id(self: *const Self) -> TypeId;
 
     fn iter_references_any(

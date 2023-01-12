@@ -1,5 +1,8 @@
+#[macro_use]
 pub mod leaf;
+#[macro_use]
 pub mod region;
+#[macro_use]
 pub mod ty;
 
 use super::{
@@ -14,10 +17,10 @@ use std::{
 /// TODO: Macro impl for *Container and tests
 
 /// A family of containers.
-pub trait ContainerFamily: Send + Sync + 'static {
-    type Container<T: Item>: Container<T>;
+pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
+    type Container: Container<T>;
 
-    fn new_container<T: Item>(region: RegionPath) -> Self::Container<T>;
+    fn new_container(region: RegionPath) -> Self::Container;
 }
 
 /// It's responsibility is to:
@@ -54,7 +57,7 @@ pub trait Container<T: Item>: AnyContainer {
     fn unfill_slot(&mut self, key: Key<T>) -> Option<(T, Self::Shell, SlotContext<T>)>;
 }
 
-pub trait AnyContainer: Any + Sync + Send {
+pub trait AnyContainer: Any + Sync {
     /// Path of container shared for all items in the container.
     fn container_path(&self) -> Path;
 

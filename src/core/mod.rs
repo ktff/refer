@@ -1,5 +1,6 @@
 #![allow(type_alias_bounds)]
 
+#[macro_use]
 mod container;
 mod context;
 mod error;
