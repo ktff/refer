@@ -1,7 +1,7 @@
-use crate::core::*;
+use crate::core::{region::RegionContainer, ty::TypeContainer, *};
 use std::{
     collections::{btree_map, hash_map::Entry, BTreeMap, HashMap, HashSet},
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, RangeBounds},
 };
 
 // TODO: Try to simplify algorithms.
@@ -19,18 +19,63 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     pub fn new(container: &'a mut C) -> Self {
         Self {
             // SAFETY: Mut access is proof of exclusive access.
-            permit: unsafe { Permit::new() },
+            permit: unsafe { Permit::<permit::Mut, permit::Slot>::new() },
             container,
         }
     }
 
-    pub fn borrow(&self) -> AnyPermit<permit::Ref, permit::Slot, C> {
+    pub fn borrow_mut(&mut self) -> ExclusivePermit<'_, C> {
+        ExclusivePermit {
+            permit: self.permit.access(),
+            container: self.container,
+        }
+    }
+
+    pub fn access(&self) -> AnyPermit<permit::Ref, permit::Slot, C> {
         // SAFETY: We have at least read access for whole C.
         unsafe { AnyPermit::unsafe_new(self.permit.borrow(), &self) }
     }
 
-    pub fn borrow_mut(&mut self) -> AnyPermit<permit::Mut, permit::Slot, C> {
-        AnyPermit::new(self.permit.access(), self.container)
+    pub fn access_mut(&mut self) -> AnyPermit<permit::Mut, permit::Slot, C> {
+        AnyPermit::new(self.container)
+    }
+
+    pub fn step<T: Item>(self) -> Option<ExclusivePermit<'a, C::Sub>>
+    where
+        C: TypeContainer<T>,
+    {
+        let Self { container, permit } = self;
+        container
+            .get_mut()
+            .map(|container| ExclusivePermit { container, permit })
+    }
+
+    pub fn step_into<T: Item>(self, index: usize) -> Option<ExclusivePermit<'a, C::Sub>>
+    where
+        C: RegionContainer<T>,
+    {
+        let Self { container, permit } = self;
+        container
+            .get_mut(index)
+            .map(|container| ExclusivePermit { container, permit })
+    }
+
+    pub fn step_range<T: Item>(
+        self,
+        range: impl RangeBounds<usize>,
+    ) -> Option<impl Iterator<Item = ExclusivePermit<'a, C::Sub>>>
+    where
+        C: RegionContainer<T>,
+    {
+        let Self { container, permit } = self;
+        Some(
+            container
+                .iter_mut(range)?
+                .map(move |(_, container)| ExclusivePermit {
+                    container,
+                    permit: permit.access(),
+                }),
+        )
     }
 
     fn in_locality<T: Item>(&self, key: Key<T>, to: T::LocalityKey) -> bool
@@ -52,7 +97,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
         // Build Duplicate
         let duplicate = self
-            .borrow()
+            .access()
             .slot(key)
             .get()?
             .duplicate(to_context)
@@ -71,7 +116,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
         // Build duplicate
         let original = self
-            .borrow()
+            .access()
             .slot(original_key)
             .get_dyn()
             .expect("Should be valid key");
@@ -109,9 +154,9 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             // Detach
 
             // item --> others
-            if detach_item(self.borrow_mut().split_parts(), other).is_ok() {
+            if detach_item(self.access_mut().split_parts(), other).is_ok() {
                 // item <-- others
-                detach_shell(self.borrow_mut().split_parts(), other, &mut remove)
+                detach_shell(self.access_mut().split_parts(), other, &mut remove)
                     .expect("Should exist");
 
                 // Unfill, drop shell, and drop item
@@ -130,7 +175,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             .fill_slot(locality, item)
             .map_err(|_| ReferError::out_of_keys::<T>(locality))?;
 
-        if let Err(error) = attach_item(self.borrow_mut().split_parts(), key) {
+        if let Err(error) = attach_item(self.access_mut().split_parts(), key) {
             // Rollback filling the slot.
             self.drop_slot(key);
 
@@ -145,7 +190,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     where
         C: Container<T>,
     {
-        let (items, shells) = self.borrow_mut().split_parts();
+        let (items, shells) = self.access_mut().split_parts();
         let mut slot = items.slot(key).get()?;
 
         // Update connections
@@ -184,7 +229,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         }
 
         // Rewire from -> other to to -> other
-        replace_item_key(self.borrow_mut().split_parts(), from, to);
+        replace_item_key(self.access_mut().split_parts(), from, to);
 
         // Unfill and drop from
         self.drop_slot(from);
@@ -203,7 +248,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         if self.in_locality(from, to) {
             // Detach shell
             let mut remove = Vec::new();
-            detach_shell(self.borrow_mut().split_parts(), from.upcast(), &mut remove)?;
+            detach_shell(self.access_mut().split_parts(), from.upcast(), &mut remove)?;
             self.resolve_remove(remove);
 
             Ok(from)
@@ -217,7 +262,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                 .map_err(|_| ReferError::out_of_keys::<T>(to))?;
 
             // Rewire from -> other to to -> other
-            replace_item_key(self.borrow_mut().split_parts(), from, to);
+            replace_item_key(self.access_mut().split_parts(), from, to);
 
             // Unfill and drop from
             self.drop_slot(from);
@@ -235,7 +280,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         // Displace shell
         let mut moves = BTreeMap::new();
         displace_shell_references(
-            self.borrow_mut().split_parts(),
+            self.access_mut().split_parts(),
             from.upcast(),
             to.upcast(),
             &mut moves,
@@ -260,7 +305,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
                         // Move shell
                         displace_shell_references(
-                            self.borrow_mut().split_parts(),
+                            self.access_mut().split_parts(),
                             from,
                             to,
                             &mut moves,
@@ -269,11 +314,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                         .expect("Key should be valid");
 
                         // Rewire from -> other to to -> other
-                        replace_any_item_key(self.borrow_mut().split_parts(), from, to);
+                        replace_any_item_key(self.access_mut().split_parts(), from, to);
 
                         // Item Drop local
                         let mut slot = self
-                            .borrow_mut()
+                            .access_mut()
                             .slot(from)
                             .get_dyn()
                             .expect("Key should be valid");
@@ -328,7 +373,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
         // Duplicate this shell
         duplicate_shell_references(
-            self.borrow_mut().split_parts(),
+            self.access_mut().split_parts(),
             from.upcast(),
             to.upcast(),
             &mut duplicates,
@@ -350,7 +395,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             // Adjust references
             for replace in replace {
                 let mut duplicate = self
-                    .borrow_mut()
+                    .access_mut()
                     .slot(to)
                     .get_dyn()
                     .expect("Should be valid key");
@@ -359,7 +404,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
             // Duplicate shell
             duplicate_shell_references(
-                self.borrow_mut().split_parts(),
+                self.access_mut().split_parts(),
                 from,
                 to,
                 &mut duplicates,
@@ -374,7 +419,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             let duplicate_key =
                 duplicate_key.expect("All duplicates should be created before attaching");
             if !attached(duplicate_key) {
-                attach_any_item(self.borrow_mut().split_parts(), duplicate_key)
+                attach_any_item(self.access_mut().split_parts(), duplicate_key)
                     .expect("Invalid Item references");
             }
         }
@@ -391,11 +436,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         // Detach
 
         // item --> others
-        detach_item(self.borrow_mut().split_parts(), key.upcast())?;
+        detach_item(self.access_mut().split_parts(), key.upcast())?;
 
         // item <-- others
         let mut remove = Vec::new();
-        detach_shell(self.borrow_mut().split_parts(), key.upcast(), &mut remove)
+        detach_shell(self.access_mut().split_parts(), key.upcast(), &mut remove)
             .expect("Should exist");
 
         // Unfill and drop shell
@@ -604,7 +649,7 @@ fn displace_shell_references<C: AnyContainer + ?Sized>(
                     match moves.entry(other_rf.key()) {
                         btree_map::Entry::Occupied(mut entry) => {
                             let prefix = entry.get_mut();
-                            *prefix = prefix.intersect(under_prefix);
+                            *prefix = prefix.or(under_prefix);
                         }
                         btree_map::Entry::Vacant(entry) => {
                             entry.insert(under_prefix);
@@ -676,7 +721,7 @@ fn duplicate_shell_references<C: AnyContainer + ?Sized>(
                             }
                             Err((prefix, vec)) => {
                                 vec.push((from, to.index()));
-                                *prefix = prefix.intersect(under_prefix);
+                                *prefix = prefix.or(under_prefix);
                             }
                         }
                     }

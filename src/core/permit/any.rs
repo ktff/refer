@@ -12,9 +12,9 @@ pub struct AnyPermit<'a, R, A, C: ?Sized> {
 }
 
 impl<'a, R, A, C: AnyContainer + ?Sized> AnyPermit<'a, R, A, C> {
-    pub fn new(permit: Permit<R, A>, container: &'a mut C) -> Self {
+    pub fn new(container: &'a mut C) -> Self {
         // SAFETY: We have exclusive access to the container so any Permit is valid.
-        unsafe { Self::unsafe_new(permit, container) }
+        unsafe { Self::unsafe_new(Permit::new(), container) }
     }
 
     /// SAFETY: Caller must ensure that it has the correct R & S access to C for the given 'a.

@@ -1,6 +1,11 @@
 use super::*;
-use crate::core::{ty::TypeContainer, Container, KeyPath, Result};
-use std::ops::Deref;
+use crate::core::{
+    region::RegionContainer, ty::TypeContainer, AnyContainer, Container, KeyPath, Path, Result,
+};
+use std::{
+    any::TypeId,
+    ops::{Bound, Deref, RangeBounds},
+};
 
 pub struct PathPermit<'a, T: core::Item, R, A, C: ?Sized> {
     permit: TypePermit<'a, T, R, A, C>,
@@ -15,8 +20,22 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
         }
     }
 
+    /// Panics if the path is not a subpath of container.
+    pub fn new_with(permit: TypePermit<'a, T, R, A, C>, path: KeyPath<T>) -> Self {
+        assert!(permit.container_path().of().includes(path));
+        Self { path, permit }
+    }
+
     pub fn path(&self) -> KeyPath<T> {
         self.path
+    }
+
+    /// Constrains the permit to the given path.
+    /// None if they don't overlap.
+    pub fn and(self, path: impl Into<Path>) -> Option<Self> {
+        let Self { permit, path: p } = self;
+        let path = p.and(path)?;
+        Some(Self { permit, path })
     }
 
     pub fn iter(self) -> Result<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
@@ -39,7 +58,22 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
         R: 'static,
         A: 'static,
     {
-        if let Some(iter) = self.path.iter_level(level) {
+        // Compute common path of all keys in the iterator.
+        let first = self.first_key(TypeId::of::<T>());
+        let last = self.last_key(TypeId::of::<T>());
+        let path = match (first, last) {
+            (Some(first), Some(last)) => first.path().or(last.path()),
+            (Some(_), None) | (None, Some(_)) => unreachable!(),
+            // There is no slots to iterate so we can return self.
+            (None, None) => return Box::new(std::iter::once(self)),
+        };
+
+        if let Some(iter) = path
+            .and(self.path.path())
+            .expect("Path out of Container path")
+            .of()
+            .iter_level(level)
+        {
             Box::new(
                 // SAFETY: We depend on iter_level returning disjoint paths.
                 iter.map(move |path| unsafe {
@@ -52,13 +86,60 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
     }
 }
 
-impl<'a, R, T: core::Item, A, C: ?Sized> PathPermit<'a, T, R, A, C> {
-    pub fn step_down(self) -> Option<PathPermit<'a, T, R, A, C::Sub>>
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, C> {
+    pub fn step(self) -> Option<PathPermit<'a, T, R, A, C::Sub>>
     where
         C: TypeContainer<T>,
     {
         let Self { permit, path } = self;
-        permit.step_down().map(|permit| PathPermit { permit, path })
+        permit.step().map(|permit| PathPermit { permit, path })
+    }
+
+    pub fn step_into(self, index: usize) -> Option<PathPermit<'a, T, R, A, C::Sub>>
+    where
+        C: RegionContainer<T>,
+    {
+        let path = self.region().path_of(index);
+        let Self { permit, path } = self.and(path)?;
+        permit
+            .step_into(index)
+            .map(|permit| PathPermit { permit, path })
+    }
+
+    pub fn step_range(
+        self,
+        range: impl RangeBounds<usize>,
+    ) -> Option<impl Iterator<Item = PathPermit<'a, T, R, A, C::Sub>>>
+    where
+        C: RegionContainer<T>,
+    {
+        let path_range = self
+            .region()
+            .range_of(self.path)
+            .expect("Path out of Container path");
+
+        // Intersect ranges, max start bound, min end bound.
+        let start = (*path_range.start()).max(match range.start_bound() {
+            Bound::Included(bound) => *bound,
+            Bound::Excluded(bound) => bound.checked_add(1)?,
+            Bound::Unbounded => 0,
+        });
+        let end = (*path_range.end()).min(match range.end_bound() {
+            Bound::Included(bound) => *bound,
+            Bound::Excluded(bound) => bound.checked_sub(1)?,
+            Bound::Unbounded => usize::MAX,
+        });
+        let range = start..=end;
+
+        let Self { permit, path } = self;
+        permit.step_range(range).map(|iter| {
+            iter.filter_map(move |permit| {
+                Some(PathPermit {
+                    path: path.and(permit.container_path())?,
+                    permit,
+                })
+            })
+        })
     }
 }
 
@@ -78,7 +159,7 @@ impl<'a, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, Mut, A, C
     }
 }
 
-impl<'a, T: core::Item, R, A, C: Container<T> + ?Sized> Deref for PathPermit<'a, T, R, A, C> {
+impl<'a, T: core::Item, R, A, C: ?Sized> Deref for PathPermit<'a, T, R, A, C> {
     type Target = &'a C;
 
     fn deref(&self) -> &Self::Target {

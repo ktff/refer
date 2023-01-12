@@ -38,7 +38,7 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> TypePermit<'
 }
 
 impl<'a, R, T: core::Item, A, C: ?Sized> TypePermit<'a, T, R, A, C> {
-    pub fn step_down(self) -> Option<TypePermit<'a, T, R, A, C::Sub>>
+    pub fn step(self) -> Option<TypePermit<'a, T, R, A, C::Sub>>
     where
         C: TypeContainer<T>,
     {

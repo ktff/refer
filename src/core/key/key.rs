@@ -41,10 +41,12 @@ impl<T: Pointee + AnyItem + ?Sized> Key<T> {
         Path::new_top(self.0.get(), INDEX_BASE_BITS.get())
     }
 
+    #[inline(always)]
     pub fn index(&self) -> Index {
         self.0
     }
 
+    #[inline(always)]
     pub fn metadata(&self) -> T::Metadata {
         self.1
     }

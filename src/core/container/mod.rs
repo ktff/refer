@@ -3,19 +3,15 @@ pub mod region;
 pub mod ty;
 
 use super::{
-    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, ExclusivePermit, Item, Key, KeyPath, Path,
-    RegionPath, Shell, SlotContext, UnsafeSlot,
+    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, ExclusivePermit, Item, Key, KeyPath,
+    MutAnySlots, Path, RegionPath, Shell, SlotContext, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
     collections::HashSet,
 };
 
-// TODO: Container returning inner Containers, & simplifications that can be done with it. Can this be traits?
-
-// TODO: Unify naming of methods in various Container traits.
-
-/// TODO: Macro impl for *Container
+/// TODO: Macro impl for *Container and tests
 
 /// A family of containers.
 pub trait ContainerFamily: Send + Sync + 'static {
@@ -94,7 +90,11 @@ pub trait AnyContainer: Any + Sync + Send {
 
     fn unfill_slot_any(&mut self, key: AnyKey);
 
-    fn access(&mut self) -> ExclusivePermit<'_, Self> {
+    fn exclusive(&mut self) -> ExclusivePermit<'_, Self> {
         ExclusivePermit::new(self)
+    }
+
+    fn access_mut(&mut self) -> MutAnySlots<Self> {
+        MutAnySlots::new(self)
     }
 }

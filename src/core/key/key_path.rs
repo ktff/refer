@@ -30,17 +30,24 @@ impl<T: Pointee + AnyItem + ?Sized> KeyPath<T> {
         self.key_type_id()
     }
 
+    #[inline(always)]
     pub fn path(&self) -> Path {
         self.0
     }
 
+    #[inline(always)]
     pub fn metadata(&self) -> T::Metadata {
         self.1
     }
 
-    /// Leaves only common start.
-    pub fn intersect(self, other: Self) -> Self {
-        Self(self.0.intersect(other.0), self.1)
+    /// Returns longest path that covers both paths.
+    pub fn or(self, other: impl Into<Path>) -> Self {
+        Self(self.0.or(other), self.1)
+    }
+
+    /// Returns shortest path covered by both paths.
+    pub fn and(self, other: impl Into<Path>) -> Option<Self> {
+        self.0.and(other).map(|path| Self(path, self.1))
     }
 
     /// Iterates over children of given level, None if level is too high.

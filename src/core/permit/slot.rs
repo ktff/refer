@@ -24,14 +24,12 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> SlotPermit<'
 }
 
 impl<'a, R, T: core::Item, A, C: ?Sized> SlotPermit<'a, T, R, A, C> {
-    pub fn step_down(self) -> Option<SlotPermit<'a, T, R, A, C::Sub>>
+    pub fn step(self) -> Option<SlotPermit<'a, T, R, A, C::Sub>>
     where
         C: TypeContainer<T>,
     {
         let Self { permit, key } = self;
-        permit
-            .step_down()
-            .map(|permit| SlotPermit::new(permit, key))
+        permit.step().map(|permit| SlotPermit::new(permit, key))
     }
 
     pub fn step_into(self) -> Option<SlotPermit<'a, T, R, A, C::Sub>>

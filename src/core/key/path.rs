@@ -1,6 +1,9 @@
+use bitvec::macros::internal::funty::Integral;
+
 use super::*;
 use crate::core::{AnyItem, Item};
 use std::{
+    cmp::Ordering,
     num::{NonZeroU16, NonZeroU32, NonZeroUsize},
     ops::RangeInclusive,
     ptr::Pointee,
@@ -52,22 +55,35 @@ impl Path {
         KeyPath::new(self)
     }
 
-    /// None if len is too large.
+    /// None if len is larger than size of usize.
     pub fn region(self, len: NonZeroU32) -> Option<RegionPath> {
         RegionPath::new(self, len)
     }
 
-    pub fn leaf(self) -> LeafPath {
+    /// None if remaining len is larger than size of usize.
+    pub fn leaf(self) -> Option<LeafPath> {
         LeafPath::new(self)
     }
 
-    /// Leaves only common prefix.
-    pub fn intersect(self, other: Self) -> Self {
+    /// Returns longest path that covers both paths.
+    pub fn or(self, other: impl Into<Self>) -> Self {
+        let other = other.into();
         // Bits: 0 - same, 1 - diff
         let diff = self.0.get() ^ other.0.get();
         let same_bits = diff.leading_zeros();
         let level = same_bits.min(self.level()).min(other.level());
         Self::new_top(self.0.get(), level)
+    }
+
+    /// Returns shortest path covered by both paths.
+    pub fn and(self, other: impl Into<Self>) -> Option<Self> {
+        let other = other.into();
+        match self.level().cmp(&other.level()) {
+            Ordering::Less if self.includes_index(other.0) => Some(other),
+            Ordering::Equal if self == other => Some(self),
+            Ordering::Greater if other.includes_index(self.0) => Some(self),
+            _ => None,
+        }
     }
 
     /// Iterates over children of given level, None if level is too high.
@@ -99,6 +115,21 @@ impl Path {
             false
         }
     }
+
+    /// Remaining range of indices under this path.
+    /// Err if range is too large for usize.
+    pub fn remaining_range(self) -> Result<RangeInclusive<usize>, ()> {
+        let level = self.level();
+        match level.cmp(&(std::mem::size_of::<usize>() as u32 * 8)) {
+            Ordering::Less => {
+                let remaining_len = INDEX_BASE_BITS.get() - level;
+                let end = (1 << remaining_len) - 1;
+                Ok(0..=end)
+            }
+            Ordering::Equal => Ok(0..=usize::MAX),
+            Ordering::Greater => Err(()),
+        }
+    }
 }
 
 impl std::fmt::Display for Path {
@@ -121,6 +152,12 @@ impl Default for Path {
     }
 }
 
+impl<T: Pointee + AnyItem + ?Sized> From<KeyPath<T>> for Path {
+    fn from(path: KeyPath<T>) -> Self {
+        path.path()
+    }
+}
+
 /// Path end optimized for leaf containers.
 /// Has path and non zero region extending from it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -134,12 +171,17 @@ pub struct LeafPath {
 }
 
 impl LeafPath {
-    pub fn new(path: Path) -> Self {
-        Self {
+    /// None if remaining_len is larger than size of usize.
+    pub fn new(path: Path) -> Option<Self> {
+        if path.remaining_len().get() > std::mem::size_of::<usize>() as u32 * 8 {
+            return None;
+        }
+
+        Some(Self {
             path: path.top(),
             level: path.level(),
             remaining_len: path.remaining_len(),
-        }
+        })
     }
 
     pub fn path(&self) -> Path {
@@ -160,6 +202,7 @@ impl LeafPath {
     }
 
     /// Panics if index is out of range.
+    #[inline(always)]
     pub fn key_of<T: Item>(&self, index: NonZeroUsize) -> Key<T> {
         assert_eq!(
             index.get() >> self.remaining_len.get(),
@@ -175,14 +218,20 @@ impl LeafPath {
     }
 
     /// May panic/return out of path index if key isn't of this path.
+    #[inline(always)]
     pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> usize {
         // Xor is intentional so to catch keys that don't correspond to this path
         (key.index().get() ^ self.path) as usize
     }
 
     /// Returns range of indices that are included in this path.
-    pub fn range_of(&self, path: Path) -> Option<RangeInclusive<usize>> {
-        unimplemented!()
+    pub fn range_of(&self, path: impl Into<Path>) -> Option<RangeInclusive<usize>> {
+        let path = self.path().and(path)?;
+        let start = path.top() as usize & usize_mask(self.remaining_len.get());
+        let range = path
+            .remaining_range()
+            .expect("Should be less or equal to size of usize");
+        Some((start + *range.start())..=(start + *range.end()))
     }
 }
 
@@ -217,6 +266,10 @@ impl RegionPath {
         })
     }
 
+    pub fn path(&self) -> Path {
+        Path::new_top(self.path, self.level as u32)
+    }
+
     /// Panics if index is out of range.
     pub fn path_of(&self, index: usize) -> Path {
         // Constructed by adding index at the end of the path
@@ -235,14 +288,29 @@ impl RegionPath {
     }
 
     /// May panic/return invalid index if key isn't of this path.
+    #[inline(always)]
     pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> usize {
         ((key.index().get() ^ self.path) >> self.remaining_len.get()) as usize
     }
 
     /// Returns range of indices that are included in this path.
-    pub fn range_of(&self, path: Path) -> Option<RangeInclusive<usize>> {
-        unimplemented!()
+    pub fn range_of(&self, path: impl Into<Path>) -> Option<RangeInclusive<usize>> {
+        let path = self.path().and(path)?;
+        let start =
+            (path.top() >> self.remaining_len.get()) as usize & usize_mask(self.len.get() as u32);
+        let bottom_len = path
+            .remaining_len()
+            .get()
+            .saturating_sub(self.remaining_len.get() as u32);
+        let end = start + usize_mask(bottom_len as u32);
+        Some(start..=end)
     }
+}
+
+fn usize_mask(len: u32) -> usize {
+    1.checked_shl(len)
+        .map(|mask| mask - 1)
+        .unwrap_or(usize::MAX)
 }
 
 #[cfg(test)]
@@ -275,24 +343,47 @@ mod tests {
     }
 
     #[test]
-    fn intersect() {
+    fn or() {
         let path1 = Path::new_bottom(0b1010, 4);
         let path2 = Path::new_bottom(0b1100, 4);
         let path3 = Path::new_bottom(0b1, 1);
-        assert_eq!(path1.intersect(path2), path3);
+        assert_eq!(path1.or(path2), path3);
     }
 
     #[test]
-    fn intersect_eq() {
+    fn or_eq() {
         let path1 = Path::new_bottom(0b1010, 4);
-        assert_eq!(path1.intersect(path1), path1);
+        assert_eq!(path1.or(path1), path1);
     }
 
     #[test]
-    fn intersect_empty() {
+    fn or_empty() {
         let path1 = Path::new_bottom(0b1010, 4);
         let path2 = Path::new_bottom(0b0, 1);
-        assert_eq!(path1.intersect(path2), Path::default());
+        assert_eq!(path1.or(path2), Path::default());
+    }
+
+    #[test]
+    fn and_equal() {
+        let path1 = Path::new_bottom(0b1010, 4);
+        let path2 = Path::new_bottom(0b1010, 4);
+        assert_eq!(path1.and(path2), Some(path1));
+    }
+
+    #[test]
+    fn and_non_equal() {
+        let path1 = Path::new_bottom(0b1010, 4);
+        let path2 = Path::new_bottom(0b101, 3);
+        assert_eq!(path1.and(path2), Some(path1));
+        assert_eq!(path2.and(path1), Some(path1));
+    }
+
+    #[test]
+    fn and_empty() {
+        let path1 = Path::new_bottom(0b1010, 4);
+        let path2 = Path::new_bottom(0b0, 1);
+        assert_eq!(path1.and(path2), None);
+        assert_eq!(path2.and(path1), None);
     }
 
     #[test]
@@ -360,7 +451,7 @@ mod tests {
     #[test]
     fn test_leaf() {
         let path = Path::new_bottom(0b100110, 6);
-        let leaf = path.leaf();
+        let leaf = path.leaf().unwrap();
         assert_eq!(leaf.path().bottom(), 0b100110);
         assert_eq!(leaf.remaining_len(), path.remaining_len());
     }
@@ -368,7 +459,7 @@ mod tests {
     #[test]
     fn key() {
         let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 4);
-        let leaf = path.leaf();
+        let leaf = path.leaf().unwrap();
         let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
         assert!(path.includes_index(key.index()));
         assert_eq!(leaf.index_of(key), 1);
@@ -378,7 +469,7 @@ mod tests {
     #[should_panic]
     fn key_index_to_large() {
         let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 4);
-        let leaf = path.leaf();
+        let leaf = path.leaf().unwrap();
         leaf.key_of::<()>(NonZeroUsize::new(0b10000).unwrap());
     }
 
@@ -387,12 +478,98 @@ mod tests {
         let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
         let region = path.region(NonZeroU32::new(4).unwrap()).unwrap();
         let container_path = region.path_of(0b1000);
-        let leaf = container_path.leaf();
+        let leaf = container_path.leaf().unwrap();
         let key = leaf.key_of::<()>(NonZeroUsize::new(1).unwrap());
 
         assert!(container_path.includes_index(key.index()));
         assert_eq!(leaf.index_of(key), 1);
         assert!(path.includes_index(key.index()));
         assert_eq!(region.index_of(key), 0b1000);
+    }
+
+    #[test]
+    fn leaf_range_of_default() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let leaf = path.leaf().unwrap();
+
+        assert_eq!(leaf.range_of(Path::default()), Some(0..=255));
+    }
+
+    #[test]
+    fn leaf_range_of_self() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let leaf = path.leaf().unwrap();
+
+        assert_eq!(leaf.range_of(path), Some(0..=255));
+    }
+
+    #[test]
+    fn leaf_range_of() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let leaf = path.leaf().unwrap();
+        let sub = path
+            .region(NonZeroU32::new(2).unwrap())
+            .unwrap()
+            .path_of(0b10);
+
+        assert_eq!(leaf.range_of(sub), Some(128..=(128 + 64 - 1)));
+    }
+
+    #[test]
+    fn leaf_range_of_empty() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let leaf = path.leaf().unwrap();
+        let other = Path::new_bottom(0b100111, INDEX_BASE_BITS.get() - 8);
+
+        assert_eq!(leaf.range_of(other), None);
+    }
+
+    #[test]
+    fn region_range_of_default() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let region = path.region(NonZeroU32::new(2).unwrap()).unwrap();
+
+        assert_eq!(region.range_of(Path::default()), Some(0..=3));
+    }
+
+    #[test]
+    fn region_range_of_self() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let region = path.region(NonZeroU32::new(2).unwrap()).unwrap();
+
+        assert_eq!(region.range_of(path), Some(0..=3));
+    }
+
+    #[test]
+    fn region_range_of() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let region = path.region(NonZeroU32::new(2).unwrap()).unwrap();
+        let sub = path
+            .region(NonZeroU32::new(2).unwrap())
+            .unwrap()
+            .path_of(0b10);
+
+        assert_eq!(region.range_of(sub), Some(2..=2));
+    }
+
+    #[test]
+    fn region_range_of_sub() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let region = path.region(NonZeroU32::new(2).unwrap()).unwrap();
+        let sub = path
+            .region(NonZeroU32::new(3).unwrap())
+            .unwrap()
+            .path_of(0b101);
+
+        assert_eq!(region.range_of(sub), Some(2..=2));
+    }
+
+    #[test]
+    fn region_range_of_empty() {
+        let path = Path::new_bottom(0b100110, INDEX_BASE_BITS.get() - 8);
+        let region = path.region(NonZeroU32::new(2).unwrap()).unwrap();
+        let other = Path::new_bottom(0b100111, INDEX_BASE_BITS.get() - 8);
+
+        assert_eq!(region.range_of(other), None);
     }
 }

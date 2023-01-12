@@ -8,6 +8,10 @@ pub trait RegionContainer<T: Item> {
     where
         Self: 'a;
 
+    type IterMut<'a>: Iterator<Item = (usize, &'a mut Self::Sub)> + Send
+    where
+        Self: 'a;
+
     /// Implementations should have #[inline(always)]
     fn region(&self) -> RegionPath;
 
@@ -29,6 +33,9 @@ pub trait RegionContainer<T: Item> {
     /// Iterates in ascending order for indices in range.
     /// Iterator MUST NOT return the same container more than once.
     fn iter(&self, range: impl RangeBounds<usize>) -> Option<Self::Iter<'_>>;
+
+    /// Iterates in ascending order for indices in range.
+    fn iter_mut(&mut self, range: impl RangeBounds<usize>) -> Option<Self::IterMut<'_>>;
 
     fn locality(&self, key: T::LocalityKey) -> Option<&Self::Sub>;
 
