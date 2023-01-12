@@ -6,10 +6,6 @@ use std::{
 
 // TODO: Try to simplify algorithms.
 
-// TODO: Panic on less occasions, instead return errors.
-
-// TODO: Check how/which Permit/Access and in what combinations are used and try to simplify them.
-
 pub struct ExclusivePermit<'a, C: AnyContainer + ?Sized> {
     permit: Permit<permit::Mut, permit::Slot>,
     container: &'a mut C,
@@ -154,10 +150,9 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             // Detach
 
             // item --> others
-            if detach_item(self.access_mut().split_parts(), other).is_ok() {
+            if self.detach_item(other).is_ok() {
                 // item <-- others
-                detach_shell(self.access_mut().split_parts(), other, &mut remove)
-                    .expect("Should exist");
+                self.detach_shell(other, &mut remove).expect("Should exist");
 
                 // Unfill, drop shell, and drop item
                 self.unfill_slot_any(other.into());
@@ -175,7 +170,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             .fill_slot(locality, item)
             .map_err(|_| ReferError::out_of_keys::<T>(locality))?;
 
-        if let Err(error) = attach_item(self.access_mut().split_parts(), key) {
+        if let Err(error) = self.attach_item(key) {
             // Rollback filling the slot.
             self.drop_slot(key);
 
@@ -190,11 +185,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     where
         C: Container<T>,
     {
-        let (items, shells) = self.access_mut().split_parts();
+        let (items, shells) = self.access_mut().split();
         let mut slot = items.slot(key).get()?;
 
         // Update connections
-        replace_item_references(shells, slot.borrow(), &item)?;
+        Self::replace_item_references(shells, slot.borrow(), &item)?;
 
         // Replace item
         slot.displace();
@@ -229,7 +224,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         }
 
         // Rewire from -> other to to -> other
-        replace_item_key(self.access_mut().split_parts(), from, to);
+        self.replace_item_key(from, to);
 
         // Unfill and drop from
         self.drop_slot(from);
@@ -248,7 +243,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         if self.in_locality(from, to) {
             // Detach shell
             let mut remove = Vec::new();
-            detach_shell(self.access_mut().split_parts(), from.upcast(), &mut remove)?;
+            self.detach_shell(from.upcast(), &mut remove)?;
             self.resolve_remove(remove);
 
             Ok(from)
@@ -262,7 +257,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                 .map_err(|_| ReferError::out_of_keys::<T>(to))?;
 
             // Rewire from -> other to to -> other
-            replace_item_key(self.access_mut().split_parts(), from, to);
+            self.replace_item_key(from, to);
 
             // Unfill and drop from
             self.drop_slot(from);
@@ -279,13 +274,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     {
         // Displace shell
         let mut moves = BTreeMap::new();
-        displace_shell_references(
-            self.access_mut().split_parts(),
-            from.upcast(),
-            to.upcast(),
-            &mut moves,
-            |key| key == from,
-        )?;
+        self.displace_shell_references(from.upcast(), to.upcast(), &mut moves, |key| key == from)?;
 
         // Resolve other moves
         if !moves.is_empty() {
@@ -304,17 +293,13 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                         let to = self.clone_any_item(from, prefix);
 
                         // Move shell
-                        displace_shell_references(
-                            self.access_mut().split_parts(),
-                            from,
-                            to,
-                            &mut moves,
-                            |key| moved.contains(&key),
-                        )
+                        self.displace_shell_references(from, to, &mut moves, |key| {
+                            moved.contains(&key)
+                        })
                         .expect("Key should be valid");
 
                         // Rewire from -> other to to -> other
-                        replace_any_item_key(self.access_mut().split_parts(), from, to);
+                        self.replace_any_item_key(from, to);
 
                         // Item Drop local
                         let mut slot = self
@@ -372,8 +357,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         let mut add = Vec::new();
 
         // Duplicate this shell
-        duplicate_shell_references(
-            self.access_mut().split_parts(),
+        self.duplicate_shell_references(
             from.upcast(),
             to.upcast(),
             &mut duplicates,
@@ -403,15 +387,8 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             }
 
             // Duplicate shell
-            duplicate_shell_references(
-                self.access_mut().split_parts(),
-                from,
-                to,
-                &mut duplicates,
-                &mut add,
-                attached,
-            )
-            .expect("Should be valid key");
+            self.duplicate_shell_references(from, to, &mut duplicates, &mut add, attached)
+                .expect("Should be valid key");
         }
 
         // Attach duplicate items
@@ -419,7 +396,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             let duplicate_key =
                 duplicate_key.expect("All duplicates should be created before attaching");
             if !attached(duplicate_key) {
-                attach_any_item(self.access_mut().split_parts(), duplicate_key)
+                self.attach_any_item(duplicate_key)
                     .expect("Invalid Item references");
             }
         }
@@ -436,11 +413,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         // Detach
 
         // item --> others
-        detach_item(self.access_mut().split_parts(), key.upcast())?;
+        self.detach_item(key.upcast())?;
 
         // item <-- others
         let mut remove = Vec::new();
-        detach_shell(self.access_mut().split_parts(), key.upcast(), &mut remove)
+        self.detach_shell(key.upcast(), &mut remove)
             .expect("Should exist");
 
         // Unfill and drop shell
@@ -450,6 +427,345 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         self.resolve_remove(remove);
 
         Ok(item)
+    }
+
+    /// Adds references in item at key to shells.
+    /// item --ref--> others
+    ///
+    /// Fails if any reference doesn't exist.
+    /// On failure, rolls back all changes.
+    ///
+    /// Panics if keys don't exist.
+    fn attach_item<T: Item>(&mut self, key: Key<T>) -> Result<()>
+    where
+        C: Container<T>,
+    {
+        let (items, shells) = self.access_mut().split();
+
+        let item = items.slot(key).get().expect("Should be valid key");
+
+        // item --> others
+        Self::attach_item_loop(shells, key.upcast(), || item.iter_references())
+    }
+
+    /// Adds references in item at key to shells.
+    /// item --ref--> others
+    ///
+    /// Fails if any reference doesn't exist.
+    /// On failure, rolls back all changes.
+    ///
+    /// Panics if keys don't exist.
+    fn attach_any_item(&mut self, key: AnyKey) -> Result<()> {
+        let (items, shells) = self.access_mut().split();
+
+        let item = items.slot(key).get_dyn().expect("Should be valid key");
+
+        // item --> others
+        Self::attach_item_loop(shells, key, || {
+            item.iter_references_any().into_iter().flatten()
+        })
+    }
+
+    fn attach_item_loop<I: Iterator<Item = AnyRef>>(
+        mut shells: MutAnyShells<C>,
+        key: AnyKey,
+        iter: impl Fn() -> I,
+    ) -> Result<()> {
+        // item --> others
+        for (i, rf) in iter().enumerate() {
+            match shells.borrow_mut().slot(rf.key()).get_dyn() {
+                Ok(mut shell_slot) => shell_slot.shell_add(key),
+                Err(error) => {
+                    // Reference doesn't exist
+
+                    // Rollback and return error
+                    for rf in iter().take(i) {
+                        shells.disconnect_dyn(key, rf);
+                    }
+
+                    return Err(error);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Rewire from -> other to to -> other
+    /// Panics if keys don't exist.
+    fn replace_item_key<T: Item>(&mut self, from: Key<T>, to: Key<T>)
+    where
+        C: Container<T>,
+    {
+        let (items, mut shells) = self.access_mut().split();
+
+        let other = items.slot(from).get().expect("Should be valid key");
+        for other_rf in other.iter_references() {
+            other_rf
+                .get(shells.borrow_mut())
+                .shell_replace(from.upcast(), to.index());
+        }
+    }
+
+    /// Rewire from -> other to to -> other
+    /// Panics if keys don't exist.
+    fn replace_any_item_key(&mut self, from: AnyKey, to: AnyKey) {
+        let (items, mut shells) = self.access_mut().split();
+
+        let other = items.slot(from).get_dyn().expect("Should be valid key");
+        if let Some(references) = other.iter_references_any() {
+            for other_rf in references {
+                other_rf
+                    .get(shells.borrow_mut())
+                    .shell_replace(from, to.index());
+            }
+        };
+    }
+
+    /// Updates diff of references between old and new item on key through shells.
+    ///
+    /// Fails if reference is not valid.
+    fn replace_item_references<T: Item>(
+        mut shells: MutAnyShells<C>,
+        slot: Slot<T, C::Shell, permit::Ref, permit::Item>,
+        new: &T,
+    ) -> Result<()>
+    where
+        C: Container<T>,
+    {
+        // Preparation for diff computation
+        let key = slot.key();
+        let mut old = slot.iter_references().collect::<Vec<_>>();
+        let mut new = new.iter_references(slot.context()).collect::<Vec<_>>();
+        old.sort();
+        new.sort();
+
+        // item --> others
+        for (i, cmp) in crate::util::pair_up(&old, &new).enumerate() {
+            match cmp {
+                (Some(_), Some(_)) | (None, None) => (),
+                (Some(&rf), None) => {
+                    // We don't care so much about this reference missing.
+                    let _ = shells
+                        .borrow_mut()
+                        .slot(rf.key())
+                        .get_dyn()
+                        .map(|mut slot| slot.shell_remove(key.upcast()));
+                }
+                (None, Some(rf)) => {
+                    match shells.borrow_mut().slot(rf.key()).get_dyn() {
+                        Ok(mut shell_slot) => shell_slot.shell_add(key.upcast()),
+                        Err(error) => {
+                            // Rollback and return error
+                            for cmp in crate::util::pair_up(&old, &new).take(i) {
+                                match cmp {
+                                    (Some(_), Some(_)) | (None, None) => (),
+                                    (Some(rf), None) => {
+                                        shells.connect_dyn(key.upcast(), rf.key());
+                                    }
+                                    (None, Some(&rf)) => {
+                                        shells.disconnect_dyn(key.upcast(), rf);
+                                    }
+                                }
+                            }
+
+                            return Err(error);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Displaces references from `from` to `to` so that all references are now pointing to `to`.
+    /// Adds additional moves to `moves` if necessary.
+    /// Doesn't move moved.
+    ///
+    /// Errors if `from` or `to` don't exist.
+    fn displace_shell_references(
+        &mut self,
+        from: AnyKey,
+        to: AnyKey,
+        moves: &mut BTreeMap<AnyKey, Path>,
+        moved: impl Fn(AnyKey) -> bool,
+    ) -> Result<()> {
+        let (mut items, shells) = self.access_mut().split();
+
+        // Fetch shells
+        let (mut from_shell, mut to_shell) = match shells.split_pair(from, to) {
+            // From == to
+            None => return Ok(()),
+            Some((from, to)) => (from.get_dyn()?, to.get_dyn()?),
+        };
+
+        // Move references in items -> from_shell
+        if let Some(references) = from_shell.iter_any() {
+            for (count, other_rf) in references.dedup() {
+                if moved(other_rf.key()) {
+                    other_rf
+                        .get(items.borrow_mut())
+                        .replace_reference(from, to.index());
+                } else {
+                    if let Some(under_prefix) = other_rf
+                        .get(items.borrow_mut())
+                        .displace_reference(from, to.index())
+                    {
+                        // Register move
+                        match moves.entry(other_rf.key()) {
+                            btree_map::Entry::Occupied(mut entry) => {
+                                let prefix = entry.get_mut();
+                                *prefix = prefix.or(under_prefix);
+                            }
+                            btree_map::Entry::Vacant(entry) => {
+                                entry.insert(under_prefix);
+                            }
+                        }
+                    }
+                }
+
+                to_shell.shell_add_many(other_rf.key(), count);
+            }
+        }
+
+        //Finish
+        from_shell.shell_clear();
+
+        Ok(())
+    }
+
+    /// Duplicates shell from `from` to `to` so that all references to `from` now also point to `to`.
+    ///
+    /// Additional slots to duplicate are added to duplicates with replace (from,to) pairs and key prefix
+    /// under which to place the duplicate, and add_duplicate with from.
+    ///
+    /// Fn attached should return true if provided item is an attached duplicate.
+    ///
+    /// Err if from or to doesn't exist.
+    fn duplicate_shell_references(
+        &mut self,
+        from: AnyKey,
+        to: AnyKey,
+        duplicates: &mut HashMap<AnyKey, std::result::Result<AnyKey, (Path, Vec<(AnyKey, Index)>)>>,
+        add_duplicate: &mut Vec<AnyKey>,
+        attached: impl Fn(AnyKey) -> bool,
+    ) -> Result<()> {
+        let (mut items, shells) = self.access_mut().split();
+
+        // Fetch shells
+        let (from_shell, mut to_shell) = match shells.split_pair(from, to) {
+            // From == to
+            None => return Ok(()),
+            Some((from, to)) => (from.get_dyn()?, to.get_dyn()?),
+        };
+
+        // Duplicate references in items -> from_shell
+        if let Some(references) = from_shell.iter_any() {
+            for (count, other_ref) in references.dedup().filter(|(_, rf)| !attached(rf.key())) {
+                // NOTE: Duplicate items aren't attached at this point
+                let mut other = other_ref.get(items.borrow_mut());
+                if let Some(under_prefix) = other.duplicate_reference(from, to.index()) {
+                    match duplicates.entry(other_ref.key()) {
+                        Entry::Vacant(entry) => {
+                            entry.insert(Err((under_prefix, vec![(from, to.index())])));
+                            add_duplicate.push(other_ref.key());
+                        }
+                        Entry::Occupied(mut entry) => {
+                            match entry.get_mut() {
+                                // Duplicate was created
+                                Ok(duplicate_key) => {
+                                    // Duplicate references only duplicate
+                                    let mut duplicate = items
+                                        .borrow_mut()
+                                        .slot(*duplicate_key)
+                                        .get_dyn()
+                                        .expect("Should be valid key");
+                                    duplicate.replace_reference(from, to.index());
+
+                                    if attached(*duplicate_key) {
+                                        // Duplicate is attached
+                                        to_shell.shell_add_many(*duplicate_key, count);
+                                    }
+                                }
+                                Err((prefix, vec)) => {
+                                    vec.push((from, to.index()));
+                                    *prefix = prefix.or(under_prefix);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Original reference duplicate
+                    to_shell.shell_add_many(other_ref.key(), count);
+
+                    // If duplicate was created, duplicate it's references.
+                    if let Some(Ok(&mut duplicate_key)) =
+                        duplicates.get_mut(&other_ref.key()).map(|d| d.as_mut())
+                    {
+                        // Duplicate reference duplicate
+                        let mut duplicate = items
+                            .borrow_mut()
+                            .slot(duplicate_key)
+                            .get_dyn()
+                            .expect("Should be valid key");
+                        assert!(
+                            duplicate.duplicate_reference(from, to.index()).is_none(),
+                            "Should be able to duplicate reference"
+                        );
+
+                        if attached(duplicate_key) {
+                            // Duplicate is attached
+                            to_shell.shell_add_many(duplicate_key, count);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Detaches item from other shells.
+    ///
+    /// Err if key doesn't exist.
+    fn detach_item(&mut self, key: AnyKey) -> Result<()> {
+        let (items, mut shells) = self.access_mut().split();
+
+        let mut item_slot = items.slot(key).get_dyn()?;
+        if let Some(references) = item_slot.iter_references_any() {
+            for rf in references {
+                shells.disconnect_dyn(key, rf);
+            }
+        }
+        // Clear local data
+        item_slot.displace();
+
+        Ok(())
+    }
+
+    /// Detaches other items from shell.
+    ///
+    /// Items that need to be removed are added to remove list.
+    ///
+    /// Err if key doesn't exist.
+    fn detach_shell(&mut self, key: AnyKey, remove: &mut Vec<AnyKey>) -> Result<()> {
+        let (mut items, shells) = self.access_mut().split();
+
+        let mut shell_slot = shells.slot(key).get_dyn()?;
+        if let Some(references) = shell_slot.shell().iter_any() {
+            for (_, other_rf) in references.dedup() {
+                if let Ok(mut other) = items.borrow_mut().slot(other_rf.key()).get_dyn() {
+                    if other.remove_reference(key) {
+                        remove.push(other_rf.key());
+                    }
+                }
+            }
+        }
+        // Clear local data
+        shell_slot.shell_clear();
+
+        Ok(())
     }
 }
 
@@ -466,342 +782,6 @@ impl<'a, C: AnyContainer + ?Sized> DerefMut for ExclusivePermit<'a, C> {
         &mut self.container
     }
 }
-
-/// Adds references in item at key to shells.
-/// item --ref--> others
-///
-/// Fails if any reference doesn't exist.
-/// On failure, rolls back all changes.
-///
-/// Panics if keys don't exist.
-fn attach_item<T: Item, C: Container<T> + ?Sized>(
-    (items, shells): (MutAnyItems<C>, MutAnyShells<C>),
-    key: Key<T>,
-) -> Result<()> {
-    let item = items.slot(key).get().expect("Should be valid key");
-
-    // item --> others
-    attach_item_loop(shells, key.upcast(), || item.iter_references())
-}
-
-/// Adds references in item at key to shells.
-/// item --ref--> others
-///
-/// Fails if any reference doesn't exist.
-/// On failure, rolls back all changes.
-///
-/// Panics if keys don't exist.
-fn attach_any_item<C: AnyContainer + ?Sized>(
-    (items, shells): (MutAnyItems<C>, MutAnyShells<C>),
-    key: AnyKey,
-) -> Result<()> {
-    let item = items.slot(key).get_dyn().expect("Should be valid key");
-
-    // item --> others
-    attach_item_loop(shells, key, || {
-        item.iter_references_any().into_iter().flatten()
-    })
-}
-
-fn attach_item_loop<C: AnyContainer + ?Sized, I: Iterator<Item = AnyRef>>(
-    mut shells: MutAnyShells<C>,
-    key: AnyKey,
-    iter: impl Fn() -> I,
-) -> Result<()> {
-    // item --> others
-    for (i, rf) in iter().enumerate() {
-        match shells.borrow_mut().slot(rf.key()).get_dyn() {
-            Ok(mut shell_slot) => shell_slot.shell_add(key),
-            Err(error) => {
-                // Reference doesn't exist
-
-                // Rollback and return error
-                for rf in iter().take(i) {
-                    shells.disconnect_dyn(key, rf);
-                }
-
-                return Err(error);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Rewire from -> other to to -> other
-/// Panics if keys don't exist.
-fn replace_item_key<T: Item, C: Container<T> + ?Sized>(
-    (items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
-    from: Key<T>,
-    to: Key<T>,
-) {
-    let other = items.slot(from).get().expect("Should be valid key");
-    for other_rf in other.iter_references() {
-        other_rf
-            .get(shells.borrow_mut())
-            .shell_replace(from.upcast(), to.index());
-    }
-}
-
-/// Rewire from -> other to to -> other
-/// Panics if keys don't exist.
-fn replace_any_item_key<C: AnyContainer + ?Sized>(
-    (items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
-    from: AnyKey,
-    to: AnyKey,
-) {
-    let other = items.slot(from).get_dyn().expect("Should be valid key");
-    if let Some(references) = other.iter_references_any() {
-        for other_rf in references {
-            other_rf
-                .get(shells.borrow_mut())
-                .shell_replace(from, to.index());
-        }
-    };
-}
-
-/// Updates diff of references between old and new item on key through shells.
-///
-/// Fails if reference is not valid.
-fn replace_item_references<T: Item, C: Container<T> + ?Sized>(
-    mut shells: MutAnyShells<C>,
-    slot: Slot<T, C::Shell, permit::Ref, permit::Item>,
-    new: &T,
-) -> Result<()> {
-    // Preparation for diff computation
-    let key = slot.key();
-    let mut old = slot.iter_references().collect::<Vec<_>>();
-    let mut new = new.iter_references(slot.context()).collect::<Vec<_>>();
-    old.sort();
-    new.sort();
-
-    // item --> others
-    for (i, cmp) in crate::util::pair_up(&old, &new).enumerate() {
-        match cmp {
-            (Some(_), Some(_)) | (None, None) => (),
-            (Some(&rf), None) => {
-                // We don't care so much about this reference missing.
-                let _ = shells
-                    .borrow_mut()
-                    .slot(rf.key())
-                    .get_dyn()
-                    .map(|mut slot| slot.shell_remove(key.upcast()));
-            }
-            (None, Some(rf)) => {
-                match shells.borrow_mut().slot(rf.key()).get_dyn() {
-                    Ok(mut shell_slot) => shell_slot.shell_add(key.upcast()),
-                    Err(error) => {
-                        // Rollback and return error
-                        for cmp in crate::util::pair_up(&old, &new).take(i) {
-                            match cmp {
-                                (Some(_), Some(_)) | (None, None) => (),
-                                (Some(rf), None) => {
-                                    shells.connect_dyn(key.upcast(), rf.key());
-                                }
-                                (None, Some(&rf)) => {
-                                    shells.disconnect_dyn(key.upcast(), rf);
-                                }
-                            }
-                        }
-
-                        return Err(error);
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Displaces references from `from` to `to` so that all references are now pointing to `to`.
-/// Adds additional moves to `moves` if necessary.
-/// Doesn't move moved.
-///
-/// Errors if `from` or `to` don't exist.
-fn displace_shell_references<C: AnyContainer + ?Sized>(
-    (mut items, shells): (MutAnyItems<C>, MutAnyShells<C>),
-    from: AnyKey,
-    to: AnyKey,
-    moves: &mut BTreeMap<AnyKey, Path>,
-    moved: impl Fn(AnyKey) -> bool,
-) -> Result<()> {
-    // Fetch shells
-    let (mut from_shell, mut to_shell) = match shells.split_pair(from, to) {
-        // From == to
-        None => return Ok(()),
-        Some((from, to)) => (from.get_dyn()?, to.get_dyn()?),
-    };
-
-    // Move references in items -> from_shell
-    if let Some(references) = from_shell.iter_any() {
-        for (count, other_rf) in references.dedup() {
-            if moved(other_rf.key()) {
-                other_rf
-                    .get(items.borrow_mut())
-                    .replace_reference(from, to.index());
-            } else {
-                if let Some(under_prefix) = other_rf
-                    .get(items.borrow_mut())
-                    .displace_reference(from, to.index())
-                {
-                    // Register move
-                    match moves.entry(other_rf.key()) {
-                        btree_map::Entry::Occupied(mut entry) => {
-                            let prefix = entry.get_mut();
-                            *prefix = prefix.or(under_prefix);
-                        }
-                        btree_map::Entry::Vacant(entry) => {
-                            entry.insert(under_prefix);
-                        }
-                    }
-                }
-            }
-
-            to_shell.shell_add_many(other_rf.key(), count);
-        }
-    }
-
-    //Finish
-    from_shell.shell_clear();
-
-    Ok(())
-}
-
-/// Duplicates shell from `from` to `to` so that all references to `from` now also point to `to`.
-///
-/// Additional slots to duplicate are added to duplicates with replace (from,to) pairs and key prefix
-/// under which to place the duplicate, and add_duplicate with from.
-///
-/// Fn attached should return true if provided item is an attached duplicate.
-///
-/// Err if from or to doesn't exist.
-fn duplicate_shell_references<C: AnyContainer + ?Sized>(
-    (mut items, shells): (MutAnyItems<C>, MutAnyShells<C>),
-    from: AnyKey,
-    to: AnyKey,
-    duplicates: &mut HashMap<AnyKey, std::result::Result<AnyKey, (Path, Vec<(AnyKey, Index)>)>>,
-    add_duplicate: &mut Vec<AnyKey>,
-    attached: impl Fn(AnyKey) -> bool,
-) -> Result<()> {
-    // Fetch shells
-    let (from_shell, mut to_shell) = match shells.split_pair(from, to) {
-        // From == to
-        None => return Ok(()),
-        Some((from, to)) => (from.get_dyn()?, to.get_dyn()?),
-    };
-
-    // Duplicate references in items -> from_shell
-    if let Some(references) = from_shell.iter_any() {
-        for (count, other_ref) in references.dedup().filter(|(_, rf)| !attached(rf.key())) {
-            // NOTE: Duplicate items aren't attached at this point
-            let mut other = other_ref.get(items.borrow_mut());
-            if let Some(under_prefix) = other.duplicate_reference(from, to.index()) {
-                match duplicates.entry(other_ref.key()) {
-                    Entry::Vacant(entry) => {
-                        entry.insert(Err((under_prefix, vec![(from, to.index())])));
-                        add_duplicate.push(other_ref.key());
-                    }
-                    Entry::Occupied(mut entry) => {
-                        match entry.get_mut() {
-                            // Duplicate was created
-                            Ok(duplicate_key) => {
-                                // Duplicate references only duplicate
-                                let mut duplicate = items
-                                    .borrow_mut()
-                                    .slot(*duplicate_key)
-                                    .get_dyn()
-                                    .expect("Should be valid key");
-                                duplicate.replace_reference(from, to.index());
-
-                                if attached(*duplicate_key) {
-                                    // Duplicate is attached
-                                    to_shell.shell_add_many(*duplicate_key, count);
-                                }
-                            }
-                            Err((prefix, vec)) => {
-                                vec.push((from, to.index()));
-                                *prefix = prefix.or(under_prefix);
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Original reference duplicate
-                to_shell.shell_add_many(other_ref.key(), count);
-
-                // If duplicate was created, duplicate it's references.
-                if let Some(Ok(&mut duplicate_key)) =
-                    duplicates.get_mut(&other_ref.key()).map(|d| d.as_mut())
-                {
-                    // Duplicate reference duplicate
-                    let mut duplicate = items
-                        .borrow_mut()
-                        .slot(duplicate_key)
-                        .get_dyn()
-                        .expect("Should be valid key");
-                    assert!(
-                        duplicate.duplicate_reference(from, to.index()).is_none(),
-                        "Should be able to duplicate reference"
-                    );
-
-                    if attached(duplicate_key) {
-                        // Duplicate is attached
-                        to_shell.shell_add_many(duplicate_key, count);
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Detaches item from other shells.
-///
-/// Err if key doesn't exist.
-fn detach_item<C: AnyContainer + ?Sized>(
-    (mut items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
-    key: AnyKey,
-) -> Result<()> {
-    let mut item_slot = items.borrow_mut().slot(key).get_dyn()?;
-    if let Some(references) = item_slot.iter_references_any() {
-        for rf in references {
-            shells.disconnect_dyn(key, rf);
-        }
-    }
-    // Clear local data
-    item_slot.displace();
-
-    Ok(())
-}
-
-/// Detaches other items from shell.
-///
-/// Items that need to be removed are added to remove list.
-///
-/// Err if key doesn't exist.
-fn detach_shell<C: AnyContainer + ?Sized>(
-    (mut items, mut shells): (MutAnyItems<C>, MutAnyShells<C>),
-    key: AnyKey,
-    remove: &mut Vec<AnyKey>,
-) -> Result<()> {
-    let mut shell_slot = shells.borrow_mut().slot(key).get_dyn()?;
-    if let Some(references) = shell_slot.shell().iter_any() {
-        for (_, other_rf) in references.dedup() {
-            if let Ok(mut other) = items.borrow_mut().slot(other_rf.key()).get_dyn() {
-                if other.remove_reference(key) {
-                    remove.push(other_rf.key());
-                }
-            }
-        }
-    }
-    // Clear local data
-    shell_slot.shell_clear();
-
-    Ok(())
-}
-
 // #[cfg(test)]
 // mod tests {
 //     use super::*;

@@ -124,7 +124,7 @@ impl<'a, A: Into<Shell>, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
 }
 
 impl<'a, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, Slot, C> {
-    pub fn split_parts(self) -> (AnyPermit<'a, Mut, Item, C>, AnyPermit<'a, Mut, Shell, C>) {
+    pub fn split(self) -> (AnyPermit<'a, Mut, Item, C>, AnyPermit<'a, Mut, Shell, C>) {
         let (item, shell) = self.permit.split();
         (
             AnyPermit {
