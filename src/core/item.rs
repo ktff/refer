@@ -86,6 +86,12 @@ pub trait Item: Sized + Any + Sync {
     /// If method is not empty, don't make Item Clone, instead use fn duplicate.
     // /// If this method is empty, consider returning true from fn global.
     fn displace(&mut self, from: SlotContext<'_, Self>, to: Option<SlotContext<'_, Self>>);
+
+    /// For traits that this Item implements it can here add mapping of
+    /// TypeId<dyn D> -> <dyn D>::Metadata for this item using item_traits! macro.
+    fn traits(_dyn_type: TypeId) -> Option<&'static dyn Any> {
+        None
+    }
 }
 
 /// Marker trait for dyn compliant traits of items.
@@ -126,6 +132,9 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     ) -> Option<Box<dyn AnyItem>>;
 
     fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>);
+
+    /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
+    fn trait_registry(self: *const Self, dyn_trait: TypeId) -> Option<&'static dyn Any>;
 }
 
 impl<T: Item> AnyItem for T {
@@ -184,4 +193,30 @@ impl<T: Item> AnyItem for T {
     fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>) {
         self.displace(from.downcast(), to.map(|to| to.downcast()))
     }
+
+    /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
+    fn trait_registry(self: *const Self, dyn_trait: TypeId) -> Option<&'static dyn Any> {
+        T::traits(dyn_trait)
+    }
+}
+
+/// Implements fn Item::traits().
+/// An example:
+/// ```
+/// item_traits!(Node<T>: dyn AnyItem, dyn Node);
+/// ```
+#[macro_export]
+macro_rules! item_traits {
+    ($t:ty: $($tr:ty),*) => {
+        fn traits(dyn_type: std::any::TypeId) -> Option<&'static dyn std::any::Any> {
+            $(
+                if std::any::TypeId::of::<$tr>() == dyn_type {
+                    const METADATA: <$tr as std::ptr::Pointee>::Metadata = std::ptr::metadata(std::ptr::null::<$t>() as *const $tr);
+                    return Some(&METADATA as &dyn std::any::Any);
+                }
+            )*
+
+            return None;
+        }
+    };
 }

@@ -4,12 +4,14 @@
 mod container;
 mod context;
 mod error;
+#[macro_use]
 mod item;
 mod key;
 pub mod permit;
 mod reference;
 mod shell;
 mod slot;
+// mod trait_registry;
 
 pub use container::*;
 pub use context::*;
@@ -22,10 +24,6 @@ pub use permit::{
 pub use reference::*;
 pub use shell::*;
 pub use slot::*;
-
-// TODO: TypeMap. Ideja da containeri imaju statičku mapu uzoraka u Indexu/pathu za svaki type koji sadrži.
-// TODO: Na temelju toga se TypeMap može prenositi preko Type sustava i koristiti za pohranu Keyeva kao Index.
-// TODO: Ovo ima stash sa `metadata` te `metadata try 2`.
 
 // *************************** Useful aliases *************************** //
 

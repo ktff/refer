@@ -93,6 +93,8 @@ macro_rules! impl_item {
                 _: Option<$crate::core::SlotContext<'_, Self>>,
             ) {
             }
+
+            item_traits!($ty: dyn std::fmt::Debug);
         }
     };
 }
