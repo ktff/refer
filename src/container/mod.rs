@@ -3,12 +3,12 @@
 // pub mod data;
 pub mod item;
 // pub mod table;
-// pub mod vec;
+pub mod vec;
 
 // pub use all::AllContainer;
 // pub use chunked::{Chunk, Chunked, ChunkingLogic};
 // pub use data::ContainerData;
-pub use item::ItemContainer;
+pub use item::{ItemContainer, ItemContainerFamily};
 // pub use table::TableContainer;
 // pub use vec::{VecContainer, VecContainerFamily};
 

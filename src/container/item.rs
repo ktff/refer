@@ -35,17 +35,13 @@ impl<T: Item, S: Shell<T = T>> ItemContainer<T, S> {
             slot: None,
         }
     }
-
-    fn key(&self) -> Key<T> {
-        self.context.leaf_path().key_of(ONE)
-    }
 }
 
 impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
     /// Shell of item.
     type Shell = S;
 
-    type Iter<'a>= impl Iterator<Item = (Key<T>, UnsafeSlot<'a, T, Self::Shell>)> + Send
+    type Iter<'a>= impl Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, Self::Shell>)> + Send
    where
        Self: 'a;
 
@@ -74,16 +70,17 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
             .map(|(item, shell)| UnsafeSlot::new(self.context.slot_context(), item, shell))
     }
 
-    fn iter(&self, range: impl RangeBounds<usize>) -> Option<Self::Iter<'_>> {
+    fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_> {
         self.slot
             .as_ref()
             .filter(|_| range.contains(&1))
             .map(|(item, shell)| {
-                std::iter::once((
-                    self.key(),
+                (
+                    ONE,
                     UnsafeSlot::new(self.context.slot_context(), item, shell),
-                ))
+                )
             })
+            .into_iter()
     }
 
     fn fill(&mut self, item: T) -> std::result::Result<NonZeroUsize, T> {
@@ -133,7 +130,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "base_u64"))]
 mod tests {
     use super::*;
 
@@ -145,15 +142,13 @@ mod tests {
         let key = container.fill(item).unwrap();
 
         assert_eq!(
-            unsafe { &*container.get(key.get()).unwrap().item().get() },
-            &item
+            unsafe { *container.get(key.get()).unwrap().item().get() },
+            item
         );
         assert!(container
             .iter(..)
-            .into_iter()
-            .flatten()
-            .map(|(key, slot)| (key, unsafe { &*slot.item().get() }))
-            .eq(Some((container.context.leaf_path().key_of(key), &item))));
+            .map(|(index, slot)| (index, unsafe { *slot.item().get() }))
+            .eq(Some((key, item))));
     }
 
     #[test]
@@ -164,8 +159,8 @@ mod tests {
         let key = container.fill(item).unwrap();
 
         assert_eq!(
-            unsafe { &*container.get(key.get()).unwrap().item().get() },
-            &item
+            unsafe { *container.get(key.get()).unwrap().item().get() },
+            item
         );
 
         assert_eq!(
@@ -174,6 +169,6 @@ mod tests {
         );
 
         assert!(container.get(key.get()).is_none());
-        assert_eq!(container.iter(..).into_iter().flatten().count(), 0);
+        assert_eq!(container.iter(..).count(), 0);
     }
 }

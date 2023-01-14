@@ -9,7 +9,7 @@ pub trait LeafContainer<T: Item> {
     /// Shell of item.
     type Shell: Shell<T = T>;
 
-    type Iter<'a>: Iterator<Item = (Key<T>, UnsafeSlot<'a, T, Self::Shell>)> + Send
+    type Iter<'a>: Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, Self::Shell>)> + Send
     where
         Self: 'a;
 
@@ -31,7 +31,7 @@ pub trait LeafContainer<T: Item> {
 
     /// Iterates in ascending order for indices in range.
     /// Iterator MUST NOT return the same slot more than once.
-    fn iter(&self, range: impl RangeBounds<usize>) -> Option<Self::Iter<'_>>;
+    fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_>;
 
     /// None if there is no more place in container.
     fn fill(&mut self, item: T) -> std::result::Result<NonZeroUsize, T>;
@@ -82,7 +82,8 @@ macro_rules! leaf_container {
     (impl Container<$t:ty>) => {
         type Shell = <Self as LeafContainer<$t>>::Shell;
 
-        type SlotIter<'a> = <Self as LeafContainer<$t>>::Iter<'a>;
+        type SlotIter<'a> =  impl Iterator<Item = (Key<$t>, UnsafeSlot<'a, $t, Self::Shell>)> + Send
+            where Self:'a;
 
         #[inline(always)]
         fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t, Self::Shell>> {
@@ -95,8 +96,9 @@ macro_rules! leaf_container {
         }
 
         fn iter_slot(&self, path: KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
-            let range = self.context().leaf_path().range_of(path.path())?;
-            self.iter(range)
+            let leaf_path=*self.context().leaf_path();
+            let range =leaf_path.range_of(path.path())?;
+            Some(self.iter(range).map(move |(index,slot)|(leaf_path.key_of(index),slot)))
         }
 
         fn fill_slot(&mut self, _: <$t>::LocalityKey, item: $t) -> std::result::Result<Key<$t>, $t> {

@@ -202,17 +202,18 @@ impl LeafPath {
         self.remaining_len
     }
 
+    pub fn contains(&self, index: NonZeroUsize) -> bool {
+        index
+            .get()
+            .checked_shr(self.remaining_len.get())
+            .unwrap_or(0)
+            == 0
+    }
+
     /// Panics if index is out of range.
     #[inline(always)]
     pub fn key_of<T: Item>(&self, index: NonZeroUsize) -> Key<T> {
-        assert_eq!(
-            index
-                .get()
-                .checked_shr(self.remaining_len.get())
-                .unwrap_or(0),
-            0,
-            "Index has too many bits"
-        );
+        assert!(self.contains(index), "Index has too many bits");
 
         let index = self.path | (index.get() as IndexBase);
         // SAFETY: This is safe since argument `index` is NonZero and
