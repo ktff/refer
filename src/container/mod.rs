@@ -10,7 +10,7 @@ pub mod vec;
 // pub use data::ContainerData;
 pub use item::{ItemContainer, ItemContainerFamily};
 // pub use table::TableContainer;
-// pub use vec::{VecContainer, VecContainerFamily};
+pub use vec::{VecContainer, VecContainerFamily};
 
 // /// Implements Allocator<T> and Container<T> for type C by delegating to it's internal container I through expression e
 // /// that has access to self to access the field of I.
