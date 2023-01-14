@@ -34,7 +34,7 @@ impl<'a, R, T: core::Item, A, C: ?Sized> SlotPermit<'a, T, R, A, C> {
 
     pub fn step_into(self) -> Option<SlotPermit<'a, T, R, A, C::Sub>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         let Self { permit, key } = self;
         let index = permit.region().index_of(key);

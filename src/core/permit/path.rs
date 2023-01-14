@@ -97,7 +97,7 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
 
     pub fn step_into(self, index: usize) -> Option<PathPermit<'a, T, R, A, C::Sub>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         let path = self.region().path_of(index);
         let Self { permit, path } = self.and(path)?;
@@ -111,7 +111,7 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
         range: impl RangeBounds<usize>,
     ) -> Option<impl Iterator<Item = PathPermit<'a, T, R, A, C::Sub>>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         let path_range = self
             .region()

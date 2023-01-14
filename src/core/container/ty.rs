@@ -1,7 +1,12 @@
 use super::*;
 
+// TODO: Explore if this can be a region that splits on type. Then AnyKey can be just an index.
+
 pub trait TypeContainer<T: Item> {
+    //: MultiContainer {
     type Sub: Container<T>;
+
+    fn path(&self) -> Path;
 
     /// Implementations should have #[inline(always)]
     fn get(&self) -> Option<&Self::Sub>;
@@ -10,6 +15,10 @@ pub trait TypeContainer<T: Item> {
 
     fn fill(&mut self) -> &mut Self::Sub;
 }
+
+// pub trait MultiContainer {
+
+// }
 
 // *************************** Blankets ***************************
 

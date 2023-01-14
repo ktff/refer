@@ -45,9 +45,9 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             .map(|container| ExclusivePermit { container, permit })
     }
 
-    pub fn step_into<T: Item>(self, index: usize) -> Option<ExclusivePermit<'a, C::Sub>>
+    pub fn step_into(self, index: usize) -> Option<ExclusivePermit<'a, C::Sub>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         let Self { container, permit } = self;
         container
@@ -55,12 +55,12 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             .map(|container| ExclusivePermit { container, permit })
     }
 
-    pub fn step_range<T: Item>(
+    pub fn step_range(
         self,
         range: impl RangeBounds<usize>,
     ) -> Option<impl Iterator<Item = ExclusivePermit<'a, C::Sub>>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         let Self { container, permit } = self;
         Some(

@@ -47,7 +47,7 @@ impl<'a, R, T: core::Item, A, C: ?Sized> TypePermit<'a, T, R, A, C> {
 
     pub fn step_into(self, index: usize) -> Option<TypePermit<'a, T, R, A, C::Sub>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         self.permit.step_into(index).map(TypePermit::new)
     }
@@ -57,7 +57,7 @@ impl<'a, R, T: core::Item, A, C: ?Sized> TypePermit<'a, T, R, A, C> {
         range: impl RangeBounds<usize>,
     ) -> Option<impl Iterator<Item = TypePermit<'a, T, R, A, C::Sub>>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         Some(self.permit.step_range(range)?.map(TypePermit::new))
     }

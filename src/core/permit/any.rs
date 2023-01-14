@@ -147,9 +147,9 @@ impl<'a, R, A, C: ?Sized> AnyPermit<'a, R, A, C> {
             .map(|container| AnyPermit { container, permit })
     }
 
-    pub fn step_into<T: core::Item>(self, index: usize) -> Option<AnyPermit<'a, R, A, C::Sub>>
+    pub fn step_into(self, index: usize) -> Option<AnyPermit<'a, R, A, C::Sub>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         let Self { container, permit } = self;
         container
@@ -157,12 +157,12 @@ impl<'a, R, A, C: ?Sized> AnyPermit<'a, R, A, C> {
             .map(|container| AnyPermit { container, permit })
     }
 
-    pub fn step_range<T: core::Item>(
+    pub fn step_range(
         self,
         range: impl RangeBounds<usize>,
     ) -> Option<impl Iterator<Item = AnyPermit<'a, R, A, C::Sub>>>
     where
-        C: RegionContainer<T>,
+        C: RegionContainer,
     {
         let Self { container, permit } = self;
         Some(container.iter(range)?.map(move |(_, container)| AnyPermit {

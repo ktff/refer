@@ -1,8 +1,16 @@
 use super::*;
 use std::ops::RangeBounds;
 
-pub trait RegionContainer<T: Item> {
-    type Sub: Container<T>;
+pub trait LocalityContainer<T: Item> {
+    /// Index of locality
+    fn locality(&self, key: T::LocalityKey) -> Option<usize>;
+
+    /// Index of locality
+    fn fill_locality(&mut self, key: T::LocalityKey) -> usize;
+}
+
+pub trait RegionContainer {
+    type Sub: AnyContainer;
 
     type Iter<'a>: Iterator<Item = (usize, &'a Self::Sub)> + Send
     where
@@ -37,9 +45,8 @@ pub trait RegionContainer<T: Item> {
     /// Iterates in ascending order for indices in range.
     fn iter_mut(&mut self, range: impl RangeBounds<usize>) -> Option<Self::IterMut<'_>>;
 
-    fn locality(&self, key: T::LocalityKey) -> Option<&Self::Sub>;
-
-    fn fill(&mut self, key: T::LocalityKey) -> &mut Self::Sub;
+    /// None if index is out of region.
+    fn fill(&mut self, index: usize) -> Option<&mut Self::Sub>;
 }
 
 // *************************** Blankets ***************************
