@@ -23,6 +23,10 @@ pub use reference::*;
 pub use shell::*;
 pub use slot::*;
 
+// TODO: TypeMap. Ideja da containeri imaju statičku mapu uzoraka u Indexu/pathu za svaki type koji sadrži.
+// TODO: Na temelju toga se TypeMap može prenositi preko Type sustava i koristiti za pohranu Keyeva kao Index.
+// TODO: Ovo ima stash sa `metadata` te `metadata try 2`.
+
 // *************************** Useful aliases *************************** //
 
 pub type Result<T> = std::result::Result<T, ReferError>;
