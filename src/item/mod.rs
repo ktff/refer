@@ -66,7 +66,7 @@ macro_rules! impl_item {
                 &mut self,
                 _: $crate::core::SlotContext<'_, Self>,
                 _: $crate::core::AnyKey,
-                _: $crate::core::Index,
+                _: $crate::core::AnyKey,
             ) {
             }
 
@@ -74,7 +74,7 @@ macro_rules! impl_item {
                 &mut self,
                 _: $crate::core::SlotContext<'_, Self>,
                 _: $crate::core::AnyKey,
-                _: $crate::core::Index,
+                _: $crate::core::AnyKey,
             ) -> Option<$crate::core::Path> {
                 None
             }
@@ -94,7 +94,7 @@ macro_rules! impl_item {
             ) {
             }
 
-            item_traits!($ty: dyn std::fmt::Debug);
+            item_traits_method!($ty: dyn std::fmt::Debug);
         }
     };
 }

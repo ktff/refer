@@ -1,6 +1,5 @@
 use crate::core::{
-    permit, AnyKey, AnyShell, AnySlot, Index, Item, Key, Path, Permit, Shell, SlotContext,
-    UnsafeSlot,
+    permit, AnyKey, AnyShell, AnySlot, Item, Key, Path, Permit, Shell, SlotContext, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -29,7 +28,7 @@ impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
 
     pub fn upcast(self) -> AnySlot<'a, R, A> {
         // SAFETY: We have the same access to the slot.
-        unsafe { AnySlot::new(self.key.upcast(), self.slot.upcast(), self.access) }
+        unsafe { AnySlot::new_any(self.key.upcast(), self.slot.upcast(), self.access) }
     }
 
     pub fn downgrade<F, B>(self) -> Slot<'a, T, S, F, B>
@@ -69,17 +68,17 @@ impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Item>> Slot<'a, T, S, permit:
         unsafe { &mut *self.slot.item().get() }
     }
 
-    pub fn replace_reference(&mut self, other: AnyKey, to: Index) {
+    pub fn replace_reference(&mut self, other: AnyKey, to: AnyKey) {
         let context = self.context();
         self.item_mut().replace_reference(context, other, to);
     }
 
-    pub fn displace_reference(&mut self, other: AnyKey, to: Index) -> Option<Path> {
+    pub fn displace_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
         let context = self.context();
         self.item_mut().displace_reference(context, other, to)
     }
 
-    pub fn duplicate_reference(&mut self, other: AnyKey, to: Index) -> Option<Path> {
+    pub fn duplicate_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
         let context = self.context();
         self.item_mut().duplicate_reference(context, other, to)
     }
@@ -115,7 +114,7 @@ impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Shell>> Slot<'a, T, S, permit
         self.shell_mut().add_many_any(from, count, context.upcast());
     }
 
-    pub fn shell_replace(&mut self, from: AnyKey, to: Index) {
+    pub fn shell_replace(&mut self, from: AnyKey, to: AnyKey) {
         let alloc = self.slot.allocator();
         self.shell_mut().replace(from, to, alloc);
     }

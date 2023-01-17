@@ -1,4 +1,4 @@
-use super::{AnyPath, Item, KeyPath, LeafPath};
+use super::{Item, KeyPath, LeafPath, Path};
 use getset::{CopyGetters, Getters};
 use std::any::Any;
 
@@ -59,7 +59,7 @@ impl<'a, T: Item> SlotContext<'a, T> {
 
     pub fn upcast(self) -> AnySlotContext<'a> {
         AnySlotContext {
-            prefix: self.prefix.upcast(),
+            prefix: self.prefix.path(),
             data: self.data,
             allocator: self.allocator,
             alloc_any: self.allocator,
@@ -82,20 +82,20 @@ impl<'a, T: Item> Clone for SlotContext<'a, T> {
 #[derive(Clone, Copy, CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct AnySlotContext<'a> {
-    prefix: AnyPath,
+    prefix: Path,
     #[getset(skip)]
-    data: &'a dyn Any,
-    allocator: &'a dyn std::alloc::Allocator,
+    data: &'a (dyn Any + Send + Sync + 'static),
+    allocator: &'a (dyn std::alloc::Allocator + Send + Sync + 'static),
     #[getset(skip)]
-    alloc_any: &'a dyn Any,
+    alloc_any: &'a (dyn Any + Send + Sync + 'static),
 }
 
 impl<'a> AnySlotContext<'a> {
     pub fn new(
-        prefix: AnyPath,
-        data: &'a dyn Any,
-        allocator: &'a dyn std::alloc::Allocator,
-        alloc_any: &'a dyn Any,
+        prefix: Path,
+        data: &'a (dyn Any + Send + Sync + 'static),
+        allocator: &'a (dyn std::alloc::Allocator + Send + Sync + 'static),
+        alloc_any: &'a (dyn Any + Send + Sync + 'static),
     ) -> Self {
         Self {
             prefix,
@@ -110,13 +110,10 @@ impl<'a> AnySlotContext<'a> {
     }
 
     pub fn downcast_try<I: Item>(self) -> Option<SlotContext<'a, I>> {
-        if let Some(prefix) = self.prefix.downcast::<I>() {
+        if let Some(data) = self.data.downcast_ref() {
             Some(SlotContext {
-                prefix,
-                data: self
-                    .data
-                    .downcast_ref()
-                    .expect("Mismatched locality data type"),
+                prefix: KeyPath::new(self.prefix),
+                data,
                 allocator: self
                     .alloc_any
                     .downcast_ref()

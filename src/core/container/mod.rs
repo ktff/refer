@@ -6,12 +6,12 @@ pub mod region;
 pub mod ty;
 
 use super::{
-    AnyKey, AnyPath, AnySlotContext, AnyUnsafeSlot, ExclusivePermit, Item, Key, KeyPath,
-    MutAnySlots, Path, RegionPath, Shell, SlotContext, UnsafeSlot,
+    AnyKey, AnySlotContext, AnyUnsafeSlot, ContextPath, ExclusivePermit, Item, ItemTraits, Key,
+    KeyPath, MutAnySlots, Path, RegionPath, Shell, SlotContext, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
-    collections::HashSet,
+    collections::HashMap,
 };
 
 /// TODO: Macro impl for *Container and tests
@@ -66,7 +66,7 @@ pub trait AnyContainer: Any + Sync {
     fn get_slot_any(&self, key: AnyKey) -> Option<AnyUnsafeSlot>;
 
     /// None if such locality doesn't exist.
-    fn get_context_any(&self, path: AnyPath) -> Option<AnySlotContext>;
+    fn get_context_any(&self, path: ContextPath) -> Option<AnySlotContext>;
 
     /// Returns first key for given type
     fn first_key(&self, key: TypeId) -> Option<AnyKey>;
@@ -79,17 +79,18 @@ pub trait AnyContainer: Any + Sync {
     fn last_key(&self, key: TypeId) -> Option<AnyKey>;
 
     /// All types in the container.
-    fn types(&self) -> HashSet<TypeId>;
+    fn types(&self) -> HashMap<TypeId, ItemTraits>;
 
     /// Err if:
     /// - no more place in locality
     /// - type is unknown
     /// - locality is undefined
     /// - type mismatch
-    fn fill_slot_any(&mut self, path: AnyPath, item: Box<dyn Any>) -> Result<AnyKey, String>;
+    fn fill_slot_any(&mut self, path: ContextPath, item: Box<dyn Any>) -> Result<AnyKey, String>;
 
-    /// Fills some locality under given prefix, or enclosing locality.
-    fn fill_context_any(&mut self, path: AnyPath) -> AnyPath;
+    /// Fills some locality under given prefix, or enclosing locality, for given type.
+    /// None if there is no context for given type under given path.
+    fn fill_context_any(&mut self, path: Path, ty: TypeId) -> Option<ContextPath>;
 
     fn unfill_slot_any(&mut self, key: AnyKey);
 

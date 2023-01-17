@@ -78,7 +78,7 @@ impl<'a, R, T: core::Item, A, C: ?Sized> TypePermit<'a, T, R, A, C> {
     {
         self.permit
             .keys(TypeId::of::<T>())
-            .map(|key| key.downcast().expect("Key type mismatch"))
+            .map(|key| Key::new(key.index()))
     }
 }
 

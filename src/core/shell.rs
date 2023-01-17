@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, AnySlotContext, Index, Item, Ref};
+use super::{AnyKey, AnyRef, AnySlotContext, Item};
 pub use crate::util::ord_iter::AscendingIterator;
 use std::any::Any;
 
@@ -10,25 +10,14 @@ pub trait Shell: Sized + Any + Sync {
     where
         Self: 'a;
 
-    type IterOf<'a, I: Item>: Iterator<Item = Ref<I>> + 'a
-    where
-        Self: 'a;
-
     fn new_in(alloc: &<Self::T as Item>::Alloc) -> Self;
 
     fn iter(&self) -> AscendingIterator<Self::Iter<'_>>;
 
-    fn iter_of<I: Item>(&self) -> AscendingIterator<Self::IterOf<'_, I>>;
-
-    /// Number of I items referencing this item.
-    fn len_of<I: Item>(&self) -> usize {
-        self.iter_of::<I>().count()
-    }
-
     /// Additive if called for same `from` multiple times.
     fn add(&mut self, from: impl Into<AnyKey>, alloc: &<Self::T as Item>::Alloc);
 
-    fn replace(&mut self, from: impl Into<AnyKey>, to: Index, alloc: &<Self::T as Item>::Alloc);
+    fn replace(&mut self, from: impl Into<AnyKey>, to: AnyKey, alloc: &<Self::T as Item>::Alloc);
 
     /// Subtracts if called for same `from` multiple times.
     fn remove(&mut self, from: impl Into<AnyKey>);
@@ -46,7 +35,7 @@ pub trait AnyShell: Any {
 
     fn add_many_any(&mut self, from: AnyKey, count: usize, context: AnySlotContext);
 
-    fn replace_any(&mut self, from: AnyKey, to: Index, context: AnySlotContext);
+    fn replace_any(&mut self, from: AnyKey, to: AnyKey, context: AnySlotContext);
 
     fn remove_any(&mut self, from: AnyKey);
 
@@ -75,7 +64,7 @@ impl<T: Shell> AnyShell for T {
         }
     }
 
-    fn replace_any(&mut self, from: AnyKey, to: Index, context: AnySlotContext) {
+    fn replace_any(&mut self, from: AnyKey, to: AnyKey, context: AnySlotContext) {
         let context = context.downcast::<T::T>();
         self.replace(from, to, context.allocator());
     }

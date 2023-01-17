@@ -3,7 +3,7 @@ use crate::leaf_container;
 use crate::shell::vec_shell::VecShell;
 use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
-use std::{any::TypeId, cell::SyncUnsafeCell, collections::HashSet};
+use std::{any::TypeId, cell::SyncUnsafeCell};
 
 const ONE: NonZeroUsize = NonZeroUsize::new(1).expect("Not zero");
 

@@ -99,10 +99,6 @@ impl<T: DynItem + ?Sized> DynRef<T> {
         self.0
     }
 
-    pub fn downcast<U: Item>(self) -> Option<Ref<U>> {
-        self.0.downcast().map(Ref)
-    }
-
     pub fn get<R, S, C: AnyContainer + ?Sized>(self, coll: AnyPermit<R, S, C>) -> DynSlot<T, R, S> {
         coll.slot(self.0)
             .get_dyn()

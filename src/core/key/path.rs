@@ -139,7 +139,7 @@ impl std::fmt::Display for Path {
         let path = self.0.get().rotate_left(level + 1) >> 1;
         write!(
             f,
-            "{:0width$x}:{}",
+            "#[{:0width$x};{}]",
             path,
             level,
             width = ((level + 3) / 4) as usize
@@ -153,8 +153,14 @@ impl Default for Path {
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> From<KeyPath<T>> for Path {
+impl<T: ?Sized + 'static> From<KeyPath<T>> for Path {
     fn from(path: KeyPath<T>) -> Self {
+        path.path()
+    }
+}
+
+impl From<ContextPath> for Path {
+    fn from(path: ContextPath) -> Self {
         path.path()
     }
 }
@@ -328,7 +334,7 @@ mod tests {
         assert_eq!(path.level(), 4);
         assert_eq!(path.bottom(), 0b1010);
         assert_eq!(path.remaining_len().get(), INDEX_BASE_BITS.get() - 4);
-        assert_eq!(format!("{}", path), "a:4");
+        assert_eq!(format!("{}", path), "#[a;4]");
     }
 
     #[test]
@@ -337,7 +343,7 @@ mod tests {
         assert_eq!(path.level(), 4);
         assert_eq!(path.top().rotate_left(4), 0b1010);
         assert_eq!(path.bottom(), 0b1010);
-        assert_eq!(format!("{}", path), "a:4");
+        assert_eq!(format!("{}", path), "#[a;4]");
     }
 
     #[test]

@@ -1,10 +1,15 @@
-use super::{AnyKey, AnyRef, AnySlotContext, Index, Path, SlotContext};
+use super::{AnyKey, AnyRef, AnySlotContext, Path, SlotContext, TypeInfo};
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
     fmt::Debug,
     marker::Unsize,
+    ptr::Pointee,
 };
+
+pub type ItemTraits = &'static [(TypeId, &'static (dyn Any + Send + Sync))];
+
+// TODO: Enable type mutation?
 
 /// An item of a model.
 pub trait Item: Sized + Any + Sync {
@@ -31,18 +36,18 @@ pub trait Item: Sized + Any + Sync {
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn replace_reference(&mut self, context: SlotContext<'_, Self>, other: AnyKey, to: Index);
+    fn replace_reference(&mut self, context: SlotContext<'_, Self>, other: AnyKey, to: AnyKey);
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
-    /// Some if this should be displaced under given prefix.
+    /// Some if this can be displaced under given prefix.
     ///
     /// Will be called for references of self, but can be called for other references.
     fn displace_reference(
         &mut self,
         context: SlotContext<'_, Self>,
         other: AnyKey,
-        to: Index,
+        to: AnyKey,
     ) -> Option<Path> {
         self.replace_reference(context, other, to);
         None
@@ -60,7 +65,7 @@ pub trait Item: Sized + Any + Sync {
         &mut self,
         context: SlotContext<'_, Self>,
         other: AnyKey,
-        to: Index,
+        to: AnyKey,
     ) -> Option<Path>;
 
     /// Clone this item from context to context.
@@ -87,20 +92,22 @@ pub trait Item: Sized + Any + Sync {
     // /// If this method is empty, consider returning true from fn global.
     fn displace(&mut self, from: SlotContext<'_, Self>, to: Option<SlotContext<'_, Self>>);
 
-    /// For traits that this Item implements it can here add mapping of
-    /// TypeId<dyn D> -> <dyn D>::Metadata for this item using item_traits! macro.
-    fn traits(_dyn_type: TypeId) -> Option<&'static dyn Any> {
-        None
-    }
+    /// TypeIds of traits with their Metadata that this Item implements.
+    /// Including Self and AnyItem.
+    /// `item_traits_method!` macro should be used to implement this.
+    fn traits() -> ItemTraits;
 }
 
+// TODO: Some better name? This sounds like it's always dynamic when it's not.
 /// Marker trait for dyn compliant traits of items.
-pub trait DynItem: AnyItem + Unsize<dyn AnyItem> {}
-impl<T: AnyItem + Unsize<dyn AnyItem> + ?Sized> DynItem for T {}
+pub trait DynItem: Any + Pointee {}
+impl<T: Any + Pointee + ?Sized> DynItem for T {}
 
 /// Methods correspond 1 to 1 to Item methods.
 pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     fn item_type_id(self: *const Self) -> TypeId;
+
+    fn type_info(self: *const Self) -> TypeInfo;
 
     fn iter_references_any(
         &self,
@@ -109,20 +116,20 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
 
     fn remove_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey) -> bool;
 
-    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: Index);
+    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: AnyKey);
 
     fn displace_reference_any(
         &mut self,
         context: AnySlotContext<'_>,
         other: AnyKey,
-        to: Index,
+        to: AnyKey,
     ) -> Option<Path>;
 
     fn duplicate_reference_any(
         &mut self,
         context: AnySlotContext<'_>,
         other: AnyKey,
-        to: Index,
+        to: AnyKey,
     ) -> Option<Path>;
 
     fn duplicate_any(
@@ -134,13 +141,21 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>);
 
     /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
-    fn trait_registry(self: *const Self, dyn_trait: TypeId) -> Option<&'static dyn Any>;
+    /// Including Self and AnyItem.
+    fn trait_metadata(
+        self: *const Self,
+        dyn_trait: TypeId,
+    ) -> Option<&'static (dyn std::any::Any + Send + Sync)>;
 }
 
 impl<T: Item> AnyItem for T {
     // NOTE: This must never be overwritten since it's used for type checking.
     fn item_type_id(self: *const Self) -> TypeId {
         TypeId::of::<T>()
+    }
+
+    fn type_info(self: *const Self) -> TypeInfo {
+        TypeInfo::of::<T>()
     }
 
     fn iter_references_any(
@@ -159,7 +174,7 @@ impl<T: Item> AnyItem for T {
         self.remove_reference(context.downcast(), other)
     }
 
-    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: Index) {
+    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: AnyKey) {
         self.replace_reference(context.downcast(), other, to)
     }
 
@@ -167,7 +182,7 @@ impl<T: Item> AnyItem for T {
         &mut self,
         context: AnySlotContext<'_>,
         other: AnyKey,
-        to: Index,
+        to: AnyKey,
     ) -> Option<Path> {
         self.displace_reference(context.downcast(), other, to)
     }
@@ -176,7 +191,7 @@ impl<T: Item> AnyItem for T {
         &mut self,
         context: AnySlotContext<'_>,
         other: AnyKey,
-        to: Index,
+        to: AnyKey,
     ) -> Option<Path> {
         self.duplicate_reference(context.downcast(), other, to)
     }
@@ -194,29 +209,42 @@ impl<T: Item> AnyItem for T {
         self.displace(from.downcast(), to.map(|to| to.downcast()))
     }
 
-    /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
-    fn trait_registry(self: *const Self, dyn_trait: TypeId) -> Option<&'static dyn Any> {
-        T::traits(dyn_trait)
+    /// TypeId::of::<dyn D> => <dyn D>::Metadata for this item.
+    fn trait_metadata(
+        self: *const Self,
+        dyn_trait: TypeId,
+    ) -> Option<&'static (dyn std::any::Any + Send + Sync)> {
+        T::traits()
+            .iter()
+            .find(|(id, _)| *id == dyn_trait)
+            .map(|(_, meta)| *meta)
     }
 }
 
-/// Implements fn Item::traits().
-/// An example:
-/// ```
-/// item_traits!(Node<T>: dyn AnyItem, dyn Node);
-/// ```
+/// Adds static with all of the traits and their metadata.fn Item::traits().
+/// Self and AnyItem is always included.
+/// An example: `item_traits_method!(Node<T>: dyn Node);`
 #[macro_export]
-macro_rules! item_traits {
+macro_rules! item_traits_method {
     ($t:ty: $($tr:ty),*) => {
-        fn traits(dyn_type: std::any::TypeId) -> Option<&'static dyn std::any::Any> {
-            $(
-                if std::any::TypeId::of::<$tr>() == dyn_type {
-                    const METADATA: <$tr as std::ptr::Pointee>::Metadata = std::ptr::metadata(std::ptr::null::<$t>() as *const $tr);
-                    return Some(&METADATA as &dyn std::any::Any);
-                }
-            )*
+        fn traits()-> $crate::core::ItemTraits{
+            /// Array with traits/Self type name and its metadata.
+            static TRAITS: $crate::core::ItemTraits = &[
+                $(
 
-            return None;
+                        (std::any::TypeId::of::<$tr>(),
+                            {const METADATA: <$tr as std::ptr::Pointee>::Metadata = std::ptr::metadata(std::ptr::null::<$t>() as *const $tr);
+                            &METADATA as &(dyn std::any::Any + Send + Sync)}
+                        ),
+                )*
+                (std::any::TypeId::of::<dyn $crate::core::AnyItem>(),
+                    {const METADATA: <dyn $crate::core::AnyItem as std::ptr::Pointee>::Metadata = std::ptr::metadata(std::ptr::null::<$t>() as *const dyn $crate::core::AnyItem);
+                    &METADATA as &(dyn std::any::Any + Send + Sync)}
+                ),
+                (std::any::TypeId::of::<$t>(),&() as &(dyn std::any::Any + Send + Sync)),
+            ];
+
+            TRAITS
         }
     };
 }

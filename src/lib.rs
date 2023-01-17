@@ -19,6 +19,7 @@
 #![feature(coerce_unsized)]
 #![feature(specialization)]
 #![feature(arbitrary_self_types)]
+#![feature(const_type_id)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs

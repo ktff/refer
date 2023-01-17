@@ -15,10 +15,6 @@ impl<T: Item> Shell for NoShell<T> {
     where
         Self: 'a;
 
-    type IterOf<'a, I: Item>=impl Iterator<Item = Ref<I>> + 'a
-    where
-        Self: 'a;
-
     fn new_in(_: &<Self::T as Item>::Alloc) -> Self {
         Self::default()
     }
@@ -27,15 +23,11 @@ impl<T: Item> Shell for NoShell<T> {
         AscendingIterator::ascending(std::iter::empty())
     }
 
-    fn iter_of<I: Item>(&self) -> AscendingIterator<Self::IterOf<'_, I>> {
-        AscendingIterator::ascending(std::iter::empty())
-    }
-
     fn add(&mut self, from: impl Into<AnyKey>, _: &<Self::T as Item>::Alloc) {
         error!("NoShell::add(from: {:?}) called", from.into());
     }
 
-    fn replace(&mut self, _: impl Into<AnyKey>, _: Index, _: &<Self::T as Item>::Alloc) {}
+    fn replace(&mut self, _: impl Into<AnyKey>, _: AnyKey, _: &<Self::T as Item>::Alloc) {}
 
     fn remove(&mut self, _: impl Into<AnyKey>) {}
 

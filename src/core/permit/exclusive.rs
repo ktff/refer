@@ -1,6 +1,7 @@
 use crate::core::{region::RegionContainer, ty::TypeContainer, *};
 use log::*;
 use std::{
+    any::TypeId,
     collections::{btree_map, hash_map::Entry, BTreeMap, HashMap, HashSet},
     ops::{Deref, DerefMut, RangeBounds},
 };
@@ -103,20 +104,18 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     }
 
     /// Clones under given prefix.
+    /// None if given type can't be placed under prefix.
     /// Panics if item can't be cloned, or item doesn't exist.
-    fn clone_any_item(&mut self, original_key: AnyKey, prefix: Path) -> AnyKey {
-        // Placement
-        let locality_prefix =
-            self.fill_context_any(AnyPath::new_with(prefix, original_key.metadata()));
-
+    fn clone_any_item(&mut self, original_key: AnyKey, context: ContextPath) -> AnyKey {
         // Build duplicate
         let original = self
             .access()
             .slot(original_key)
             .get_dyn()
             .expect("Should be valid key");
+        let original_ty = original.item_type_id();
         let to_context = self
-            .get_context_any(locality_prefix)
+            .get_context_any(context)
             .expect("Should be valid prefix");
         let duplicate = original
             .duplicate(to_context)
@@ -125,10 +124,10 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
         // Fill
         let duplicate_ty = duplicate.as_ref().type_id();
-        match self.fill_slot_any(locality_prefix, duplicate) {
+        match self.fill_slot_any(context, duplicate) {
             Ok(key) => key,
             Err(error) => {
-                panic!("Failed to fill slot of ty:{:?} locality:{} with duplicate of ty:{:?}.Cause: {:?}",original_key.type_id(),prefix,duplicate_ty,error);
+                panic!("Failed to fill slot of ty:{:?} locality:{} with duplicate of ty:{:?}.Cause: {:?}",original_ty,context,duplicate_ty,error);
             }
         }
     }
@@ -281,35 +280,41 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             moved.insert(from.upcast());
             moved.insert(to.upcast());
 
-            while let Some((from, prefix)) = moves.pop_first() {
+            while let Some((from, (ty, prefix))) = moves.pop_first() {
                 // Has been moved?
                 if moved.insert(from) {
-                    // Does current place satisfy prefix?
-                    if !prefix.contains_index(from.index()) {
-                        // Move
+                    // Can anything satisfy it?
+                    if let Some(prefix) = prefix {
+                        // Does current place satisfy prefix?
+                        if !prefix.contains_index(from.index()) {
+                            // Move
 
-                        // Clone & fill
-                        let to = self.clone_any_item(from, prefix);
+                            // Placement
+                            if let Some(context) = self.fill_context_any(prefix, ty) {
+                                // Clone & fill
+                                let to = self.clone_any_item(from, context);
 
-                        // Move shell
-                        self.displace_shell_references(from, to, &mut moves, |key| {
-                            moved.contains(&key)
-                        })
-                        .expect("Key should be valid");
+                                // Move shell
+                                self.displace_shell_references(from, to, &mut moves, |key| {
+                                    moved.contains(&key)
+                                })
+                                .expect("Key should be valid");
 
-                        // Rewire from -> other to to -> other
-                        self.replace_any_item_key(from, to);
+                                // Rewire from -> other to to -> other
+                                self.replace_any_item_key(from, to);
 
-                        // Item Drop local
-                        let mut slot = self
-                            .access_mut()
-                            .slot(from)
-                            .get_dyn()
-                            .expect("Key should be valid");
-                        slot.displace();
+                                // Item Drop local
+                                let mut slot = self
+                                    .access_mut()
+                                    .slot(from)
+                                    .get_dyn()
+                                    .expect("Key should be valid");
+                                slot.displace();
 
-                        // Unfill, drop shell, and drop item
-                        self.unfill_slot_any(from);
+                                // Unfill, drop shell, and drop item
+                                self.unfill_slot_any(from);
+                            }
+                        }
                     }
                 }
             }
@@ -365,14 +370,22 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         )?;
 
         // Resolve other duplications
-        while let Some(from) = add.pop() {
+        while let Some((from, ty)) = add.pop() {
             let (prefix, replace) = match duplicates.remove(&from) {
                 Some(Err(data)) => data,
                 _ => panic!("Illegal state"),
             };
 
             // Duplicate item
-            let to = self.clone_any_item(from, prefix);
+            let context = if let Some(context) = self.fill_context_any(prefix, ty) {
+                context
+            } else {
+                self.fill_context_any(Path::default(), ty)
+                    .expect("Should be able to clone item somewhere")
+            };
+
+            // Duplicate item
+            let to = self.clone_any_item(from, context);
             duplicates.insert(from, Ok(to));
 
             // Adjust references
@@ -512,7 +525,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         for other_rf in other.iter_references() {
             other_rf
                 .get(shells.borrow_mut())
-                .shell_replace(from.upcast(), to.index());
+                .shell_replace(from.upcast(), to.upcast());
         }
     }
 
@@ -524,9 +537,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         let other = items.slot(from).get_dyn().expect("Should be valid key");
         if let Some(references) = other.iter_references_any() {
             for other_rf in references {
-                other_rf
-                    .get(shells.borrow_mut())
-                    .shell_replace(from, to.index());
+                other_rf.get(shells.borrow_mut()).shell_replace(from, to);
             }
         };
     }
@@ -615,7 +626,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         &mut self,
         from: AnyKey,
         to: AnyKey,
-        moves: &mut BTreeMap<AnyKey, Path>,
+        moves: &mut BTreeMap<AnyKey, (TypeId, Option<Path>)>,
         moved: impl Fn(AnyKey) -> bool,
     ) -> Result<()> {
         let (mut items, shells) = self.access_mut().split();
@@ -631,22 +642,21 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         if let Some(references) = from_shell.iter_any() {
             for (count, other_rf) in references.dedup() {
                 if moved(other_rf.key()) {
-                    other_rf
-                        .get(items.borrow_mut())
-                        .replace_reference(from, to.index());
+                    other_rf.get(items.borrow_mut()).replace_reference(from, to);
                 } else {
-                    if let Some(under_prefix) = other_rf
-                        .get(items.borrow_mut())
-                        .displace_reference(from, to.index())
-                    {
+                    let mut other = other_rf.get(items.borrow_mut());
+                    if let Some(under_prefix) = other.displace_reference(from, to) {
                         // Register move
                         match moves.entry(other_rf.key()) {
                             btree_map::Entry::Occupied(mut entry) => {
                                 let prefix = entry.get_mut();
-                                *prefix = prefix.or(under_prefix);
+                                prefix.1 = prefix
+                                    .1
+                                    .as_ref()
+                                    .and_then(|&prefix| prefix.and(under_prefix));
                             }
                             btree_map::Entry::Vacant(entry) => {
-                                entry.insert(under_prefix);
+                                entry.insert((other.item_type_id(), Some(under_prefix)));
                             }
                         }
                     }
@@ -674,8 +684,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         &mut self,
         from: AnyKey,
         to: AnyKey,
-        duplicates: &mut HashMap<AnyKey, std::result::Result<AnyKey, (Path, Vec<(AnyKey, Index)>)>>,
-        add_duplicate: &mut Vec<AnyKey>,
+        duplicates: &mut HashMap<
+            AnyKey,
+            std::result::Result<AnyKey, (Path, Vec<(AnyKey, AnyKey)>)>,
+        >,
+        add_duplicate: &mut Vec<(AnyKey, TypeId)>,
         attached: impl Fn(AnyKey) -> bool,
     ) -> Result<()> {
         let (mut items, shells) = self.access_mut().split();
@@ -692,11 +705,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             for (count, other_ref) in references.dedup().filter(|(_, rf)| !attached(rf.key())) {
                 // NOTE: Duplicate items aren't attached at this point
                 let mut other = other_ref.get(items.borrow_mut());
-                if let Some(under_prefix) = other.duplicate_reference(from, to.index()) {
+                if let Some(under_prefix) = other.duplicate_reference(from, to) {
                     match duplicates.entry(other_ref.key()) {
                         Entry::Vacant(entry) => {
-                            entry.insert(Err((under_prefix, vec![(from, to.index())])));
-                            add_duplicate.push(other_ref.key());
+                            entry.insert(Err((under_prefix, vec![(from, to)])));
+                            add_duplicate.push((other_ref.key(), other.item_type_id()));
                         }
                         Entry::Occupied(mut entry) => {
                             match entry.get_mut() {
@@ -706,7 +719,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                                     let mut duplicate = items
                                         .peek_dyn(*duplicate_key)
                                         .expect("Should be valid key");
-                                    duplicate.replace_reference(from, to.index());
+                                    duplicate.replace_reference(from, to);
 
                                     if attached(*duplicate_key) {
                                         // Duplicate is attached
@@ -714,7 +727,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                                     }
                                 }
                                 Err((prefix, vec)) => {
-                                    vec.push((from, to.index()));
+                                    vec.push((from, to));
                                     *prefix = prefix.or(under_prefix);
                                 }
                             }
@@ -732,7 +745,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                         let mut duplicate =
                             items.peek_dyn(duplicate_key).expect("Should be valid key");
                         assert!(
-                            duplicate.duplicate_reference(from, to.index()).is_none(),
+                            duplicate.duplicate_reference(from, to).is_none(),
                             "Should be able to duplicate reference"
                         );
 

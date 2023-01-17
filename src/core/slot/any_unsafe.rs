@@ -1,6 +1,7 @@
-use crate::core::{AnyItem, AnyShell, AnySlotContext};
+use crate::core::{AnyItem, AnyShell, AnySlotContext, DynItem};
 use getset::CopyGetters;
-use std::cell::SyncUnsafeCell;
+use log::*;
+use std::{any::TypeId, cell::SyncUnsafeCell};
 
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
@@ -20,6 +21,27 @@ impl<'a> AnyUnsafeSlot<'a> {
             context,
             item,
             shell,
+        }
+    }
+
+    pub fn item_type_id(&self) -> std::any::TypeId {
+        self.item().get().item_type_id()
+    }
+
+    pub fn metadata<T: DynItem + ?Sized>(&self) -> Option<T::Metadata> {
+        let metadata = self.item.get().trait_metadata(TypeId::of::<T>())?;
+
+        if let Some(&metadata) = metadata.downcast_ref::<T::Metadata>() {
+            Some(metadata)
+        } else {
+            error!(
+                "Item {:?} returned unexpected metadata for type {}. Expected: {}, got: {:?}",
+                self.item.get().type_info(),
+                std::any::type_name::<T>(),
+                std::any::type_name::<T::Metadata>(),
+                metadata.type_id(),
+            );
+            panic!("Metadata type mismatch");
         }
     }
 }

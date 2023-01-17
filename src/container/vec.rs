@@ -6,7 +6,6 @@ use crate::{
 use std::{
     any::TypeId,
     cell::SyncUnsafeCell,
-    collections::HashSet,
     num::NonZeroUsize,
     ops::{Bound, RangeBounds},
 };

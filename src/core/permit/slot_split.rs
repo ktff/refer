@@ -22,7 +22,7 @@ impl<'a, A, C: ?Sized> SlotSplitPermit<'a, A, C> {
     where
         C: AnyContainer,
     {
-        if self.splitted.insert(key.upcast()) {
+        if self.splitted.insert(key.any()) {
             // SAFETY: We just checked that the key is not splitted.
             Some(unsafe { self.permit.unsafe_split(|permit| permit.slot(key)) })
         } else {

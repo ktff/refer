@@ -120,21 +120,13 @@ macro_rules! leaf_container {
 
         #[inline(always)]
         fn get_slot_any(&self, key: AnyKey) -> Option<AnyUnsafeSlot>{
-            if let Some(key) = key.downcast::<$t>() {
-                self.get_slot(key).map(|slot| slot.upcast())
-            } else {
-                None
-            }
+            self.get_slot(Key::new(key.index())).map(|slot| slot.upcast())
         }
 
-        fn get_context_any(&self, path: AnyPath) -> Option<AnySlotContext>{
-            if let Some(path) = path.downcast::<$t>() {
-                if self.container_path().contains(path){
-                    Some(self.context.slot_context().upcast())
-                }else{
-                    None
-                }
-            } else {
+        fn get_context_any(&self, path: ContextPath) -> Option<AnySlotContext>{
+            if self.container_path().contains(path){
+                Some(self.context.slot_context().upcast())
+            }else{
                 None
             }
         }
@@ -148,12 +140,8 @@ macro_rules! leaf_container {
         }
 
         fn next_key(&self, key: AnyKey) -> Option<AnyKey>{
-            if let Some(key) = key.downcast::<$t>() {
-                let index = self.context().leaf_path().index_of(key);
-                self.next(NonZeroUsize::new(index)?).map(|index| self.context().leaf_path().key_of::<$t>(index).upcast())
-            } else {
-                None
-            }
+            let index = self.context().leaf_path().index_of(key);
+            self.next(NonZeroUsize::new(index)?).map(|index| self.context().leaf_path().key_of::<$t>(index).upcast())
         }
 
         fn last_key(&self, key: TypeId) -> Option<AnyKey>{
@@ -164,27 +152,23 @@ macro_rules! leaf_container {
             }
         }
 
-        fn types(&self) -> HashSet<TypeId>{
-            let mut set = HashSet::new();
-            set.insert(TypeId::of::<$t>());
+        fn types(&self) -> std::collections::HashMap<TypeId,ItemTraits>{
+            let mut set = std::collections::HashMap::new();
+            set.insert(TypeId::of::<$t>(),<$t as Item>::traits());
             set
         }
 
-        fn fill_slot_any(&mut self, path: AnyPath, item: Box<dyn std::any::Any>) -> std::result::Result<AnyKey, String>{
+        fn fill_slot_any(&mut self, path: ContextPath, item: Box<dyn std::any::Any>) -> std::result::Result<AnyKey, String>{
             match item.downcast::<$t>() {
                 Ok(item)=>{
-                    if let Some(path) = path.downcast::<$t>() {
-                        if self.container_path().contains(path){
-                            if let Ok(index)=self.fill(Box::into_inner(item)){
-                                    Ok(self.context().leaf_path().key_of::<$t>(index).upcast())
-                                } else {
-                                    Err(format!("No more place in {:?}::{}", self.container_path(),std::any::type_name::<Self>()))
-                                }
-                        } else {
-                            Err(format!("Path {:?} is not contained in {:?}::{}", path, self.container_path(),std::any::type_name::<Self>()))
-                        }
+                    if self.container_path().contains(path){
+                        if let Ok(index)=self.fill(Box::into_inner(item)){
+                                Ok(self.context().leaf_path().key_of::<$t>(index).upcast())
+                            } else {
+                                Err(format!("No more place in {:?}::{}", self.container_path(),std::any::type_name::<Self>()))
+                            }
                     } else {
-                        Err(format!("Path type mismatch: expected {:?}, got {:?}", TypeId::of::<$t>(), path.type_id()))
+                        Err(format!("Path {:?} is not contained in {:?}::{}", path, self.container_path(),std::any::type_name::<Self>()))
                     }
                 }
                 Err(error)=> {
@@ -193,14 +177,17 @@ macro_rules! leaf_container {
             }
         }
 
-        fn fill_context_any(&mut self, path: AnyPath) -> AnyPath{
-            path
+        fn fill_context_any(&mut self, path: Path,ty: TypeId) -> Option<ContextPath>{
+            if ty == TypeId::of::<$t>() && self.container_path().contains(path){
+                Some(ContextPath::new(self.container_path()))
+            } else {
+                None
+            }
+
         }
 
         fn unfill_slot_any(&mut self, key: AnyKey){
-            if let Some(key) = key.downcast::<$t>() {
-                self.unfill_slot(key);
-            }
+            self.unfill_slot(Key::new(key.index()));
         }
     }
 }

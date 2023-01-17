@@ -1,43 +1,33 @@
 use super::{Key, LeafPath, Path};
+use crate::core::{AnyItem, DynItem};
 use std::{
-    any::{self, TypeId},
+    any::{self},
     fmt::{self},
     hash::{Hash, Hasher},
-    marker::Unsize,
-    ptr::Pointee,
+    marker::{PhantomData, Unsize},
 };
-
-use crate::core::AnyItem;
 
 pub type AnyPath = KeyPath<dyn AnyItem>;
 
-pub struct KeyPath<T: Pointee + AnyItem + ?Sized>(Path, T::Metadata);
+pub struct KeyPath<T: DynItem + ?Sized>(Path, PhantomData<&'static T>);
 
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> KeyPath<T> {
+impl<T: AnyItem + ?Sized> KeyPath<T> {
+    /// Constructors of KeyPath should strive to guarantee that T can indeed be on Path.
     pub fn new(path: Path) -> Self {
-        KeyPath(path, ())
+        KeyPath(path, PhantomData)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> KeyPath<T> {
-    pub fn new_with(path: Path, metadata: T::Metadata) -> Self {
-        KeyPath(path, metadata)
+impl AnyPath {
+    pub fn new_any(path: Path) -> Self {
+        Self(path, PhantomData)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> KeyPath<T> {
-    pub fn type_id(&self) -> TypeId {
-        self.key_type_id()
-    }
-
+impl<T: DynItem + ?Sized> KeyPath<T> {
     #[inline(always)]
     pub fn path(&self) -> Path {
         self.0
-    }
-
-    #[inline(always)]
-    pub fn metadata(&self) -> T::Metadata {
-        self.1
     }
 
     /// Returns longest path that covers both paths.
@@ -57,36 +47,11 @@ impl<T: Pointee + AnyItem + ?Sized> KeyPath<T> {
             .map(|iter| iter.map(move |path| Self(path, self.1)))
     }
 
-    pub fn upcast<U: Pointee + AnyItem + ?Sized>(self) -> KeyPath<U>
+    pub fn upcast<U: DynItem + ?Sized>(self) -> KeyPath<U>
     where
         T: Unsize<U>,
     {
-        let Self(index, metadata) = self;
-        let ptr = std::ptr::from_raw_parts::<T>(std::ptr::null(), metadata);
-        let metadata = std::ptr::metadata(ptr as *const U);
-        KeyPath(index, metadata)
-    }
-
-    pub fn downcast<U: Pointee<Metadata = ()> + AnyItem + ?Sized>(self) -> Option<KeyPath<U>> {
-        if self.type_id() == TypeId::of::<U>() {
-            Some(KeyPath(self.0, ()))
-        } else {
-            None
-        }
-    }
-
-    /// Downcasts key if type matches and this is the start of the key.
-    pub fn downcast_key<U: AnyItem + ?Sized>(self, key: Key<U>) -> Option<Key<T>> {
-        if self.type_id() == key.type_id() {
-            let key = Key::new_with(key.index(), self.1);
-            if self.contains_key(key) {
-                Some(key)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        KeyPath(self.0, PhantomData)
     }
 
     /// True if self start of given path.
@@ -100,81 +65,59 @@ impl<T: Pointee + AnyItem + ?Sized> KeyPath<T> {
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Eq for KeyPath<T> {}
+impl<T: DynItem + ?Sized> Eq for KeyPath<T> {}
 
-impl<T: Pointee + AnyItem + ?Sized, U: Pointee + AnyItem + ?Sized> PartialEq<KeyPath<U>>
-    for KeyPath<T>
-{
-    default fn eq(&self, other: &KeyPath<U>) -> bool {
-        self.0 == other.0 && self.type_id() == other.type_id()
-    }
-}
-
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> PartialEq for KeyPath<T> {
-    fn eq(&self, other: &Self) -> bool {
+impl<T: DynItem + ?Sized, U: DynItem + ?Sized> PartialEq<KeyPath<U>> for KeyPath<T> {
+    fn eq(&self, other: &KeyPath<U>) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Hash for KeyPath<T> {
+impl<T: DynItem + ?Sized> Hash for KeyPath<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.type_id().hash(state);
         self.0.hash(state);
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Copy for KeyPath<T> {}
+/// SAFETY: KeyPath only contains Path, which is Send.
+unsafe impl<T: DynItem + ?Sized> Send for KeyPath<T> where Path: Send {}
+/// SAFETY: KeyPath only contains Path, which is Sync.
+unsafe impl<T: DynItem + ?Sized> Sync for KeyPath<T> where Path: Sync {}
 
-impl<T: Pointee + AnyItem + ?Sized> Clone for KeyPath<T> {
+impl<T: DynItem + ?Sized> Copy for KeyPath<T> {}
+
+impl<T: DynItem + ?Sized> Clone for KeyPath<T> {
     fn clone(&self) -> Self {
         KeyPath(self.0, self.1)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> fmt::Debug for KeyPath<T> {
+impl<T: DynItem + ?Sized> fmt::Debug for KeyPath<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "KeyPath<{}>({:?}, {:?})",
-            any::type_name::<T>(),
-            self.0,
-            self.type_id()
-        )
+        write!(f, "{:?}:{}", self.0, any::type_name::<T>())
     }
 }
 
-// Default
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> Default for KeyPath<T> {
+impl<T: DynItem + ?Sized> fmt::Display for KeyPath<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.0, any::type_name::<T>())
+    }
+}
+
+impl<T: DynItem + ?Sized> Default for KeyPath<T> {
     fn default() -> Self {
-        KeyPath(Path::default(), ())
+        KeyPath(Path::default(), PhantomData)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> From<Key<T>> for KeyPath<T> {
+impl<T: DynItem + ?Sized> From<Key<T>> for KeyPath<T> {
     fn from(key: Key<T>) -> Self {
-        KeyPath(key.path(), key.metadata())
+        KeyPath(key.path(), PhantomData)
     }
 }
 
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> From<LeafPath> for KeyPath<T> {
+impl<T: AnyItem + ?Sized> From<LeafPath> for KeyPath<T> {
     fn from(path: LeafPath) -> Self {
-        Self(path.path(), ())
-    }
-}
-
-trait KeyTypeId {
-    fn key_type_id(&self) -> TypeId;
-}
-
-impl<T: Pointee + AnyItem + ?Sized> KeyTypeId for KeyPath<T> {
-    default fn key_type_id(&self) -> TypeId {
-        let ptr = std::ptr::from_raw_parts::<T>(std::ptr::null(), self.1);
-        ptr.item_type_id()
-    }
-}
-
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> KeyTypeId for KeyPath<T> {
-    fn key_type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+        Self::new(path.path())
     }
 }

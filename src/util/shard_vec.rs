@@ -748,7 +748,7 @@ mod tests {
 
         let alloc = ShardAllocator::new();
         let mut vec = ShardVec::<u32, 2>::new();
-        let mut dopl = Vec::new();
+        let mut doppelganger = Vec::new();
         let mut rand = thread_rng();
         for _ in 0..ops {
             match rand.gen_range(0..10) {
@@ -756,20 +756,20 @@ mod tests {
                 0 | 1 | 2 | 3 | 4 | 5 => {
                     let val = rand.gen();
                     vec.push(val, &alloc);
-                    dopl.push(val);
+                    doppelganger.push(val);
                 }
                 // Pop
                 6 | 7 | 8 => {
-                    assert_eq!(vec.pop(), dopl.pop());
+                    assert_eq!(vec.pop(), doppelganger.pop());
                 }
                 // Remove
                 9 if vec.len() > 0 => {
                     let index = rand.gen_range(0..vec.len());
-                    assert_eq!(vec.swap_remove(index), dopl.swap_remove(index));
+                    assert_eq!(vec.swap_remove(index), doppelganger.swap_remove(index));
                 }
                 _ => (),
             }
-            assert_eq!(vec.as_slice(), dopl.as_slice());
+            assert_eq!(vec.as_slice(), doppelganger.as_slice());
         }
     }
 }

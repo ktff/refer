@@ -7,6 +7,8 @@ use std::{
     ops::{Bound, Deref, RangeBounds},
 };
 
+// TODO: PathPermit over any trait
+
 pub struct PathPermit<'a, T: core::Item, R, A, C: ?Sized> {
     permit: TypePermit<'a, T, R, A, C>,
     path: KeyPath<T>,

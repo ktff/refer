@@ -3,7 +3,7 @@ use crate::core::{
     region::RegionContainer, ty::TypeContainer, AnyContainer, Container, Key, ReferError, Result,
 };
 
-pub struct SlotPermit<'a, T: core::AnyItem + ?Sized, R, A, C: ?Sized> {
+pub struct SlotPermit<'a, T: core::DynItem + ?Sized, R, A, C: ?Sized> {
     permit: TypePermit<'a, T, R, A, C>,
     key: Key<T>,
 }
@@ -16,10 +16,10 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> SlotPermit<'
     pub fn get_dyn(self) -> Result<core::DynSlot<'a, T, R, A>> {
         let Self { permit, key } = self;
         permit
-            .get_slot_any(key.upcast())
-            // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
-            .map(|slot| unsafe { core::DynSlot::new(key, slot, permit.access()) })
+            .get_slot_any(key.any())
             .ok_or_else(|| ReferError::invalid_key(key, permit.container_path()))
+            // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
+            .and_then(|slot| unsafe { core::DynSlot::new(key, slot, permit.access()) })
     }
 }
 

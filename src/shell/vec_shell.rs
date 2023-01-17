@@ -12,10 +12,6 @@ impl<T: Item> Shell for VecShell<T> {
     where
         Self: 'a;
 
-    type IterOf<'a, I: Item>=impl Iterator<Item = Ref<I>> + 'a
-    where
-        Self: 'a;
-
     fn new_in(alloc: &<Self::T as Item>::Alloc) -> Self {
         Self {
             from: Vec::new_in(alloc.clone()),
@@ -24,10 +20,6 @@ impl<T: Item> Shell for VecShell<T> {
 
     fn iter(&self) -> AscendingIterator<Self::Iter<'_>> {
         AscendingIterator::ascending(self.from.iter().copied())
-    }
-
-    fn iter_of<I: Item>(&self) -> AscendingIterator<Self::IterOf<'_, I>> {
-        AscendingIterator::ascending(self.from.iter().filter_map(|r| r.downcast::<I>()))
     }
 
     fn add(&mut self, from: impl Into<AnyKey>, _: &<Self::T as Item>::Alloc) {
@@ -39,9 +31,9 @@ impl<T: Item> Shell for VecShell<T> {
         self.from.insert(i, add);
     }
 
-    fn replace(&mut self, from: impl Into<AnyKey>, to: Index, _: &<Self::T as Item>::Alloc) {
+    fn replace(&mut self, from: impl Into<AnyKey>, to: AnyKey, _: &<Self::T as Item>::Alloc) {
         let from = AnyRef::new(from.into());
-        let to = AnyRef::new(AnyKey::new_with(to, from.key().metadata()));
+        let to = AnyRef::new(to);
 
         for r in self.from.iter_mut() {
             if r == &from {

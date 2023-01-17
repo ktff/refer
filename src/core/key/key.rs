@@ -1,13 +1,12 @@
 use super::{Index, Path, INDEX_BASE_BITS};
 use std::{
-    any::{self, TypeId},
-    fmt::{self},
+    any, fmt,
     hash::{Hash, Hasher},
-    marker::Unsize,
+    marker::{PhantomData, Unsize},
     ptr::Pointee,
 };
 
-use crate::core::AnyItem;
+use crate::core::{AnyItem, DynItem};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -16,27 +15,39 @@ use crate::core::AnyItem;
 
 pub type AnyKey = Key<dyn AnyItem>;
 
-// TODO: Swap places of Index and Metadata to reflect order of cmp.
+/// Key to an Item in a collection.
+///
+/// Key space is unified across types, that means that an item at some index determines its own type, not the key.
+/// Another way of looking at it by drawing parallels with pointers:
+/// - Key is a pointer to an item in constrained memory space as defined by a container.
+/// - The item at some index has type, but a key with the same index can be cast to different types.
+/// - Hence Key<T> is similar to *mut (T,Shell) where following checks are delegated to other parts of the library:
+///     - Does *mut (T,Shell) exist? (In pointer terms: is it safe to dereference?)
+///     - Do we have exclusive or shared access? (In pointer terms: is it safe to dereference as & or &mut?)
+///     - To which parts of the slot we have access? (In pointer terms: is it safe to access the item, the slot, or both?)
+pub struct Key<T: DynItem + ?Sized>(Index, PhantomData<&'static T>);
 
-pub struct Key<T: Pointee + AnyItem + ?Sized>(Index, T::Metadata);
-
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> Key<T> {
+impl<T: Pointee<Metadata = ()> + DynItem + ?Sized> Key<T> {
+    /// Constructors of Key should strive to guarantee that T is indeed at Index.
     pub fn new(index: Index) -> Self {
-        Key(index, ())
+        Key(index, PhantomData)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Key<T> {
-    pub fn new_with(index: Index, metadata: T::Metadata) -> Self {
-        Key(index, metadata)
+impl<T: DynItem + ?Sized> Key<T> {
+    /// Constructors of Key should strive to guarantee that T is indeed at Index.
+    pub fn new_cast(index: Index) -> Self {
+        Key(index, PhantomData)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Key<T> {
-    pub fn type_id(&self) -> TypeId {
-        self.key_type_id()
+impl AnyKey {
+    pub fn new_any(index: Index) -> Self {
+        Key(index, PhantomData)
     }
+}
 
+impl<T: DynItem + ?Sized> Key<T> {
     pub fn path(&self) -> Path {
         Path::new_top(self.0.get(), INDEX_BASE_BITS.get())
     }
@@ -46,114 +57,65 @@ impl<T: Pointee + AnyItem + ?Sized> Key<T> {
         self.0
     }
 
-    #[inline(always)]
-    pub fn metadata(&self) -> T::Metadata {
-        self.1
-    }
-
-    pub fn upcast<U: Pointee + AnyItem + ?Sized>(self) -> Key<U>
+    pub fn upcast<U: DynItem + ?Sized>(self) -> Key<U>
     where
         T: Unsize<U>,
     {
-        let Self(index, metadata) = self;
-        let ptr = std::ptr::from_raw_parts::<T>(std::ptr::null(), metadata);
-        let metadata = std::ptr::metadata(ptr as *const U);
-        Key(index, metadata)
+        Key(self.0, PhantomData)
     }
 
-    pub fn downcast<U: Pointee<Metadata = ()> + AnyItem + ?Sized>(self) -> Option<Key<U>> {
-        if self.type_id() == TypeId::of::<U>() {
-            Some(Key::new(self.0))
-        } else {
-            None
-        }
+    pub fn any(self) -> AnyKey {
+        Key(self.0, PhantomData)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Eq for Key<T> {}
+impl<T: DynItem + ?Sized> Eq for Key<T> {}
 
-impl<T: Pointee + AnyItem + ?Sized, U: Pointee + AnyItem + ?Sized> PartialEq<Key<U>> for Key<T> {
-    default fn eq(&self, other: &Key<U>) -> bool {
-        self.0 == other.0 && self.type_id() == other.type_id()
-    }
-}
-
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> PartialEq for Key<T> {
-    fn eq(&self, other: &Self) -> bool {
+impl<T: DynItem + ?Sized, U: DynItem + ?Sized> PartialEq<Key<U>> for Key<T> {
+    fn eq(&self, other: &Key<U>) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Ord for Key<T> {
-    default fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.type_id()
-            .cmp(&other.type_id())
-            .then_with(|| self.0.cmp(&other.0))
-    }
-}
-
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> Ord for Key<T> {
+impl<T: DynItem + ?Sized> Ord for Key<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized, U: Pointee + AnyItem + ?Sized> PartialOrd<Key<U>> for Key<T> {
-    default fn partial_cmp(&self, other: &Key<U>) -> Option<std::cmp::Ordering> {
-        Some(
-            self.type_id()
-                .cmp(&other.type_id())
-                .then_with(|| self.0.cmp(&other.0)),
-        )
-    }
-}
-
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> PartialOrd for Key<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+impl<T: DynItem + ?Sized, U: DynItem + ?Sized> PartialOrd<Key<U>> for Key<T> {
+    fn partial_cmp(&self, other: &Key<U>) -> Option<std::cmp::Ordering> {
         Some(self.0.cmp(&other.0))
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Hash for Key<T> {
+impl<T: DynItem + ?Sized> Hash for Key<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.type_id().hash(state);
         self.0.hash(state);
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> Copy for Key<T> {}
+/// SAFETY: Key only contains Index, which is Send.
+unsafe impl<T: DynItem + ?Sized> Send for Key<T> where Index: Send {}
+/// SAFETY: Key only contains Index, which is Sync.
+unsafe impl<T: DynItem + ?Sized> Sync for Key<T> where Index: Sync {}
 
-impl<T: Pointee + AnyItem + ?Sized> Clone for Key<T> {
+impl<T: DynItem + ?Sized> Copy for Key<T> {}
+
+impl<T: DynItem + ?Sized> Clone for Key<T> {
     fn clone(&self) -> Self {
         Key(self.0, self.1)
     }
 }
 
-impl<T: Pointee + AnyItem + ?Sized> fmt::Debug for Key<T> {
+impl<T: DynItem + ?Sized> fmt::Debug for Key<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Key<{}>({:?}, {:?})",
-            any::type_name::<T>(),
-            self.0,
-            self.type_id()
-        )
+        write!(f, "#{}:{}", self.0, any::type_name::<T>())
     }
 }
 
-trait KeyTypeId {
-    fn key_type_id(&self) -> TypeId;
-}
-
-impl<T: Pointee + AnyItem + ?Sized> KeyTypeId for Key<T> {
-    default fn key_type_id(&self) -> TypeId {
-        let ptr = std::ptr::from_raw_parts::<T>(std::ptr::null(), self.1);
-        ptr.item_type_id()
-    }
-}
-
-impl<T: Pointee<Metadata = ()> + AnyItem + ?Sized> KeyTypeId for Key<T> {
-    fn key_type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+impl<T: DynItem + ?Sized> fmt::Display for Key<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "#{}:{}", self.0, any::type_name::<T>())
     }
 }

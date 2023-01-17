@@ -1,5 +1,8 @@
-use crate::core::{AnyItem, Index, Item, Key, Path};
-use std::{any::TypeId, fmt::Display};
+use crate::core::{Index, Item, Key, Path};
+use std::{
+    any::{Any, TypeId},
+    fmt::Display,
+};
 
 /// Collection level errors.
 /// Non fatal in theory but can be fatal in practice.
@@ -10,19 +13,19 @@ pub enum ReferError {
     /// Item it was representing doesn't exist on given path.
     InvalidKey {
         ty: TypeInfo,
-        key: Index,
+        index: Index,
         container: Path,
     },
-    // /// Path doesn't exist on given path.
-    // InvalidPath {
-    //     ty: TypeInfo,
-    //     path: Path,
-    //     container: Path,
-    // },
+    InvalidCastType {
+        expected: TypeInfo,
+        found: TypeInfo,
+        index: Index,
+        container: Path,
+    },
     /// Item doesn't support operation.
     InvalidOperation {
         ty: TypeInfo,
-        key: Index,
+        index: Index,
         op: &'static str,
     },
 }
@@ -30,42 +33,30 @@ pub enum ReferError {
 impl ReferError {
     pub fn out_of_keys<T: Item>(locality: T::LocalityKey) -> Self {
         Self::OutOfKeys {
-            ty: TypeInfo::of::<T>(None),
+            ty: TypeInfo::of::<T>(),
             locality: format!("{:?}", locality),
         }
     }
 
-    pub fn invalid_key<T: AnyItem + ?Sized>(key: Key<T>, container: Path) -> Self {
+    pub fn invalid_key<T: Any + ?Sized>(key: Key<T>, container: Path) -> Self {
         Self::InvalidKey {
-            ty: TypeInfo::of::<T>(Some(key.type_id())),
-            key: key.index(),
+            ty: TypeInfo::of::<T>(),
+            index: key.index(),
             container,
         }
     }
 
-    // pub fn invalid_path<T: AnyItem + ?Sized>(path: KeyPath<T>, container: Path) -> Self {
-    //     Self::InvalidPath {
-    //         ty: TypeInfo::of::<T>(Some(path.type_id())),
-    //         path: path.path(),
-    //         container,
-    //     }
-    // }
-
-    pub fn invalid_op<T: AnyItem + ?Sized>(key: Key<T>, op: &'static str) -> Self {
+    pub fn invalid_op<T: Any + ?Sized>(key: Key<T>, op: &'static str) -> Self {
         Self::InvalidOperation {
-            ty: TypeInfo::of::<T>(Some(key.type_id())),
-            key: key.index(),
+            ty: TypeInfo::of::<T>(),
+            index: key.index(),
             op,
         }
     }
 
-    pub fn is_invalid_key<T: AnyItem + ?Sized>(&self, key: Key<T>) -> bool {
+    pub fn is_invalid_key<T: ?Sized + 'static>(&self, key: Key<T>) -> bool {
         match self {
-            Self::InvalidKey {
-                ty: TypeInfo { ty, .. },
-                key: index,
-                ..
-            } => key.type_id() == *ty && key.index() == *index,
+            Self::InvalidKey { index, .. } => key.index() == *index,
             _ => false,
         }
     }
@@ -81,23 +72,24 @@ impl Display for ReferError {
             ),
             Self::InvalidKey {
                 ty,
-                key,
+                index: key,
                 container: path,
             } => write!(
                 f,
                 "Item for key {}#{} doesn't exist in container {}.",
                 ty, key, path
             ),
-            // Self::InvalidPath {
-            //     ty,
-            //     path,
-            //     container,
-            // } => write!(
-            //     f,
-            //     "Path {}#{} doesn't exist in container {}.",
-            //     path, ty, container
-            // ),
-            Self::InvalidOperation { ty, key, op } => {
+            Self::InvalidCastType {
+                expected,
+                found,
+                index,
+                container: path,
+            } => write!(
+                f,
+                "Item on key {}:{} in container {} can't be casted to {}.",
+                index, found, path, expected
+            ),
+            Self::InvalidOperation { ty, index: key, op } => {
                 write!(
                     f,
                     "Item for key {}#{} doesn't support operation '{}'.",
@@ -115,9 +107,9 @@ pub struct TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn of<T: AnyItem + ?Sized>(ty: Option<TypeId>) -> Self {
+    pub fn of<T: ?Sized + 'static>() -> Self {
         Self {
-            ty: ty.unwrap_or_else(|| TypeId::of::<T>()),
+            ty: TypeId::of::<T>(),
             ty_name: std::any::type_name::<T>(),
         }
     }
