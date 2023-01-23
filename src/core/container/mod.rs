@@ -20,7 +20,7 @@ use std::{
 pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
     type Container: Container<T>;
 
-    fn new_container(region: RegionPath) -> Self::Container;
+    fn new_container(&mut self, region: Path) -> Self::Container;
 }
 
 /// It's responsibility is to:
@@ -94,11 +94,17 @@ pub trait AnyContainer: Any + Sync {
 
     fn unfill_slot_any(&mut self, key: AnyKey);
 
-    fn exclusive(&mut self) -> ExclusivePermit<'_, Self> {
+    fn exclusive(&mut self) -> ExclusivePermit<'_, Self>
+    where
+        Self: Sized,
+    {
         ExclusivePermit::new(self)
     }
 
-    fn access_mut(&mut self) -> MutAnySlots<Self> {
+    fn access_mut(&mut self) -> MutAnySlots<Self>
+    where
+        Self: Sized,
+    {
         MutAnySlots::new(self)
     }
 }

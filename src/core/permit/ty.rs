@@ -45,23 +45,6 @@ impl<'a, R, T: core::Item, A, C: ?Sized> TypePermit<'a, T, R, A, C> {
         self.permit.step().map(TypePermit::new)
     }
 
-    pub fn step_into(self, index: usize) -> Option<TypePermit<'a, T, R, A, C::Sub>>
-    where
-        C: RegionContainer,
-    {
-        self.permit.step_into(index).map(TypePermit::new)
-    }
-
-    pub fn step_range(
-        self,
-        range: impl RangeBounds<usize>,
-    ) -> Option<impl Iterator<Item = TypePermit<'a, T, R, A, C::Sub>>>
-    where
-        C: RegionContainer,
-    {
-        Some(self.permit.step_range(range)?.map(TypePermit::new))
-    }
-
     pub fn step_iter(self) -> impl Iterator<Item = SlotPermit<'a, T, R, A, C>>
     where
         C: LeafContainer<T> + AnyContainer,
@@ -79,6 +62,25 @@ impl<'a, R, T: core::Item, A, C: ?Sized> TypePermit<'a, T, R, A, C> {
         self.permit
             .keys(TypeId::of::<T>())
             .map(|key| Key::new(key.index()))
+    }
+}
+
+impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> TypePermit<'a, T, R, A, C> {
+    pub fn step_into(self, index: usize) -> Option<TypePermit<'a, T, R, A, C::Sub>>
+    where
+        C: RegionContainer,
+    {
+        self.permit.step_into(index).map(TypePermit::new)
+    }
+
+    pub fn step_range(
+        self,
+        range: impl RangeBounds<usize>,
+    ) -> Option<impl Iterator<Item = TypePermit<'a, T, R, A, C::Sub>>>
+    where
+        C: RegionContainer,
+    {
+        Some(self.permit.step_range(range)?.map(TypePermit::new))
     }
 }
 

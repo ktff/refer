@@ -1,230 +1,168 @@
+use crate::{
+    core::{
+        ty::{MultiTypeContainer, TypeContainer},
+        *,
+    },
+    type_container,
+};
+use log::*;
 use std::{
     any::{Any, TypeId},
-    collections::{HashMap, HashSet},
-    marker::PhantomData,
+    collections::{hash_map::Entry, HashMap},
 };
 
-use crate::core::*;
-
-use super::vec::VecContainerFamily;
-
 /// A container of all types backed by container family F.
-pub struct AllContainer<F: ContainerFamily = VecContainerFamily> {
-    /// T -> F::C<T>
-    collections: HashMap<TypeId, Box<dyn AnyContainer>>,
-    key_len: u32,
-    _family: PhantomData<F>,
+pub struct AllContainer<F: Send + Sync + 'static> {
+    /// T -> i
+    collections: HashMap<TypeId, usize>,
+    traits: HashMap<TypeId, ItemTraits>,
+    /// [i] -> F::Container<T>
+    mappings: Vec<Box<dyn AnyContainer>>,
+    region: RegionPath,
+    family: F,
 }
 
-impl<F: ContainerFamily> AllContainer<F> {
-    pub fn new(key_len: u32) -> Self {
+impl<F: Send + Sync + 'static> AllContainer<F> {
+    pub fn new(region: RegionPath, family: F) -> Self {
         Self {
             collections: HashMap::new(),
-            key_len,
-            _family: PhantomData,
+            traits: HashMap::new(),
+            region,
+            family,
+            mappings: Vec::new(),
         }
     }
+}
 
-    fn coll<T: AnyItem>(&self) -> Option<&F::C<T>> {
-        self.collections.get(&TypeId::of::<T>()).map(|c| {
-            ((&**c) as &dyn Any)
-                .downcast_ref()
-                .expect("Should be correct type")
-        })
-    }
+impl<F: ContainerFamily<T>, T: Item> TypeContainer<T> for AllContainer<F> {
+    type Sub = F::Container;
 
-    fn coll_mut<T: AnyItem>(&mut self) -> Option<&mut F::C<T>> {
-        self.collections.get_mut(&TypeId::of::<T>()).map(|c| {
-            ((&mut **c) as &mut dyn Any)
-                .downcast_mut()
-                .expect("Should be correct type")
-        })
-    }
+    fn fill(&mut self) -> &mut Self::Sub {
+        let index = match self.collections.entry(TypeId::of::<T>()) {
+            Entry::Occupied(value) => *value.get(),
+            Entry::Vacant(entry) => {
+                // Add a new container
+                let index = self.mappings.len();
+                let path = self.region.path_of(index);
+                self.mappings
+                    .push(Box::new(self.family.new_container(path)) as Box<dyn AnyContainer>);
+                self.traits.insert(TypeId::of::<T>(), T::traits());
 
-    fn coll_or_insert<T: AnyItem>(&mut self) -> &mut F::C<T> {
-        let key_len = self.key_len;
-        (&mut **self
-            .collections
-            .entry(TypeId::of::<T>())
-            .or_insert_with(|| Box::new(F::new::<T>(key_len))) as &mut dyn Any)
-            .downcast_mut::<F::C<T>>()
+                *entry.insert(index)
+            }
+        };
+
+        (&mut *self.mappings[index] as &mut dyn Any)
+            .downcast_mut::<F::Container>()
             .expect("Should be correct type")
     }
 }
 
-impl<T: AnyItem, F: ContainerFamily> Allocator<T> for AllContainer<F>
-where
-    F::C<T>: Allocator<T>,
-{
-    type Alloc = <F::C<T> as Allocator<T>>::Alloc;
-
-    type Locality = <F::C<T> as Allocator<T>>::Locality;
-
-    fn reserve(
-        &mut self,
-        item: Option<&T>,
-        r: Self::Locality,
-    ) -> Option<(ReservedKey<T>, &Self::Alloc)> {
-        self.coll_or_insert::<T>().reserve(item, r)
+impl<F: Send + Sync + 'static> MultiTypeContainer for AllContainer<F> {
+    #[inline(always)]
+    fn region(&self) -> RegionPath {
+        self.region
     }
 
-    fn cancel(&mut self, key: ReservedKey<T>) {
-        self.coll_mut::<T>()
-            .expect("Invalid reserved key")
-            .cancel(key);
+    fn type_to_index(&self, type_id: TypeId) -> Option<usize> {
+        self.collections.get(&type_id).copied()
     }
 
-    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T>
-    where
-        T: Sized,
-    {
-        self.coll_mut::<T>()
-            .expect("Invalid reserved key")
-            .fulfill(key, item)
+    #[inline(always)]
+    fn get_any_index(&self, index: usize) -> Option<&dyn AnyContainer> {
+        self.mappings.get(index).map(|x| &**x)
     }
 
-    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
-    where
-        T: Sized,
-    {
-        self.coll_mut::<T>()?.unfill(key)
+    fn get_mut_any_index(&mut self, index: usize) -> Option<&mut dyn AnyContainer> {
+        self.mappings.get_mut(index).map(|x| &mut **x)
     }
 }
 
-impl<T: AnyItem, F: ContainerFamily> Container<T> for AllContainer<F>
-where
-    F::C<T>: Container<T>,
-{
-    type GroupItem = <F::C<T> as Container<T>>::GroupItem;
-
-    type Shell = <F::C<T> as Container<T>>::Shell;
-
-    type SlotIter<'a>=<F::C<T> as Container<T>>::SlotIter<'a>
-    where
-        Self: 'a;
-
-    fn get_slot(
-        &self,
-        key: SubKey<T>,
-    ) -> Option<UnsafeSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>> {
-        self.coll::<T>()?.get_slot(key)
-    }
-
-    fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
-        self.coll::<T>()?.iter_slot()
-    }
+impl<F: ContainerFamily<T>, T: Item> Container<T> for AllContainer<F> {
+    type_container!(impl Container<T>);
 }
 
-impl<F: ContainerFamily> AnyContainer for AllContainer<F> {
-    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
-        self.collections
-            .get(&key.type_id())
-            .map(|c| &**c)?
-            .get_any_slot(key)
-    }
+impl<F: Send + Sync + 'static> AnyContainer for AllContainer<F> {
+    type_container!(impl AnyContainer);
 
-    fn unfill_any_slot(&mut self, key: AnySubKey) {
-        self.collections
-            .get_mut(&key.type_id())
-            .map(|c| &mut **c)
-            .map(|c| c.unfill_any_slot(key));
-    }
-
-    fn first(&self, key: TypeId) -> Option<AnySubKey> {
-        self.collections.get(&key).and_then(|c| c.first(key))
-    }
-
-    fn next(&self, key: AnySubKey) -> Option<AnySubKey> {
-        self.collections
-            .get(&key.type_id())
-            .and_then(|c| c.next(key))
-    }
-
-    fn types(&self) -> HashSet<TypeId> {
-        let mut set = HashSet::new();
-        for c in self.collections.values() {
-            set.extend(c.types());
-        }
-        set
-    }
-}
-
-impl<F: ContainerFamily> Default for AllContainer<F> {
-    fn default() -> Self {
-        Self::new(MAX_KEY_LEN)
+    fn types(&self) -> HashMap<TypeId, ItemTraits> {
+        self.traits.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collection::owned::Owned;
-    use std::any::Any;
+    use crate::container::VecContainerFamily;
+    use std::{any::Any, num::NonZeroU32};
+
+    fn container() -> AllContainer<VecContainerFamily> {
+        AllContainer::new(
+            Path::default()
+                .region(NonZeroU32::new(10).unwrap())
+                .unwrap(),
+            VecContainerFamily::default(),
+        )
+    }
 
     #[test]
     fn allocate_multi_type_item() {
-        let mut container = Owned::new(AllContainer::<VecContainerFamily>::default());
+        let mut container = container();
 
-        let key_a = container.add_with(42, ()).unwrap();
-        let key_b = container.add_with(true, ()).unwrap();
-        let key_c = container.add_with("Hello", ()).unwrap();
+        let key_a = container.fill_slot((), 42).unwrap();
+        let key_b = container.fill_slot((), true).unwrap();
+        let key_c = container.fill_slot((), "Hello").unwrap();
 
-        assert_eq!(container.get(key_a).map(|((item, _), _)| item), Some(&42));
-        assert_eq!(container.get(key_b).map(|((item, _), _)| item), Some(&true));
         assert_eq!(
-            container.get(key_c).map(|((item, _), _)| item),
-            Some(&"Hello")
+            container.access_mut().slot(key_a).get().unwrap().item(),
+            &42
+        );
+        assert_eq!(
+            container.access_mut().slot(key_b).get().unwrap().item(),
+            &true
+        );
+        assert_eq!(
+            container.access_mut().slot(key_c).get().unwrap().item(),
+            &"Hello"
         );
     }
 
     #[test]
     fn get_any() {
-        let mut container = Owned::new(AllContainer::<VecContainerFamily>::default());
+        let mut container = container();
 
-        let key_a = container.add_with(42, ()).unwrap();
-        let key_b = container.add_with(true, ()).unwrap();
-        let key_c = container.add_with("Hello", ()).unwrap();
+        let key_a = container.fill_slot((), 42).unwrap();
+        let key_b = container.fill_slot((), true).unwrap();
+        let key_c = container.fill_slot((), "Hello").unwrap();
 
         assert_eq!(
             (container
-                .split_item_any(key_a.into())
-                .map(|(((item, _), _), _)| item)
-                .unwrap() as &dyn Any)
+                .access_mut()
+                .slot(key_a.any())
+                .get_dyn()
+                .unwrap()
+                .item() as &dyn Any)
                 .downcast_ref(),
             Some(&42)
         );
         assert_eq!(
             (container
-                .split_item_any(key_b.into())
-                .map(|(((item, _), _), _)| item)
-                .unwrap() as &dyn Any)
+                .access_mut()
+                .slot(key_b.any())
+                .get_dyn()
+                .unwrap()
+                .item() as &dyn Any)
                 .downcast_ref(),
             Some(&true)
         );
         assert_eq!(
             (container
-                .split_item_any(key_c.into())
-                .map(|(((item, _), _), _)| item)
-                .unwrap() as &dyn Any)
+                .access_mut()
+                .slot(key_c.any())
+                .get_dyn()
+                .unwrap()
+                .item() as &dyn Any)
                 .downcast_ref(),
-            Some(&"Hello")
-        );
-    }
-
-    #[test]
-    fn unfill_any() {
-        let mut container = Owned::new(AllContainer::<VecContainerFamily>::default());
-
-        let key_a = container.add_with(42, ()).unwrap();
-        let key_b = container.add_with(true, ()).unwrap();
-        let key_c = container.add_with("Hello", ()).unwrap();
-
-        assert_eq!(container.remove(key_b), Some(true));
-
-        assert_eq!(container.get(key_a).map(|((item, _), _)| item), Some(&42));
-        assert!(container.get(key_b).is_none());
-        assert_eq!(
-            container.get(key_c).map(|((item, _), _)| item),
             Some(&"Hello")
         );
     }

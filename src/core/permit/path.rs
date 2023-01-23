@@ -1,34 +1,33 @@
 use super::*;
 use crate::core::{
-    region::RegionContainer, ty::TypeContainer, AnyContainer, Container, KeyPath, Path, Result,
+    region::RegionContainer, ty::TypeContainer, AnyContainer, Container, DynItem, Path, Result,
 };
 use std::{
     any::TypeId,
     ops::{Bound, Deref, RangeBounds},
 };
 
-// TODO: PathPermit over any trait
-
-pub struct PathPermit<'a, T: core::Item, R, A, C: ?Sized> {
+pub struct PathPermit<'a, T: DynItem + ?Sized, R, A, C: AnyContainer + ?Sized> {
     permit: TypePermit<'a, T, R, A, C>,
-    path: KeyPath<T>,
+    path: Path,
 }
 
-impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, C> {
+impl<'a, R, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> PathPermit<'a, T, R, A, C> {
     pub fn new(permit: TypePermit<'a, T, R, A, C>) -> Self {
         Self {
-            path: permit.container_path().of(),
+            path: permit.container_path(),
             permit,
         }
     }
 
     /// Panics if the path is not a subpath of container.
-    pub fn new_with(permit: TypePermit<'a, T, R, A, C>, path: KeyPath<T>) -> Self {
-        assert!(permit.container_path().of().contains(path));
+    pub fn new_with(permit: TypePermit<'a, T, R, A, C>, path: impl Into<Path>) -> Self {
+        let path = path.into();
+        assert!(permit.container_path().contains(path));
         Self { path, permit }
     }
 
-    pub fn path(&self) -> KeyPath<T> {
+    pub fn path(&self) -> Path {
         self.path
     }
 
@@ -40,11 +39,22 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
         Some(Self { permit, path })
     }
 
+    // TODO
+    // /// Iterates over valid keys in ascending order of types that have T as Item trait.
+    // pub fn iter_dyn(self) -> Result<impl Iterator<Item = core::DynSlot<'a, T, R, A>>> {
+    //     unimplemented!()
+    // }
+
+    // TODO
+    // pub fn split_level_dyn
+}
+
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, C> {
     pub fn iter(self) -> Result<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
         let Self { permit, path } = self;
-        assert!(permit.container_path().of().contains(path));
+        assert!(permit.container_path().contains(path));
         Ok(permit
-            .iter_slot(path)
+            .iter_slot(path.of())
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
@@ -71,9 +81,8 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
         };
 
         if let Some(iter) = path
-            .and(self.path.path())
+            .and(self.path)
             .expect("Path out of Container path")
-            .of()
             .iter_level(level)
         {
             Box::new(
@@ -96,7 +105,9 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
         let Self { permit, path } = self;
         permit.step().map(|permit| PathPermit { permit, path })
     }
+}
 
+impl<'a, R, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> PathPermit<'a, T, R, A, C> {
     pub fn step_into(self, index: usize) -> Option<PathPermit<'a, T, R, A, C::Sub>>
     where
         C: RegionContainer,
@@ -145,7 +156,7 @@ impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, 
     }
 }
 
-impl<'a, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, Mut, A, C> {
+impl<'a, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> PathPermit<'a, T, Mut, A, C> {
     pub fn borrow(&self) -> PathPermit<T, Ref, A, C> {
         PathPermit {
             permit: self.permit.borrow(),
@@ -161,7 +172,7 @@ impl<'a, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, Mut, A, C
     }
 }
 
-impl<'a, T: core::Item, R, A, C: ?Sized> Deref for PathPermit<'a, T, R, A, C> {
+impl<'a, T: DynItem + ?Sized, R, A, C: AnyContainer + ?Sized> Deref for PathPermit<'a, T, R, A, C> {
     type Target = &'a C;
 
     fn deref(&self) -> &Self::Target {
@@ -169,9 +180,9 @@ impl<'a, T: core::Item, R, A, C: ?Sized> Deref for PathPermit<'a, T, R, A, C> {
     }
 }
 
-impl<'a, T: core::Item, A, C: ?Sized> Copy for PathPermit<'a, T, Ref, A, C> {}
+impl<'a, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> Copy for PathPermit<'a, T, Ref, A, C> {}
 
-impl<'a, T: core::Item, A, C: ?Sized> Clone for PathPermit<'a, T, Ref, A, C> {
+impl<'a, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> Clone for PathPermit<'a, T, Ref, A, C> {
     fn clone(&self) -> Self {
         Self {
             permit: self.permit,
@@ -180,7 +191,7 @@ impl<'a, T: core::Item, A, C: ?Sized> Clone for PathPermit<'a, T, Ref, A, C> {
     }
 }
 
-impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> From<TypePermit<'a, T, R, A, C>>
+impl<'a, R, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> From<TypePermit<'a, T, R, A, C>>
     for PathPermit<'a, T, R, A, C>
 {
     fn from(permit: TypePermit<'a, T, R, A, C>) -> Self {

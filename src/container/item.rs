@@ -7,6 +7,7 @@ use std::{any::TypeId, cell::SyncUnsafeCell};
 
 const ONE: NonZeroUsize = NonZeroUsize::new(1).expect("Not zero");
 
+#[derive(Default)]
 pub struct ItemContainerFamily;
 
 impl<T: Item<Alloc = std::alloc::Global>> ContainerFamily<T> for ItemContainerFamily
@@ -15,9 +16,9 @@ where
 {
     type Container = ItemContainer<T>;
 
-    fn new_container(region: RegionPath) -> Self::Container {
+    fn new_container(&mut self, region: Path) -> Self::Container {
         ItemContainer::new(Context::new_default(
-            region.path().leaf().expect("Too large path region"),
+            region.leaf().expect("Too large path region"),
         ))
     }
 }

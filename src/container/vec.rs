@@ -10,6 +10,7 @@ use std::{
     ops::{Bound, RangeBounds},
 };
 
+#[derive(Default)]
 pub struct VecContainerFamily;
 
 impl<T: Item<Alloc = std::alloc::Global>> ContainerFamily<T> for VecContainerFamily
@@ -18,9 +19,9 @@ where
 {
     type Container = VecContainer<T>;
 
-    fn new_container(region: RegionPath) -> Self::Container {
+    fn new_container(&mut self, region: Path) -> Self::Container {
         VecContainer::new(Context::new_default(
-            region.path().leaf().expect("Too large path region"),
+            region.leaf().expect("Too large path region"),
         ))
     }
 }

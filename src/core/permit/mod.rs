@@ -21,6 +21,8 @@ use std::marker::PhantomData;
 
 // TODO: Test permit system, test compile failures?
 
+// TODO: Unify *Acccess under Access<R: Restriction>? Restrictions could be: Type<T>, Path, PathKey<T>, Key<T>, etc.
+
 // Extension TODO: Like ExclusivePermit, SharedPermit could be constructed from ExclusivePermit for concurrent mutation.
 
 pub struct Mut;

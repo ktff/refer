@@ -22,9 +22,9 @@ pub type AnyKey = Key<dyn AnyItem>;
 /// - Key is a pointer to an item in constrained memory space as defined by a container.
 /// - The item at some index has type, but a key with the same index can be cast to different types.
 /// - Hence Key<T> is similar to *mut (T,Shell) where following checks are delegated to other parts of the library:
-///     - Does *mut (T,Shell) exist? (In pointer terms: is it safe to dereference?)
-///     - Do we have exclusive or shared access? (In pointer terms: is it safe to dereference as & or &mut?)
-///     - To which parts of the slot we have access? (In pointer terms: is it safe to access the item, the slot, or both?)
+///     - Does *mut (T,Shell) exist? (In pointer terms: is it safe to dereference?) (Responsibility of Container system)
+///     - Do we have exclusive or shared access? (In pointer terms: is it safe to dereference as & or &mut?) (Responsibility of Permit system)
+///     - To which parts of the slot we have access? (In pointer terms: is it safe to access the item, the slot, or both?) (Responsibility of Permit system)
 pub struct Key<T: DynItem + ?Sized>(Index, PhantomData<&'static T>);
 
 impl<T: Pointee<Metadata = ()> + DynItem + ?Sized> Key<T> {

@@ -23,7 +23,7 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> SlotPermit<'
     }
 }
 
-impl<'a, R, T: core::Item, A, C: ?Sized> SlotPermit<'a, T, R, A, C> {
+impl<'a, R, T: core::Item, A, C: AnyContainer + ?Sized> SlotPermit<'a, T, R, A, C> {
     pub fn step(self) -> Option<SlotPermit<'a, T, R, A, C::Sub>>
     where
         C: TypeContainer<T>,

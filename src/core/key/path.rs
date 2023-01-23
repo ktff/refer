@@ -247,7 +247,7 @@ impl LeafPath {
 }
 
 /// Region of paths that starts at some path and has non zero length.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct RegionPath {
     /// Path of indices
     path: IndexBase,

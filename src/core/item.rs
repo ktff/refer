@@ -9,8 +9,6 @@ use std::{
 
 pub type ItemTraits = &'static [(TypeId, &'static (dyn Any + Send + Sync))];
 
-// TODO: Enable type mutation?
-
 /// An item of a model.
 pub trait Item: Sized + Any + Sync {
     type Alloc: Allocator + Any + Clone + 'static + Send + Sync;
@@ -98,7 +96,6 @@ pub trait Item: Sized + Any + Sync {
     fn traits() -> ItemTraits;
 }
 
-// TODO: Some better name? This sounds like it's always dynamic when it's not.
 /// Marker trait for dyn compliant traits of items.
 pub trait DynItem: Any + Pointee {}
 impl<T: Any + Pointee + ?Sized> DynItem for T {}
