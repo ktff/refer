@@ -1,6 +1,7 @@
 use super::*;
 use crate::core::{
-    region::RegionContainer, ty::TypeContainer, AnyContainer, Container, DynItem, Path, Result,
+    container::RegionContainer, container::TypeContainer, AnyContainer, Container, DynItem, Path,
+    Result,
 };
 use std::{
     any::TypeId,

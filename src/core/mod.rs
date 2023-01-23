@@ -1,7 +1,7 @@
 #![allow(type_alias_bounds)]
 
 #[macro_use]
-mod container;
+pub mod container;
 mod context;
 mod error;
 #[macro_use]
@@ -13,7 +13,7 @@ mod shell;
 mod slot;
 // mod trait_registry;
 
-pub use container::*;
+pub use container::{AnyContainer, Container};
 pub use context::*;
 pub use error::*;
 pub use item::*;

@@ -1,11 +1,10 @@
 use crate::{
     core::{
-        ty::{MultiTypeContainer, TypeContainer},
+        container::{ContainerFamily, MultiTypeContainer, TypeContainer},
         *,
     },
     type_container,
 };
-use log::*;
 use std::{
     any::{Any, TypeId},
     collections::{hash_map::Entry, HashMap},
@@ -79,7 +78,7 @@ impl<F: Send + Sync + 'static> MultiTypeContainer for AllContainer<F> {
 }
 
 impl<F: ContainerFamily<T>, T: Item> Container<T> for AllContainer<F> {
-    type_container!(impl Container<T>);
+    type_container!(impl Container<T> prefer index);
 }
 
 impl<F: Send + Sync + 'static> AnyContainer for AllContainer<F> {
@@ -131,7 +130,7 @@ mod tests {
     fn get_any() {
         let mut container = container();
 
-        let key_a = container.fill_slot((), 42).unwrap();
+        let key_a = container.fill_slot((), 42u32).unwrap();
         let key_b = container.fill_slot((), true).unwrap();
         let key_c = container.fill_slot((), "Hello").unwrap();
 
@@ -143,7 +142,7 @@ mod tests {
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
-            Some(&42)
+            Some(&42u32)
         );
         assert_eq!(
             (container

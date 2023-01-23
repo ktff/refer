@@ -1,9 +1,13 @@
 #[macro_use]
-pub mod leaf;
+mod leaf;
 #[macro_use]
-pub mod region;
+mod region;
 #[macro_use]
-pub mod ty;
+mod ty;
+
+pub use leaf::*;
+pub use region::*;
+pub use ty::*;
 
 use super::{
     AnyKey, AnySlotContext, AnyUnsafeSlot, ContextPath, ExclusivePermit, Item, ItemTraits, Key,

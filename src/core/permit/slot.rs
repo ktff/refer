@@ -1,6 +1,7 @@
 use super::*;
 use crate::core::{
-    region::RegionContainer, ty::TypeContainer, AnyContainer, Container, Key, ReferError, Result,
+    container::RegionContainer, container::TypeContainer, AnyContainer, Container, Key, ReferError,
+    Result,
 };
 
 pub struct SlotPermit<'a, T: core::DynItem + ?Sized, R, A, C: ?Sized> {
