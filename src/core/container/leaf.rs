@@ -139,7 +139,7 @@ macro_rules! leaf_container {
             }
         }
 
-        fn next_key(&self, key: AnyKey) -> Option<AnyKey>{
+        fn next_key(&self, _: TypeId, key: AnyKey) -> Option<AnyKey>{
             let index = self.context().leaf_path().index_of(key);
             self.next(NonZeroUsize::new(index)?).map(|index| self.context().leaf_path().key_of::<$t>(index).upcast())
         }

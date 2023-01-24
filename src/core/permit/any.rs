@@ -63,10 +63,10 @@ impl<'a, R, A, C: AnyContainer + ?Sized> AnyPermit<'a, R, A, C> {
     }
 
     /// Iterates over valid keys of type in ascending order.
-    pub fn keys(&self, key: TypeId) -> impl Iterator<Item = AnyKey> + 'a {
+    pub fn keys(&self, ty: TypeId) -> impl Iterator<Item = AnyKey> + 'a {
         let container = self.container;
-        std::iter::successors(container.first_key(key), move |&key| {
-            container.next_key(key)
+        std::iter::successors(container.first_key(ty), move |&key| {
+            container.next_key(ty, key)
         })
     }
 

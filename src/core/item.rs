@@ -14,7 +14,7 @@ use std::{
 pub type ItemTraits = &'static [(TypeId, &'static (dyn Any + Send + Sync))];
 
 /// An item of a model.
-pub trait Item: Sized + Any + Sync {
+pub trait Item: Sized + Any + Sync + Send {
     type Alloc: Allocator + Any + Clone + 'static + Send + Sync;
 
     /// Locality of item.

@@ -59,7 +59,7 @@ pub trait Container<T: Item>: AnyContainer {
     fn unfill_slot(&mut self, key: Key<T>) -> Option<(T, Self::Shell, SlotContext<T>)>;
 }
 
-pub trait AnyContainer: Any + Sync {
+pub trait AnyContainer: Any + Sync + Send {
     /// Path of container shared for all items in the container.
     fn container_path(&self) -> Path;
 
@@ -74,8 +74,8 @@ pub trait AnyContainer: Any + Sync {
     fn first_key(&self, key: TypeId) -> Option<AnyKey>;
 
     /// Returns following key after given in ascending order
-    /// for the same type.
-    fn next_key(&self, key: AnyKey) -> Option<AnyKey>;
+    /// for the type at the key.
+    fn next_key(&self, ty: TypeId, key: AnyKey) -> Option<AnyKey>;
 
     /// Returns last key for given type
     fn last_key(&self, key: TypeId) -> Option<AnyKey>;

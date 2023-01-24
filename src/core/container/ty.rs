@@ -84,8 +84,8 @@ macro_rules! single_type_container {
             self.get()?.first_key(key)
         }
 
-        fn next_key(&self, key: AnyKey) -> Option<AnyKey> {
-            self.get()?.next_key(key)
+        fn next_key(&self, ty: std::any::TypeId, key: AnyKey) -> Option<AnyKey> {
+            self.get()?.next_key(ty, key)
         }
 
         fn last_key(&self, key: std::any::TypeId) -> Option<AnyKey> {
@@ -214,8 +214,8 @@ macro_rules! multi_type_container {
             self.get_any_index(self.type_to_index(key)?)?.first_key(key)
         }
 
-        fn next_key(&self, key: AnyKey) -> Option<AnyKey> {
-            self.get_any(key)?.next_key(key)
+        fn next_key(&self, ty: std::any::TypeId, key: AnyKey) -> Option<AnyKey> {
+            self.get_any(key)?.next_key(ty,key)
         }
 
         fn last_key(&self, key: std::any::TypeId) -> Option<AnyKey> {

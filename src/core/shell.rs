@@ -3,7 +3,7 @@ pub use crate::util::ord_iter::AscendingIterator;
 use std::any::Any;
 
 /// A shell of an item. In which references are recorded.
-pub trait Shell: Sized + Any + Sync {
+pub trait Shell: Sized + Any + Sync + Send {
     type T: Item;
 
     type Iter<'a>: Iterator<Item = AnyRef> + 'a

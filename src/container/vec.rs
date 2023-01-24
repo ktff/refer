@@ -82,7 +82,7 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
     ) -> impl Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, S>)> + Send {
         let mut start = match start {
             Bound::Included(i) => i,
-            Bound::Excluded(i) => i + 1,
+            Bound::Excluded(i) => i.saturating_add(1),
             Bound::Unbounded => 0,
         };
         let end = match end {
