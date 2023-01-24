@@ -4,6 +4,37 @@
 /// and index that must correspond to index of internal container in this container region.
 #[macro_export]
 macro_rules! delegate_container {
+    (impl for $c:ty {<$t:ty> => 0: $i:ty = $e:tt;} in $path:tt) => {
+        impl $crate::core::container::TypeContainer<$t> for $c {
+            type Sub =  $i;
+
+            #[inline(always)]
+            fn get(&self) -> Option<&Self::Sub> {
+               Some(&self.$e)
+            }
+
+            fn get_mut(&mut self) -> Option<&mut Self::Sub> {
+                Some(&mut self.$e)
+            }
+
+            fn fill(&mut self) -> &mut Self::Sub{
+                &mut self.$e
+            }
+        }
+
+        impl $crate::core::Container<$t> for $c{
+            $crate::single_type_container!(impl Container<$t>);
+        }
+
+
+        impl $crate::core::AnyContainer for $c {
+            $crate::single_type_container!(impl AnyContainer<$t>);
+
+            fn container_path(&self) -> Path {
+                self.$e.container_path()
+            }
+        }
+    };
     (impl for $c:ty { $(<$t:ty> => $index:tt: $i:ty = $e:tt;)+} in $region:tt) => {
         $(
             impl $crate::core::container::TypeContainer<$t> for $c {
@@ -24,7 +55,7 @@ macro_rules! delegate_container {
             }
 
             impl $crate::core::Container<$t> for $c{
-                $crate::type_container!(impl Container<$t> prefer type);
+                $crate::multi_type_container!(impl Container<$t> prefer type);
             }
         )*
 
@@ -66,7 +97,7 @@ macro_rules! delegate_container {
         }
 
         impl $crate::core::AnyContainer for $c {
-            $crate::type_container!(impl AnyContainer);
+            $crate::multi_type_container!(impl AnyContainer);
 
 
             fn types(&self) -> std::collections::HashMap<std::any::TypeId, $crate::core::ItemTraits> {
@@ -77,7 +108,8 @@ macro_rules! delegate_container {
                 set
             }
         }
-    }
+    };
+
 }
 
 #[cfg(test)]
@@ -171,6 +203,66 @@ mod tests {
                 .item() as &dyn Any)
                 .downcast_ref(),
             Some(&"Hello")
+        );
+    }
+
+    struct SingleFieldContainer {
+        a: VecContainer<i32>,
+    }
+
+    delegate_container!(impl for SingleFieldContainer {
+        <i32> => 0: VecContainer<i32> = a;
+    } in region);
+
+    fn single_container() -> SingleFieldContainer {
+        SingleFieldContainer {
+            a: VecContainer::new(Context::new_default(Path::default().leaf().unwrap())),
+        }
+    }
+
+    #[test]
+    fn fill() {
+        let mut container = single_container();
+
+        let item = 42;
+        let key = container.fill_slot((), item).unwrap();
+
+        assert_eq!(
+            container.access_mut().slot(key).get().unwrap().item(),
+            &item
+        );
+        let mut iter = container.access_mut().ty::<i32>().path().iter().unwrap();
+        assert_eq!(iter.next().unwrap().item(), &item);
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn unfill() {
+        let mut container = single_container();
+
+        let item = 42;
+        let key = container.fill_slot((), item).unwrap();
+
+        assert_eq!(
+            container.access_mut().slot(key).get().unwrap().item(),
+            &item
+        );
+
+        assert_eq!(
+            container.unfill_slot(key).map(|(item, _, _)| item),
+            Some(item)
+        );
+
+        assert!(container.access_mut().slot(key).get().is_err());
+        assert_eq!(
+            container
+                .access_mut()
+                .ty::<i32>()
+                .path()
+                .iter()
+                .unwrap()
+                .count(),
+            0
         );
     }
 }

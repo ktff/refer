@@ -3,7 +3,7 @@ use crate::{
         container::{ContainerFamily, MultiTypeContainer, TypeContainer},
         *,
     },
-    type_container,
+    multi_type_container,
 };
 use std::{
     any::{Any, TypeId},
@@ -35,6 +35,27 @@ impl<F: Send + Sync + 'static> AllContainer<F> {
 
 impl<F: ContainerFamily<T>, T: Item> TypeContainer<T> for AllContainer<F> {
     type Sub = F::Container;
+
+    fn get(&self) -> Option<&Self::Sub> {
+        let index = self.type_to_index(TypeId::of::<T>())?;
+        let container = self.get_any_index(index)?;
+
+        Some(
+            (container as &dyn Any)
+                .downcast_ref()
+                .expect("Should be correct type"),
+        )
+    }
+
+    fn get_mut(&mut self) -> Option<&mut Self::Sub> {
+        let index = self.type_to_index(TypeId::of::<T>())?;
+        let container = self.get_mut_any_index(index)?;
+        Some(
+            (container as &mut dyn Any)
+                .downcast_mut()
+                .expect("Should be correct type"),
+        )
+    }
 
     fn fill(&mut self) -> &mut Self::Sub {
         let index = match self.collections.entry(TypeId::of::<T>()) {
@@ -78,11 +99,11 @@ impl<F: Send + Sync + 'static> MultiTypeContainer for AllContainer<F> {
 }
 
 impl<F: ContainerFamily<T>, T: Item> Container<T> for AllContainer<F> {
-    type_container!(impl Container<T> prefer index);
+    multi_type_container!(impl Container<T> prefer index);
 }
 
 impl<F: Send + Sync + 'static> AnyContainer for AllContainer<F> {
-    type_container!(impl AnyContainer);
+    multi_type_container!(impl AnyContainer);
 
     fn types(&self) -> HashMap<TypeId, ItemTraits> {
         self.traits.clone()

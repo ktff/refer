@@ -18,8 +18,6 @@ use std::{
     collections::HashMap,
 };
 
-/// TODO: Macro impl for *Container and tests
-
 /// A family of containers.
 pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
     type Container: Container<T>;

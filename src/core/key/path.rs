@@ -121,10 +121,10 @@ impl Path {
     /// Err if range is too large for usize.
     pub fn remaining_range(self) -> Result<RangeInclusive<usize>, ()> {
         let level = self.level();
-        match level.cmp(&(std::mem::size_of::<usize>() as u32 * 8)) {
+        let remaining_len = INDEX_BASE_BITS.get() - level;
+        match remaining_len.cmp(&(std::mem::size_of::<usize>() as u32 * 8)) {
             Ordering::Less => {
-                let remaining_len = INDEX_BASE_BITS.get() - level;
-                let end = (1 << remaining_len) - 1;
+                let end = (1usize << remaining_len) - 1;
                 Ok(0..=end)
             }
             Ordering::Equal => Ok(0..=usize::MAX),

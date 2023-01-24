@@ -80,19 +80,29 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
         start: Bound<usize>,
         end: Bound<usize>,
     ) -> impl Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, S>)> + Send {
-        let index_start = match &start {
-            Bound::Included(i) => *i,
-            Bound::Excluded(i) => *i + 1,
+        let mut start = match start {
+            Bound::Included(i) => i,
+            Bound::Excluded(i) => i + 1,
             Bound::Unbounded => 0,
         };
+        let end = match end {
+            // slice doesn't support inclusive end of usize::MAX nor the slice can contain it
+            // so we need to adjust it to usize::MAX - 1.
+            Bound::Included(i) => i.saturating_add(1).min(self.slots.len()),
+            Bound::Excluded(i) => i.min(self.slots.len()),
+            Bound::Unbounded => self.slots.len(),
+        };
+        if start > end {
+            start = end;
+        }
 
-        self.slots[(start, end)]
+        self.slots[start..end]
             .iter()
             .enumerate()
             .filter_map(move |(i, slot)| {
                 if let Slot::Some(ref item, ref shell) = slot {
                     Some((
-                        NonZeroUsize::new(index_start + i).expect("Zero index was allocated"),
+                        NonZeroUsize::new(start + i).expect("Zero index was allocated"),
                         UnsafeSlot::new(self.context.slot_context(), item, shell),
                     ))
                 } else {
