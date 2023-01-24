@@ -137,6 +137,10 @@ impl LocalityPath for Path {
     fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
         region.range_of(*self).map(LocalityRegion::Indices)
     }
+
+    fn upcast(&self) -> &dyn LocalityPath {
+        self
+    }
 }
 
 impl std::fmt::Display for Path {

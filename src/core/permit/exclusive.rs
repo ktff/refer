@@ -67,14 +67,14 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         Some(
             container
                 .iter_mut(range)?
-                .map(move |(_, container)| ExclusivePermit {
+                .map(move |container| ExclusivePermit {
                     container,
                     permit: permit.access(),
                 }),
         )
     }
 
-    fn in_locality<T: Item>(&self, key: Key<T>, to: impl LocalityPath) -> bool
+    fn in_locality<T: Item>(&self, key: Key<T>, to: &impl LocalityPath) -> bool
     where
         C: Container<T>,
     {
@@ -83,7 +83,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             .unwrap_or(false)
     }
 
-    fn clone_item<T: Item>(&mut self, key: Key<T>, to: impl LocalityPath + Copy) -> Result<T>
+    fn clone_item<T: Item>(&mut self, key: Key<T>, to: &impl LocalityPath) -> Result<T>
     where
         C: Container<T>,
     {
@@ -160,7 +160,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 }
 
 impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
-    pub fn add<T: Item>(&mut self, locality: impl LocalityPath + Copy, item: T) -> Result<Key<T>>
+    pub fn add<T: Item>(&mut self, locality: &impl LocalityPath, item: T) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -196,11 +196,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
     /// Displaces item to locality and displaces shell.
     /// May have side effects that invalidate some Keys.
-    pub fn displace<T: Item>(
-        &mut self,
-        from: Key<T>,
-        to: impl LocalityPath + Copy,
-    ) -> Result<Key<T>>
+    pub fn displace<T: Item>(&mut self, from: Key<T>, to: &impl LocalityPath) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -237,11 +233,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
     /// Displaces item and removes shell.
     /// May have side effects that invalidate some Keys.
-    pub fn displace_item<T: Item>(
-        &mut self,
-        from: Key<T>,
-        to: impl LocalityPath + Copy,
-    ) -> Result<Key<T>>
+    pub fn displace_item<T: Item>(&mut self, from: Key<T>, to: &impl LocalityPath) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -332,11 +324,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     }
 
     // Duplicates item to locality and duplicates shell.
-    pub fn duplicate<T: Item>(
-        &mut self,
-        key: Key<T>,
-        to: impl LocalityPath + Copy,
-    ) -> Result<Key<T>>
+    pub fn duplicate<T: Item>(&mut self, key: Key<T>, to: &impl LocalityPath) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -351,11 +339,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     }
 
     /// Duplicates item to locality.
-    pub fn duplicate_item<T: Item>(
-        &mut self,
-        key: Key<T>,
-        to: impl LocalityPath + Copy,
-    ) -> Result<Key<T>>
+    pub fn duplicate_item<T: Item>(&mut self, key: Key<T>, to: &impl LocalityPath) -> Result<Key<T>>
     where
         C: Container<T>,
     {

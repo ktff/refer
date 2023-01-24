@@ -43,18 +43,18 @@ pub trait Container<T: Item>: AnyContainer {
     /// Bijection between keys and slots MUST be enforced.
     fn get_slot(&self, key: Key<T>) -> Option<UnsafeSlot<T, Self::Shell>>;
 
-    fn get_locality(&self, key: impl LocalityPath) -> Option<SlotLocality<T>>;
+    fn get_locality(&self, key: &impl LocalityPath) -> Option<SlotLocality<T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
     /// Iterator MUST NOT return the same slot more than once.
     fn iter_slot(&self, path: KeyPath<T>) -> Option<Self::SlotIter<'_>>;
 
     /// None if there is no more place in locality.
-    fn fill_slot(&mut self, key: impl LocalityPath, item: T) -> Result<Key<T>, T>;
+    fn fill_slot(&mut self, key: &impl LocalityPath, item: T) -> Result<Key<T>, T>;
 
     /// Fills locality
     /// None if there is no locality for T under given key.
-    fn fill_locality(&mut self, key: impl LocalityPath) -> Option<LocalityKey>;
+    fn fill_locality(&mut self, key: &impl LocalityPath) -> Option<LocalityKey>;
 
     /// Removes from container.
     fn unfill_slot(&mut self, key: Key<T>) -> Option<(T, Self::Shell, SlotLocality<T>)>;

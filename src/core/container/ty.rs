@@ -41,7 +41,7 @@ macro_rules! single_type_container {
 
         type SlotIter<'a> = <<Self as TypeContainer<$t>>::Sub as Container<$t>>::SlotIter<'a>;
 
-        fn get_locality(&self, key: impl LocalityPath) -> Option<SlotLocality<$t>> {
+        fn get_locality(&self, key: &impl LocalityPath) -> Option<SlotLocality<$t>> {
             TypeContainer::<$t>::get(self)?.get_locality(key)
         }
 
@@ -51,13 +51,13 @@ macro_rules! single_type_container {
 
         fn fill_slot(
             &mut self,
-            key: impl LocalityPath,
+            key: &impl LocalityPath,
             item: $t,
         ) -> std::result::Result<Key<$t>, $t> {
             TypeContainer::<$t>::fill(self).fill_slot(key, item)
         }
 
-        fn fill_locality(&mut self, key: impl LocalityPath) -> Option<LocalityKey> {
+        fn fill_locality(&mut self, key: &impl LocalityPath) -> Option<LocalityKey> {
             TypeContainer::<$t>::fill(self).fill_locality(key)
         }
 
@@ -141,7 +141,7 @@ macro_rules! multi_type_container {
 
         type SlotIter<'a> = <<Self as TypeContainer<$t>>::Sub as Container<$t>>::SlotIter<'a>;
 
-        fn get_locality(&self, key: impl LocalityPath) -> Option<SlotLocality<$t>> {
+        fn get_locality(&self, key: &impl LocalityPath) -> Option<SlotLocality<$t>> {
             TypeContainer::<$t>::get(self)?.get_locality(key)
         }
 
@@ -151,13 +151,13 @@ macro_rules! multi_type_container {
 
         fn fill_slot(
             &mut self,
-            key: impl LocalityPath,
+            key: &impl LocalityPath,
             item: $t,
         ) -> std::result::Result<Key<$t>, $t> {
             TypeContainer::<$t>::fill(self).fill_slot(key, item)
         }
 
-        fn fill_locality(&mut self, key: impl LocalityPath) -> Option<LocalityKey>{
+        fn fill_locality(&mut self, key: &impl LocalityPath) -> Option<LocalityKey>{
             TypeContainer::<$t>::fill(self).fill_locality(key)
         }
 

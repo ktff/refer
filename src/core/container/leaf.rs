@@ -91,7 +91,7 @@ macro_rules! leaf_container {
             self.get(index)
         }
 
-        fn get_locality(&self, _: impl LocalityPath) -> Option<SlotLocality<$t>> {
+        fn get_locality(&self, _: &impl LocalityPath) -> Option<SlotLocality<$t>> {
             Some(self.locality().slot_locality())
         }
 
@@ -101,11 +101,11 @@ macro_rules! leaf_container {
             Some(self.iter(range).map(move |(index,slot)|(leaf_path.key_of(index),slot)))
         }
 
-        fn fill_slot(&mut self, _: impl LocalityPath, item: $t) -> std::result::Result<Key<$t>, $t> {
+        fn fill_slot(&mut self, _: &impl LocalityPath, item: $t) -> std::result::Result<Key<$t>, $t> {
             self.fill(item).map(|index|self.locality().locality_key().key_of(index))
         }
 
-        fn fill_locality(&mut self, _: impl LocalityPath) -> Option<LocalityKey> {
+        fn fill_locality(&mut self, _: &impl LocalityPath) -> Option<LocalityKey> {
             Some(*self.locality().locality_key())
         }
 

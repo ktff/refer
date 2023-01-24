@@ -1,277 +1,208 @@
-use std::{any::TypeId, collections::HashSet};
+use crate::{
+    core::{container::*, *},
+    region_container,
+};
+use std::{
+    any::TypeId,
+    collections::HashMap,
+    ops::{Bound, Range, RangeBounds},
+};
 
-use crate::core::*;
+type Iter<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a C> + Send + 'a;
 
-pub type SlotIter<'a, L: ChunkingLogic<T>, T: AnyItem>
-where
-    L::C: Container<T>,
-= impl Iterator<
-    Item = (
-        SubKey<T>,
-        UnsafeSlot<
-            'a,
-            T,
-            <<L as Chunk>::C as Container<T>>::GroupItem,
-            <<L as Chunk>::C as Container<T>>::Shell,
-            <<L as Chunk>::C as Allocator<T>>::Alloc,
-        >,
-    ),
->;
+type IterMut<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a mut C> + Send + 'a;
 
-pub trait Chunk: Sync + Send + 'static {
-    /// Chunk container type
-    type C: 'static;
-
-    /// Key len of chunking layer.
-    fn key_len(&self) -> u32;
+/// A container that chunks items into separate containers according to items locality key.
+pub struct VecChunkedContainer<C: AnyContainer> {
+    region: RegionPath,
+    builder: Box<dyn FnMut(&dyn LocalityPath, Path) -> Option<C> + Send + Sync>,
+    /// Maps Locality IDs to path indices.
+    map: HashMap<(TypeId, usize), usize>,
+    chunks: Vec<C>,
 }
 
-pub trait ChunkingLogic<T: AnyItem>: Chunk
-where
-    Self::C: Allocator<T>,
-{
-    // TODO: Some descriptive name
-    type R: Copy;
-
-    /// Assign item to some chunk.
-    fn assign(
-        &mut self,
-        chunks: &mut Vec<Self::C>,
-        item: Option<&T>,
-        r: Self::R,
-    ) -> Option<(usize, <Self::C as Allocator<T>>::Locality)>;
-}
-
-/// A container that chunks items into separate containers according to ChunkingLogic.
-pub struct Chunked<L: Chunk> {
-    logic: L,
-    chunks: Vec<L::C>,
-}
-
-impl<L: Chunk> Chunked<L> {
-    pub fn new(logic: L) -> Self {
+impl<C: AnyContainer> VecChunkedContainer<C> {
+    /// Builder should build for given locality path and path in this region Container C, or return None if it can do so for given locality path.
+    pub fn new(
+        region: RegionPath,
+        builder: impl FnMut(&dyn LocalityPath, Path) -> Option<C> + Send + Sync + 'static,
+    ) -> Self {
         Self {
-            logic,
+            region,
+            builder: Box::new(builder) as Box<_>,
+            map: HashMap::new(),
             chunks: Vec::new(),
         }
     }
 
-    // TODO: Think through correctness of such inner methods and can they be replaced.
-    pub fn inner(&self) -> &[L::C] {
-        &self.chunks
+    fn iter_slice<'a>(&'a self, start: Bound<usize>, end: Bound<usize>) -> Option<Iter<'a, C>> {
+        let range = self.normalize_bounds(start, end)?;
+        Some(self.chunks[range].iter())
+    }
+    fn iter_slice_mut<'a>(
+        &'a mut self,
+        start: Bound<usize>,
+        end: Bound<usize>,
+    ) -> Option<IterMut<'a, C>> {
+        let range = self.normalize_bounds(start, end)?;
+        Some(self.chunks[range].iter_mut())
     }
 
-    pub fn inner_mut(&mut self) -> &mut [L::C] {
-        &mut self.chunks
-    }
-
-    pub fn inner_logic(&self) -> &L {
-        &self.logic
-    }
-}
-
-impl<L: ChunkingLogic<T>, T: AnyItem> Allocator<T> for Chunked<L>
-where
-    L::C: Allocator<T>,
-{
-    type Alloc = <L::C as Allocator<T>>::Alloc;
-
-    type Locality = L::R;
-
-    fn reserve(
-        &mut self,
-        item: Option<&T>,
-        r: Self::Locality,
-    ) -> Option<(ReservedKey<T>, &Self::Alloc)> {
-        let (index, r) = self.logic.assign(&mut self.chunks, item, r)?;
-        let (sub_key, alloc) = self.chunks[index].reserve(item, r)?;
-        Some((sub_key.push(self.logic.key_len(), index), alloc))
-    }
-
-    fn cancel(&mut self, key: ReservedKey<T>) {
-        let (index, sub_key) = key.pop(self.logic.key_len());
-        self.chunks[index].cancel(sub_key);
-    }
-
-    fn fulfill(&mut self, key: ReservedKey<T>, item: T) -> SubKey<T>
-    where
-        T: Sized,
-    {
-        let (index, sub_key) = key.pop(self.logic.key_len());
-        self.chunks[index]
-            .fulfill(sub_key, item)
-            .push(self.logic.key_len(), index)
-    }
-
-    fn unfill(&mut self, key: SubKey<T>) -> Option<(T, &Self::Alloc)>
-    where
-        T: Sized,
-    {
-        let (index, sub_key) = key.pop(self.logic.key_len());
-        self.chunks[index].unfill(sub_key)
+    fn normalize_bounds(&self, start: Bound<usize>, end: Bound<usize>) -> Option<Range<usize>> {
+        let start = match start {
+            Bound::Included(start) => start,
+            Bound::Excluded(start) => start.checked_add(1)?,
+            Bound::Unbounded => 0,
+        };
+        let end = match end {
+            Bound::Included(end) => end.saturating_add(1).min(self.chunks.len()),
+            Bound::Excluded(end) => end.min(self.chunks.len()),
+            Bound::Unbounded => self.chunks.len(),
+        };
+        if start >= end {
+            None
+        } else {
+            Some(start..end)
+        }
     }
 }
 
-impl<L: ChunkingLogic<T>, T: AnyItem> Container<T> for Chunked<L>
-where
-    L::C: Container<T>,
-{
-    type GroupItem = <L::C as Container<T>>::GroupItem;
+impl<C: AnyContainer> RegionContainer for VecChunkedContainer<C> {
+    type Sub = C;
 
-    type Shell = <L::C as Container<T>>::Shell;
-
-    type SlotIter<'a> = SlotIter<'a, L, T>
+    type Iter<'a> = Iter<'a,C>
     where
         Self: 'a;
 
-    fn get_slot(
-        &self,
-        key: SubKey<T>,
-    ) -> Option<UnsafeSlot<T, Self::GroupItem, Self::Shell, Self::Alloc>> {
-        let (prefix, suffix) = key.pop(self.logic.key_len());
-        self.chunks.get(prefix)?.get_slot(suffix)
+    type IterMut<'a> = IterMut<'a, C>
+    where
+        Self: 'a;
+
+    #[inline(always)]
+    fn region(&self) -> RegionPath {
+        self.region
     }
 
-    fn iter_slot(&self) -> Option<Self::SlotIter<'_>> {
-        let key_len = self.logic.key_len();
-        Some(
-            self.chunks
-                .iter()
-                .enumerate()
-                .flat_map(move |(prefix, chunk)| {
-                    chunk.iter_slot().map(|iter| {
-                        iter.map(move |(suffix, slot)| (suffix.push(key_len, prefix), slot))
-                    })
-                })
-                .flat_map(|iter| iter),
-        )
-    }
-}
-
-impl<L: Chunk> AnyContainer for Chunked<L>
-where
-    L::C: AnyContainer,
-{
-    fn get_any_slot(&self, key: AnySubKey) -> Option<AnyUnsafeSlot> {
-        let (prefix, suffix) = key.pop(self.logic.key_len());
-        self.chunks.get(prefix)?.get_any_slot(suffix)
+    #[inline(always)]
+    fn get(&self, index: usize) -> Option<&Self::Sub> {
+        self.chunks.get(index)
     }
 
-    fn unfill_any_slot(&mut self, key: AnySubKey) {
-        let (prefix, suffix) = key.pop(self.logic.key_len());
-        self.chunks
-            .get_mut(prefix)
-            .map(|chunk| chunk.unfill_any_slot(suffix));
+    fn get_mut(&mut self, index: usize) -> Option<&mut Self::Sub> {
+        self.chunks.get_mut(index)
     }
 
-    fn first(&self, key: TypeId) -> Option<AnySubKey> {
-        self.chunks.iter().enumerate().find_map(|(prefix, chunk)| {
-            chunk
-                .first(key)
-                .map(|suffix| suffix.push(self.logic.key_len(), prefix))
-        })
+    fn iter(&self, range: impl RangeBounds<usize>) -> Option<Self::Iter<'_>> {
+        self.iter_slice(range.start_bound().cloned(), range.end_bound().cloned())
     }
 
-    fn next(&self, key: AnySubKey) -> Option<AnySubKey> {
-        let (prefix, suffix) = key.pop(self.logic.key_len());
-        let chunk = self.chunks.get(prefix)?;
-        if let Some(suffix) = chunk.next(suffix) {
-            Some(suffix.push(self.logic.key_len(), prefix))
-        } else {
-            self.chunks
-                .iter()
-                .enumerate()
-                .skip(prefix + 1)
-                .find_map(|(prefix, chunk)| {
-                    chunk
-                        .first(key.type_id())
-                        .map(|suffix| suffix.push(self.logic.key_len(), prefix))
-                })
+    fn iter_mut(&mut self, range: impl RangeBounds<usize>) -> Option<Self::IterMut<'_>> {
+        self.iter_slice_mut(range.start_bound().cloned(), range.end_bound().cloned())
+    }
+
+    fn locality<P: LocalityPath + ?Sized>(&self, key: &P) -> Option<&Self::Sub> {
+        match key.map(self.region)? {
+            LocalityRegion::Id(id) => self.get(*self.map.get(&id)?),
+            LocalityRegion::Index(index) => self.get(index),
+            LocalityRegion::Any => self.get(0),
+            LocalityRegion::Indices(range) if range.start() <= range.end() => {
+                self.get(*range.start())
+            }
+            LocalityRegion::Indices(_) => None,
         }
     }
 
-    fn types(&self) -> HashSet<TypeId> {
-        self.chunks.iter().flat_map(|chunk| chunk.types()).collect()
+    fn fill<P: LocalityPath + ?Sized>(&mut self, key: &P) -> Option<&mut Self::Sub> {
+        match key.map(self.region)? {
+            LocalityRegion::Id(id) => {
+                if let Some(&index) = self.map.get(&id) {
+                    Some(&mut self.chunks[index])
+                } else {
+                    let index = self.chunks.len();
+                    let container = (self.builder)(key.upcast(), self.region.path_of(index))?;
+                    self.chunks.push(container);
+                    self.map.insert(id, index);
+                    self.chunks.last_mut()
+                }
+            }
+            LocalityRegion::Index(index) => self.get_mut(index),
+            LocalityRegion::Any => self.get_mut(0),
+            LocalityRegion::Indices(range) if range.start() <= range.end() => {
+                self.get_mut(*range.start())
+            }
+            LocalityRegion::Indices(_) => None,
+        }
+    }
+}
+
+impl<C: Container<T>, T: Item> Container<T> for VecChunkedContainer<C> {
+    region_container!(impl Container<T>);
+}
+
+impl<C: AnyContainer> AnyContainer for VecChunkedContainer<C> {
+    region_container!(impl AnyContainer);
+
+    /// All types in the container.
+    fn types(&self) -> HashMap<TypeId, ItemTraits> {
+        //? NOTE: This will be slow for many chunks but that's fine for now.
+        self.chunks
+            .iter()
+            .flat_map(|c| c.types().into_iter())
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{collection::owned::Owned, container::vec::VecContainer};
-    use std::any::Any;
+    use crate::container::VecContainer;
+    use std::{any::Any, num::NonZeroU32};
 
-    struct Uniform;
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    struct SpaceId(usize);
 
-    impl Chunk for Uniform {
-        type C = VecContainer<usize>;
+    impl LocalityPath for SpaceId {
+        fn map(&self, _: RegionPath) -> Option<LocalityRegion> {
+            Some(LocalityRegion::Id((self.type_id(), self.0)))
+        }
 
-        fn key_len(&self) -> u32 {
-            2
+        fn upcast(&self) -> &dyn LocalityPath {
+            self
         }
     }
 
-    impl ChunkingLogic<usize> for Uniform {
-        type R = ();
-
-        fn assign(
-            &mut self,
-            chunks: &mut Vec<Self::C>,
-            item: Option<&usize>,
-            _: (),
-        ) -> Option<(usize, ())> {
-            while chunks.len() < 1 << self.key_len() {
-                chunks.push(VecContainer::new(MAX_KEY_LEN - self.key_len()));
-            }
-            Some(((*item.unwrap()) % (1 << self.key_len()), ()))
-        }
+    fn container() -> VecChunkedContainer<VecContainer<usize>> {
+        VecChunkedContainer::new(
+            Path::default().region(NonZeroU32::new(8).unwrap()).unwrap(),
+            |_: &dyn LocalityPath, path| {
+                Some(VecContainer::new(Locality::new_default(
+                    path.leaf().unwrap(),
+                )))
+            },
+        )
     }
 
     #[test]
     fn add_items() {
         let n = 20;
-        let mut container = Owned::new(Chunked::new(Uniform));
+        let mut container = container();
 
         let keys = (0..n)
-            .map(|i| container.add_with(i, ()).unwrap())
+            .map(|i| container.exclusive().add(&SpaceId(i), i).unwrap())
             .collect::<Vec<_>>();
 
         for (i, key) in keys.iter().enumerate() {
-            assert_eq!(container.get(*key).unwrap().0, (&i, &()));
+            assert_eq!(container.access_mut().slot(*key).get().unwrap().item(), &i);
         }
-    }
-
-    #[should_panic]
-    #[test]
-    fn reserve_cancel() {
-        let mut container = Owned::new(Chunked::new(Uniform));
-
-        let item = 42;
-        let (key, _) = container.reserve(Some(&item), ()).unwrap();
-        let copy = ReservedKey::new(key.key());
-
-        container.cancel(key);
-        container.fulfill(copy, item);
-    }
-
-    #[test]
-    fn take() {
-        let mut container = Owned::new(Chunked::new(Uniform));
-
-        let item = 42;
-        let key = container.add_with(item, ()).unwrap();
-
-        assert_eq!(container.remove(key).unwrap(), item);
-        assert!(container.get(key).is_none());
     }
 
     #[test]
     fn iter() {
         let n = 20;
-        let mut container = Owned::new(Chunked::new(Uniform));
+        let mut container = container();
 
         let mut keys = (0..n)
-            .map(|i| (container.add_with(i, ()).unwrap(), i))
+            .map(|i| (container.exclusive().add(&SpaceId(i), i).unwrap(), i))
             .collect::<Vec<_>>();
 
         keys.sort();
@@ -279,22 +210,30 @@ mod tests {
         assert_eq!(
             keys,
             container
-                .items()
+                .access_mut()
+                .ty()
+                .path()
                 .iter()
-                .map(|(key, (&item, _))| (key, item))
+                .unwrap()
+                .map(|slot| (slot.key(), *slot.item()))
                 .collect::<Vec<_>>()
         );
     }
 
     #[test]
     fn get_any() {
-        let mut container = Owned::new(Chunked::new(Uniform));
+        let mut container = container();
 
         let item = 42;
-        let key = container.add_with(item, ()).unwrap();
+        let key = container.exclusive().add(&SpaceId(item), item).unwrap();
 
         assert_eq!(
-            (container.items_mut().get_any(key.into()).unwrap().0 as &dyn Any)
+            (container
+                .access_mut()
+                .slot(key.any())
+                .get_dyn()
+                .unwrap()
+                .item() as &dyn Any)
                 .downcast_ref::<usize>(),
             Some(&item)
         );
@@ -302,33 +241,12 @@ mod tests {
 
     #[test]
     fn unfill_any() {
-        let mut container = Chunked::new(Uniform);
+        let mut container = container();
 
         let item = 42;
-        let (key, _) = container.reserve(Some(&item), ()).unwrap();
-        let key = container.fulfill(key, item);
+        let key = container.exclusive().add(&SpaceId(item), item).unwrap();
 
-        container.unfill_any_slot(key.into());
+        container.exclusive().unfill_slot_any(key.any());
         assert!(container.get_slot(key.into()).is_none());
-    }
-
-    #[test]
-    fn iter_keys() {
-        let n = 20;
-        let mut container = Owned::new(Chunked::new(Uniform));
-
-        let mut keys = (0..n)
-            .map(|i| container.add_with(i, ()).unwrap().into())
-            .collect::<Vec<AnyKey>>();
-
-        keys.sort();
-
-        let any_keys = std::iter::successors(container.first(keys[0].type_id()), |key| {
-            container.next(*key)
-        })
-        .take(30)
-        .collect::<Vec<_>>();
-
-        assert_eq!(keys, any_keys);
     }
 }

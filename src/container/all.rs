@@ -129,9 +129,9 @@ mod tests {
     fn allocate_multi_type_item() {
         let mut container = container();
 
-        let key_a = container.fill_slot((), 42).unwrap();
-        let key_b = container.fill_slot((), true).unwrap();
-        let key_c = container.fill_slot((), "Hello").unwrap();
+        let key_a = container.fill_slot(&(), 42).unwrap();
+        let key_b = container.fill_slot(&(), true).unwrap();
+        let key_c = container.fill_slot(&(), "Hello").unwrap();
 
         assert_eq!(
             container.access_mut().slot(key_a).get().unwrap().item(),
@@ -151,9 +151,9 @@ mod tests {
     fn get_any() {
         let mut container = container();
 
-        let key_a = container.fill_slot((), 42u32).unwrap();
-        let key_b = container.fill_slot((), true).unwrap();
-        let key_c = container.fill_slot((), "Hello").unwrap();
+        let key_a = container.fill_slot(&(), 42u32).unwrap();
+        let key_b = container.fill_slot(&(), true).unwrap();
+        let key_c = container.fill_slot(&(), "Hello").unwrap();
 
         assert_eq!(
             (container

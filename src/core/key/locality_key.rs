@@ -15,6 +15,10 @@ impl LocalityPath for LocalityKey {
     fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
         self.path().map(region)
     }
+
+    fn upcast(&self) -> &dyn LocalityPath {
+        self
+    }
 }
 
 impl Deref for LocalityKey {

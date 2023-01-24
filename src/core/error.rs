@@ -33,7 +33,7 @@ pub enum ReferError {
 }
 
 impl ReferError {
-    pub fn out_of_keys<T: Item>(locality: impl LocalityPath) -> Self {
+    pub fn out_of_keys<T: Item>(locality: &impl LocalityPath) -> Self {
         Self::OutOfKeys {
             ty: TypeInfo::of::<T>(),
             locality: format!("{:?}", locality),

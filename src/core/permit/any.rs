@@ -165,7 +165,7 @@ impl<'a, R, A, C: ?Sized> AnyPermit<'a, R, A, C> {
         C: RegionContainer,
     {
         let Self { container, permit } = self;
-        Some(container.iter(range)?.map(move |(_, container)| AnyPermit {
+        Some(container.iter(range)?.map(move |container| AnyPermit {
             container,
             permit: permit.access(),
         }))

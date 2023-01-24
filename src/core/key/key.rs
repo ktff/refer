@@ -73,6 +73,10 @@ impl<T: DynItem + ?Sized> LocalityPath for Key<T> {
     fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
         Some(LocalityRegion::Index(region.index_of(*self)))
     }
+
+    fn upcast(&self) -> &dyn LocalityPath {
+        self
+    }
 }
 
 impl<T: DynItem + ?Sized> Eq for Key<T> {}
