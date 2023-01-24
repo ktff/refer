@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::Context;
+use crate::core::Locality;
 use log::*;
 use std::{num::NonZeroUsize, ops::RangeBounds};
 
@@ -14,7 +14,7 @@ pub trait LeafContainer<T: Item> {
         Self: 'a;
 
     /// Implementations should have #[inline(always)]
-    fn context(&self) -> &Context<T>;
+    fn locality(&self) -> &Locality<T>;
 
     /// Returns first index with a slot.
     fn first(&self) -> Option<NonZeroUsize>;
@@ -47,12 +47,12 @@ pub trait LeafContainer<T: Item> {
                 match self.unfill(now.get()) {
                     Some((mut item, mut shell)) => {
                         // Drop local
-                        shell.clear(self.context().allocator());
-                        item.displace(self.context().slot_context(), None);
+                        shell.clear(self.locality().allocator());
+                        item.displace(self.locality().slot_locality(), None);
                     }
                     None => warn!(
                         "{:?}::{} returned invalid index: {}",
-                        self.context().leaf_path().path(),
+                        self.locality().locality_key().path(),
                         std::any::type_name::<Self>(),
                         now
                     ),
@@ -87,35 +87,37 @@ macro_rules! leaf_container {
 
         #[inline(always)]
         fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t, Self::Shell>> {
-            let index = self.context().leaf_path().index_of(key);
+            let index = self.locality().locality_key().index_of(key);
             self.get(index)
         }
 
-        fn get_context(&self, _: <$t>::LocalityKey) -> Option<SlotContext<$t>> {
-            Some(self.context().slot_context())
+        fn get_locality(&self, _: impl LocalityPath) -> Option<SlotLocality<$t>> {
+            Some(self.locality().slot_locality())
         }
 
         fn iter_slot(&self, path: KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
-            let leaf_path=*self.context().leaf_path();
+            let leaf_path=*self.locality().locality_key();
             let range =leaf_path.range_of(path.path())?;
             Some(self.iter(range).map(move |(index,slot)|(leaf_path.key_of(index),slot)))
         }
 
-        fn fill_slot(&mut self, _: <$t>::LocalityKey, item: $t) -> std::result::Result<Key<$t>, $t> {
-            self.fill(item).map(|index|self.context().leaf_path().key_of(index))
+        fn fill_slot(&mut self, _: impl LocalityPath, item: $t) -> std::result::Result<Key<$t>, $t> {
+            self.fill(item).map(|index|self.locality().locality_key().key_of(index))
         }
 
-        fn fill_context(&mut self, _: <$t>::LocalityKey) {}
+        fn fill_locality(&mut self, _: impl LocalityPath) -> Option<LocalityKey> {
+            Some(*self.locality().locality_key())
+        }
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotContext<$t>)> {
-            let index = self.context().leaf_path().index_of(key);
+        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotLocality<$t>)> {
+            let index = self.locality().locality_key().index_of(key);
             self.unfill(index)
-                .map(move |(item, shell)| (item, shell, self.context().slot_context()))
+                .map(move |(item, shell)| (item, shell, self.locality().slot_locality()))
         }
     };
     (impl AnyContainer<$t:ty>) => {
         fn container_path(&self) -> Path{
-            self.context().leaf_path().path()
+            self.locality().locality_key().path()
         }
 
         #[inline(always)]
@@ -123,30 +125,30 @@ macro_rules! leaf_container {
             self.get_slot(Key::new(key.index())).map(|slot| slot.upcast())
         }
 
-        fn get_context_any(&self, path: ContextPath) -> Option<AnySlotContext>{
-            if self.container_path().contains(path){
-                Some(self.context.slot_context().upcast())
-            }else{
+        fn get_locality_any(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnySlotLocality>{
+            if ty == TypeId::of::<$t>() {
+                Some(self.locality.slot_locality().upcast())
+            } else {
                 None
             }
         }
 
         fn first_key(&self, key: TypeId) -> Option<AnyKey>{
             if key == TypeId::of::<$t>() {
-                self.first().map(|index| self.context().leaf_path().key_of::<$t>(index).upcast())
+                self.first().map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
             } else {
                 None
             }
         }
 
         fn next_key(&self, _: TypeId, key: AnyKey) -> Option<AnyKey>{
-            let index = self.context().leaf_path().index_of(key);
-            self.next(NonZeroUsize::new(index)?).map(|index| self.context().leaf_path().key_of::<$t>(index).upcast())
+            let index = self.locality().locality_key().index_of(key);
+            self.next(NonZeroUsize::new(index)?).map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
         }
 
         fn last_key(&self, key: TypeId) -> Option<AnyKey>{
             if key == TypeId::of::<$t>() {
-                self.last().map(|index| self.context().leaf_path().key_of::<$t>(index).upcast())
+                self.last().map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
             } else {
                 None
             }
@@ -158,17 +160,13 @@ macro_rules! leaf_container {
             set
         }
 
-        fn fill_slot_any(&mut self, path: ContextPath, item: Box<dyn std::any::Any>) -> std::result::Result<AnyKey, String>{
+        fn fill_slot_any(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<AnyKey, String>{
             match item.downcast::<$t>() {
                 Ok(item)=>{
-                    if self.container_path().contains(path){
-                        if let Ok(index)=self.fill(Box::into_inner(item)){
-                                Ok(self.context().leaf_path().key_of::<$t>(index).upcast())
-                            } else {
-                                Err(format!("No more place in {:?}::{}", self.container_path(),std::any::type_name::<Self>()))
-                            }
+                    if let Ok(index)=self.fill(Box::into_inner(item)){
+                        Ok(self.locality().locality_key().key_of::<$t>(index).upcast())
                     } else {
-                        Err(format!("Path {:?} is not contained in {:?}::{}", path, self.container_path(),std::any::type_name::<Self>()))
+                        Err(format!("No more place in {:?}::{}", self.container_path(),std::any::type_name::<Self>()))
                     }
                 }
                 Err(error)=> {
@@ -177,9 +175,9 @@ macro_rules! leaf_container {
             }
         }
 
-        fn fill_context_any(&mut self, path: Path,ty: TypeId) -> Option<ContextPath>{
-            if ty == TypeId::of::<$t>() && self.container_path().contains(path){
-                Some(ContextPath::new(self.container_path()))
+        fn fill_locality_any(&mut self, _: &dyn LocalityPath,ty: TypeId) -> Option<LocalityKey>{
+            if ty == TypeId::of::<$t>() {
+                Some(*self.locality().locality_key())
             } else {
                 None
             }

@@ -10,8 +10,8 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    AnyKey, AnySlotContext, AnyUnsafeSlot, ContextPath, ExclusivePermit, Item, ItemTraits, Key,
-    KeyPath, MutAnySlots, Path, RegionPath, Shell, SlotContext, UnsafeSlot,
+    AnyKey, AnySlotLocality, AnyUnsafeSlot, ExclusivePermit, Item, ItemTraits, Key, KeyPath,
+    LocalityKey, LocalityPath, MutAnySlots, Path, RegionPath, Shell, SlotLocality, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
@@ -43,32 +43,26 @@ pub trait Container<T: Item>: AnyContainer {
     /// Bijection between keys and slots MUST be enforced.
     fn get_slot(&self, key: Key<T>) -> Option<UnsafeSlot<T, Self::Shell>>;
 
-    fn get_context(&self, key: T::LocalityKey) -> Option<SlotContext<T>>;
+    fn get_locality(&self, key: impl LocalityPath) -> Option<SlotLocality<T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
     /// Iterator MUST NOT return the same slot more than once.
     fn iter_slot(&self, path: KeyPath<T>) -> Option<Self::SlotIter<'_>>;
 
     /// None if there is no more place in locality.
-    fn fill_slot(&mut self, key: T::LocalityKey, item: T) -> Result<Key<T>, T>;
+    fn fill_slot(&mut self, key: impl LocalityPath, item: T) -> Result<Key<T>, T>;
 
     /// Fills locality
-    fn fill_context(&mut self, key: T::LocalityKey);
+    /// None if there is no locality for T under given key.
+    fn fill_locality(&mut self, key: impl LocalityPath) -> Option<LocalityKey>;
 
     /// Removes from container.
-    fn unfill_slot(&mut self, key: Key<T>) -> Option<(T, Self::Shell, SlotContext<T>)>;
+    fn unfill_slot(&mut self, key: Key<T>) -> Option<(T, Self::Shell, SlotLocality<T>)>;
 }
 
 pub trait AnyContainer: Any + Sync + Send {
     /// Path of container shared for all items in the container.
     fn container_path(&self) -> Path;
-
-    /// Implementations should have #[inline(always)]
-    /// Bijection between keys and slots MUST be enforced.
-    fn get_slot_any(&self, key: AnyKey) -> Option<AnyUnsafeSlot>;
-
-    /// None if such locality doesn't exist.
-    fn get_context_any(&self, path: ContextPath) -> Option<AnySlotContext>;
 
     /// Returns first key for given type
     fn first_key(&self, key: TypeId) -> Option<AnyKey>;
@@ -83,16 +77,27 @@ pub trait AnyContainer: Any + Sync + Send {
     /// All types in the container.
     fn types(&self) -> HashMap<TypeId, ItemTraits>;
 
+    /// Implementations should have #[inline(always)]
+    /// Bijection between keys and slots MUST be enforced.
+    fn get_slot_any(&self, key: AnyKey) -> Option<AnyUnsafeSlot>;
+
+    /// None if there is no locality for given type under given key.
+    fn get_locality_any(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnySlotLocality>;
+
     /// Err if:
     /// - no more place in locality
     /// - type is unknown
     /// - locality is undefined
     /// - type mismatch
-    fn fill_slot_any(&mut self, path: ContextPath, item: Box<dyn Any>) -> Result<AnyKey, String>;
+    fn fill_slot_any(
+        &mut self,
+        key: &dyn LocalityPath,
+        item: Box<dyn Any>,
+    ) -> Result<AnyKey, String>;
 
-    /// Fills some locality under given prefix, or enclosing locality, for given type.
-    /// None if there is no context for given type under given path.
-    fn fill_context_any(&mut self, path: Path, ty: TypeId) -> Option<ContextPath>;
+    /// Fills some locality under given key, or enclosing locality, for given type.
+    /// None if there is no locality for given type under given key.
+    fn fill_locality_any(&mut self, key: &dyn LocalityPath, ty: TypeId) -> Option<LocalityKey>;
 
     fn unfill_slot_any(&mut self, key: AnyKey);
 

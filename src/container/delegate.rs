@@ -138,9 +138,9 @@ mod tests {
 
         ThreeFieldContainer {
             region,
-            a: VecContainer::new(Context::new_default(region.path_of(0).leaf().unwrap())),
-            b: VecContainer::new(Context::new_default(region.path_of(1).leaf().unwrap())),
-            c: VecContainer::new(Context::new_default(region.path_of(2).leaf().unwrap())),
+            a: VecContainer::new(Locality::new_default(region.path_of(0).leaf().unwrap())),
+            b: VecContainer::new(Locality::new_default(region.path_of(1).leaf().unwrap())),
+            c: VecContainer::new(Locality::new_default(region.path_of(2).leaf().unwrap())),
         }
     }
 
@@ -216,7 +216,7 @@ mod tests {
 
     fn single_container() -> SingleFieldContainer {
         SingleFieldContainer {
-            a: VecContainer::new(Context::new_default(Path::default().leaf().unwrap())),
+            a: VecContainer::new(Locality::new_default(Path::default().leaf().unwrap())),
         }
     }
 

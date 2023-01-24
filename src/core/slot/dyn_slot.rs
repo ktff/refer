@@ -1,5 +1,5 @@
 use crate::core::{
-    permit, AnyItem, AnyKey, AnyRef, AnyShell, AnySlotContext, AnyUnsafeSlot, DynItem, Item, Key,
+    permit, AnyItem, AnyKey, AnyRef, AnyShell, AnySlotLocality, AnyUnsafeSlot, DynItem, Item, Key,
     Path, Permit, ReferError, Shell, TypeInfo,
 };
 
@@ -73,8 +73,8 @@ impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
         self.slot.item_type_id()
     }
 
-    pub fn context(&self) -> AnySlotContext<'a> {
-        self.slot.context()
+    pub fn locality(&self) -> AnySlotLocality<'a> {
+        self.slot.locality()
     }
 
     pub fn upcast<U: DynItem + ?Sized>(self) -> DynSlot<'a, U, R, A>
@@ -161,13 +161,13 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>, A: Into<permit::Item>> DynSl
     }
 
     pub fn iter_references_any(&self) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
-        self.any_item().iter_references_any(self.context())
+        self.any_item().iter_references_any(self.locality())
     }
 
-    /// Can panic if context isn't for this type.
-    pub fn duplicate(&self, to: AnySlotContext) -> Option<Box<dyn AnyItem>> {
-        let context = self.context();
-        self.any_item().duplicate_any(context, to)
+    /// Can panic if locality isn't for this type.
+    pub fn duplicate(&self, to: AnySlotLocality) -> Option<Box<dyn AnyItem>> {
+        let locality = self.locality();
+        self.any_item().duplicate_any(locality, to)
     }
 }
 
@@ -198,31 +198,31 @@ impl<'a, T: DynItem + ?Sized, A: Into<permit::Item>> DynSlot<'a, T, permit::Mut,
     }
 
     pub fn remove_reference(&mut self, other: AnyKey) -> bool {
-        let context = self.context();
-        self.any_item_mut().remove_reference_any(context, other)
+        let locality = self.locality();
+        self.any_item_mut().remove_reference_any(locality, other)
     }
 
     pub fn replace_reference(&mut self, other: AnyKey, to: AnyKey) {
-        let context = self.context();
+        let locality = self.locality();
         self.any_item_mut()
-            .replace_reference_any(context, other, to);
+            .replace_reference_any(locality, other, to);
     }
 
     pub fn displace_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let context = self.context();
+        let locality = self.locality();
         self.any_item_mut()
-            .displace_reference_any(context, other, to)
+            .displace_reference_any(locality, other, to)
     }
 
     pub fn duplicate_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let context = self.context();
+        let locality = self.locality();
         self.any_item_mut()
-            .duplicate_reference_any(context, other, to)
+            .duplicate_reference_any(locality, other, to)
     }
 
     pub fn displace(&mut self) {
-        let context = self.context();
-        self.any_item_mut().displace_any(context, None);
+        let locality = self.locality();
+        self.any_item_mut().displace_any(locality, None);
     }
 }
 
@@ -248,18 +248,18 @@ impl<'a, T: DynItem + ?Sized, A: Into<permit::Shell>> DynSlot<'a, T, permit::Mut
     }
 
     pub fn shell_add(&mut self, from: AnyKey) {
-        let context = self.context();
-        self.shell_mut().add_any(from, context);
+        let locality = self.locality();
+        self.shell_mut().add_any(from, locality);
     }
 
     pub fn shell_add_many(&mut self, from: AnyKey, count: usize) {
-        let context = self.context();
-        self.shell_mut().add_many_any(from, count, context);
+        let locality = self.locality();
+        self.shell_mut().add_many_any(from, count, locality);
     }
 
     pub fn shell_replace(&mut self, from: AnyKey, to: AnyKey) {
-        let context = self.context();
-        self.shell_mut().replace_any(from, to, context);
+        let locality = self.locality();
+        self.shell_mut().replace_any(from, to, locality);
     }
 
     pub fn shell_remove(&mut self, from: AnyKey) {
@@ -267,8 +267,8 @@ impl<'a, T: DynItem + ?Sized, A: Into<permit::Shell>> DynSlot<'a, T, permit::Mut
     }
 
     pub fn shell_clear(&mut self) {
-        let context = self.context();
-        self.shell_mut().clear_any(context);
+        let locality = self.locality();
+        self.shell_mut().clear_any(locality);
     }
 }
 

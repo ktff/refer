@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, AnySlotContext, Item};
+use super::{AnyKey, AnyRef, AnySlotLocality, Item};
 pub use crate::util::ord_iter::AscendingIterator;
 use std::any::Any;
 
@@ -31,15 +31,15 @@ pub trait Shell: Sized + Any + Sync + Send {
 pub trait AnyShell: Any {
     fn iter_any(&self) -> Option<AscendingIterator<Box<dyn Iterator<Item = AnyRef> + '_>>>;
 
-    fn add_any(&mut self, from: AnyKey, context: AnySlotContext);
+    fn add_any(&mut self, from: AnyKey, locality: AnySlotLocality);
 
-    fn add_many_any(&mut self, from: AnyKey, count: usize, context: AnySlotContext);
+    fn add_many_any(&mut self, from: AnyKey, count: usize, locality: AnySlotLocality);
 
-    fn replace_any(&mut self, from: AnyKey, to: AnyKey, context: AnySlotContext);
+    fn replace_any(&mut self, from: AnyKey, to: AnyKey, locality: AnySlotLocality);
 
     fn remove_any(&mut self, from: AnyKey);
 
-    fn clear_any(&mut self, context: AnySlotContext);
+    fn clear_any(&mut self, locality: AnySlotLocality);
 }
 
 impl<T: Shell> AnyShell for T {
@@ -52,29 +52,29 @@ impl<T: Shell> AnyShell for T {
         }
     }
 
-    fn add_any(&mut self, from: AnyKey, context: AnySlotContext) {
-        let context = context.downcast::<T::T>();
-        self.add(from, context.allocator());
+    fn add_any(&mut self, from: AnyKey, locality: AnySlotLocality) {
+        let locality = locality.downcast::<T::T>();
+        self.add(from, locality.allocator());
     }
 
-    fn add_many_any(&mut self, from: AnyKey, count: usize, context: AnySlotContext) {
-        let context = context.downcast::<T::T>();
+    fn add_many_any(&mut self, from: AnyKey, count: usize, locality: AnySlotLocality) {
+        let locality = locality.downcast::<T::T>();
         for _ in 0..count {
-            self.add(from, context.allocator());
+            self.add(from, locality.allocator());
         }
     }
 
-    fn replace_any(&mut self, from: AnyKey, to: AnyKey, context: AnySlotContext) {
-        let context = context.downcast::<T::T>();
-        self.replace(from, to, context.allocator());
+    fn replace_any(&mut self, from: AnyKey, to: AnyKey, locality: AnySlotLocality) {
+        let locality = locality.downcast::<T::T>();
+        self.replace(from, to, locality.allocator());
     }
 
     fn remove_any(&mut self, from: AnyKey) {
         self.remove(from);
     }
 
-    fn clear_any(&mut self, context: AnySlotContext) {
-        let context = context.downcast::<T::T>();
-        self.clear(context.allocator());
+    fn clear_any(&mut self, locality: AnySlotLocality) {
+        let locality = locality.downcast::<T::T>();
+        self.clear(locality.allocator());
     }
 }

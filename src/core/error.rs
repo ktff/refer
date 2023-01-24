@@ -4,6 +4,8 @@ use std::{
     fmt::Display,
 };
 
+use super::LocalityPath;
+
 /// Collection level errors.
 /// Non fatal in theory but can be fatal in practice.
 #[derive(Debug, Clone)]
@@ -31,7 +33,7 @@ pub enum ReferError {
 }
 
 impl ReferError {
-    pub fn out_of_keys<T: Item>(locality: T::LocalityKey) -> Self {
+    pub fn out_of_keys<T: Item>(locality: impl LocalityPath) -> Self {
         Self::OutOfKeys {
             ty: TypeInfo::of::<T>(),
             locality: format!("{:?}", locality),

@@ -74,29 +74,29 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         )
     }
 
-    fn in_locality<T: Item>(&self, key: Key<T>, to: T::LocalityKey) -> bool
+    fn in_locality<T: Item>(&self, key: Key<T>, to: impl LocalityPath) -> bool
     where
         C: Container<T>,
     {
-        self.get_context(to)
-            .map(|context| context.prefix().contains_key(key))
+        self.get_locality(to)
+            .map(|locality| locality.prefix().contains_key(key))
             .unwrap_or(false)
     }
 
-    fn clone_item<T: Item>(&mut self, key: Key<T>, to: T::LocalityKey) -> Result<T>
+    fn clone_item<T: Item>(&mut self, key: Key<T>, to: impl LocalityPath + Copy) -> Result<T>
     where
         C: Container<T>,
     {
         // Placement
-        self.fill_context(to);
-        let to_context = self.get_context(to).expect("Should be valid locality");
+        self.fill_locality(to);
+        let to_locality = self.get_locality(to).expect("Should be valid locality");
 
         // Build Duplicate
         let duplicate = self
             .access()
             .slot(key)
             .get()?
-            .duplicate(to_context)
+            .duplicate(to_locality)
             .ok_or_else(|| ReferError::invalid_op(key, "duplicate"))?;
 
         // Finish
@@ -106,7 +106,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     /// Clones under given prefix.
     /// None if given type can't be placed under prefix.
     /// Panics if item can't be cloned, or item doesn't exist.
-    fn clone_any_item(&mut self, original_key: AnyKey, context: ContextPath) -> AnyKey {
+    fn clone_any_item(&mut self, original_key: AnyKey, locality: LocalityKey) -> AnyKey {
         // Build duplicate
         let original = self
             .access()
@@ -114,20 +114,20 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             .get_dyn()
             .expect("Should be valid key");
         let original_ty = original.item_type_id();
-        let to_context = self
-            .get_context_any(context)
+        let to_locality = self
+            .get_locality_any(&locality, original_ty)
             .expect("Should be valid prefix");
         let duplicate = original
-            .duplicate(to_context)
+            .duplicate(to_locality)
             .ok_or_else(|| ReferError::invalid_op(original_key, "duplicate"))
             .expect("Must be able to duplicate");
 
         // Fill
         let duplicate_ty = duplicate.as_ref().type_id();
-        match self.fill_slot_any(context, duplicate) {
+        match self.fill_slot_any(&locality, duplicate) {
             Ok(key) => key,
             Err(error) => {
-                panic!("Failed to fill slot of ty:{:?} locality:{} with duplicate of ty:{:?}.Cause: {:?}",original_ty,context,duplicate_ty,error);
+                panic!("Failed to fill slot of ty:{:?} locality:{} with duplicate of ty:{:?}.Cause: {:?}",original_ty,locality,duplicate_ty,error);
             }
         }
     }
@@ -137,9 +137,9 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     where
         C: Container<T>,
     {
-        let (mut item, mut shell, context) = self.unfill_slot(key).expect("Should be present");
-        shell.clear(context.allocator());
-        item.displace(context, None);
+        let (mut item, mut shell, locality) = self.unfill_slot(key).expect("Should be present");
+        shell.clear(locality.allocator());
+        item.displace(locality, None);
     }
 
     fn resolve_remove(&mut self, mut remove: Vec<AnyKey>) {
@@ -160,7 +160,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 }
 
 impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
-    pub fn add<T: Item>(&mut self, locality: T::LocalityKey, item: T) -> Result<Key<T>>
+    pub fn add<T: Item>(&mut self, locality: impl LocalityPath + Copy, item: T) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -196,7 +196,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
     /// Displaces item to locality and displaces shell.
     /// May have side effects that invalidate some Keys.
-    pub fn displace<T: Item>(&mut self, from: Key<T>, to: T::LocalityKey) -> Result<Key<T>>
+    pub fn displace<T: Item>(
+        &mut self,
+        from: Key<T>,
+        to: impl LocalityPath + Copy,
+    ) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -233,7 +237,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
 
     /// Displaces item and removes shell.
     /// May have side effects that invalidate some Keys.
-    pub fn displace_item<T: Item>(&mut self, from: Key<T>, to: T::LocalityKey) -> Result<Key<T>>
+    pub fn displace_item<T: Item>(
+        &mut self,
+        from: Key<T>,
+        to: impl LocalityPath + Copy,
+    ) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -290,9 +298,9 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                             // Move
 
                             // Placement
-                            if let Some(context) = self.fill_context_any(prefix, ty) {
+                            if let Some(locality) = self.fill_locality_any(&prefix, ty) {
                                 // Clone & fill
-                                let to = self.clone_any_item(from, context);
+                                let to = self.clone_any_item(from, locality);
 
                                 // Move shell
                                 self.displace_shell_references(from, to, &mut moves, |key| {
@@ -324,7 +332,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     }
 
     // Duplicates item to locality and duplicates shell.
-    pub fn duplicate<T: Item>(&mut self, key: Key<T>, to: T::LocalityKey) -> Result<Key<T>>
+    pub fn duplicate<T: Item>(
+        &mut self,
+        key: Key<T>,
+        to: impl LocalityPath + Copy,
+    ) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -339,7 +351,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
     }
 
     /// Duplicates item to locality.
-    pub fn duplicate_item<T: Item>(&mut self, key: Key<T>, to: T::LocalityKey) -> Result<Key<T>>
+    pub fn duplicate_item<T: Item>(
+        &mut self,
+        key: Key<T>,
+        to: impl LocalityPath + Copy,
+    ) -> Result<Key<T>>
     where
         C: Container<T>,
     {
@@ -377,15 +393,15 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
             };
 
             // Duplicate item
-            let context = if let Some(context) = self.fill_context_any(prefix, ty) {
-                context
+            let locality = if let Some(locality) = self.fill_locality_any(&prefix, ty) {
+                locality
             } else {
-                self.fill_context_any(Path::default(), ty)
+                self.fill_locality_any(&Path::default(), ty)
                     .expect("Should be able to clone item somewhere")
             };
 
             // Duplicate item
-            let to = self.clone_any_item(from, context);
+            let to = self.clone_any_item(from, locality);
             duplicates.insert(from, Ok(to));
 
             // Adjust references
@@ -556,7 +572,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         // Preparation for diff computation
         let key = slot.key();
         let mut old = slot.iter_references().collect::<Vec<_>>();
-        let mut new = new.iter_references(slot.context()).collect::<Vec<_>>();
+        let mut new = new.iter_references(slot.locality()).collect::<Vec<_>>();
         old.sort();
         new.sort();
 

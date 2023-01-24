@@ -1,7 +1,7 @@
 use bitvec::macros::internal::funty::Integral;
 
 use super::*;
-use crate::core::{AnyItem, Item};
+use crate::core::{AnyItem, DynItem, Item, LocalityPath, LocalityRegion};
 use std::{
     cmp::Ordering,
     num::{NonZeroU16, NonZeroU32, NonZeroUsize},
@@ -133,6 +133,12 @@ impl Path {
     }
 }
 
+impl LocalityPath for Path {
+    fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
+        region.range_of(*self).map(LocalityRegion::Indices)
+    }
+}
+
 impl std::fmt::Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let level = self.level();
@@ -159,8 +165,8 @@ impl<T: ?Sized + 'static> From<KeyPath<T>> for Path {
     }
 }
 
-impl From<ContextPath> for Path {
-    fn from(path: ContextPath) -> Self {
+impl From<LocalityKey> for Path {
+    fn from(path: LocalityKey) -> Self {
         path.path()
     }
 }
@@ -281,6 +287,12 @@ impl RegionPath {
         Path::new_top(self.path, self.level as u32)
     }
 
+    pub fn max_index(&self) -> usize {
+        1.checked_shl(self.len.get() as u32)
+            .map(|r| r - 1)
+            .unwrap_or(usize::MAX)
+    }
+
     /// Panics if index is out of range.
     pub fn path_of(&self, index: usize) -> Path {
         // Constructed by adding index at the end of the path
@@ -300,7 +312,7 @@ impl RegionPath {
 
     /// May panic/return invalid index if key isn't of this path.
     #[inline(always)]
-    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> usize {
+    pub fn index_of<T: DynItem + ?Sized>(&self, key: Key<T>) -> usize {
         ((key.index().get() ^ self.path) >> self.remaining_len.get()) as usize
     }
 

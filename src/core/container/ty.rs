@@ -41,8 +41,8 @@ macro_rules! single_type_container {
 
         type SlotIter<'a> = <<Self as TypeContainer<$t>>::Sub as Container<$t>>::SlotIter<'a>;
 
-        fn get_context(&self, key: <$t as Item>::LocalityKey) -> Option<SlotContext<$t>> {
-            TypeContainer::<$t>::get(self)?.get_context(key)
+        fn get_locality(&self, key: impl LocalityPath) -> Option<SlotLocality<$t>> {
+            TypeContainer::<$t>::get(self)?.get_locality(key)
         }
 
         fn iter_slot(&self, path: KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
@@ -51,14 +51,14 @@ macro_rules! single_type_container {
 
         fn fill_slot(
             &mut self,
-            key: <$t as Item>::LocalityKey,
+            key: impl LocalityPath,
             item: $t,
         ) -> std::result::Result<Key<$t>, $t> {
             TypeContainer::<$t>::fill(self).fill_slot(key, item)
         }
 
-        fn fill_context(&mut self, key: <$t as Item>::LocalityKey) {
-            TypeContainer::<$t>::fill(self).fill_context(key);
+        fn fill_locality(&mut self, key: impl LocalityPath) -> Option<LocalityKey> {
+            TypeContainer::<$t>::fill(self).fill_locality(key)
         }
 
         #[inline(always)]
@@ -66,7 +66,7 @@ macro_rules! single_type_container {
             TypeContainer::<$t>::get(self)?.get_slot(key)
         }
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotContext<$t>)> {
+        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotLocality<$t>)> {
             TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
         }
     };
@@ -76,8 +76,12 @@ macro_rules! single_type_container {
             self.get()?.get_slot_any(key)
         }
 
-        fn get_context_any(&self, path: ContextPath) -> Option<AnySlotContext> {
-            self.get()?.get_context_any(path)
+        fn get_locality_any(
+            &self,
+            path: &dyn LocalityPath,
+            ty: std::any::TypeId,
+        ) -> Option<AnySlotLocality> {
+            self.get()?.get_locality_any(path, ty)
         }
 
         fn first_key(&self, key: std::any::TypeId) -> Option<AnyKey> {
@@ -100,7 +104,7 @@ macro_rules! single_type_container {
 
         fn fill_slot_any(
             &mut self,
-            path: ContextPath,
+            path: &dyn LocalityPath,
             item: Box<dyn std::any::Any>,
         ) -> std::result::Result<AnyKey, String> {
             if let Some(sub) = self.get_mut() {
@@ -114,8 +118,12 @@ macro_rules! single_type_container {
             }
         }
 
-        fn fill_context_any(&mut self, path: Path, ty: std::any::TypeId) -> Option<ContextPath> {
-            self.fill().fill_context_any(path, ty)
+        fn fill_locality_any(
+            &mut self,
+            path: &dyn LocalityPath,
+            ty: std::any::TypeId,
+        ) -> Option<LocalityKey> {
+            self.fill().fill_locality_any(path, ty)
         }
 
         fn unfill_slot_any(&mut self, key: AnyKey) {
@@ -133,8 +141,8 @@ macro_rules! multi_type_container {
 
         type SlotIter<'a> = <<Self as TypeContainer<$t>>::Sub as Container<$t>>::SlotIter<'a>;
 
-        fn get_context(&self, key: <$t as Item>::LocalityKey) -> Option<SlotContext<$t>> {
-            TypeContainer::<$t>::get(self)?.get_context(key)
+        fn get_locality(&self, key: impl LocalityPath) -> Option<SlotLocality<$t>> {
+            TypeContainer::<$t>::get(self)?.get_locality(key)
         }
 
         fn iter_slot(&self, path: KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
@@ -143,14 +151,14 @@ macro_rules! multi_type_container {
 
         fn fill_slot(
             &mut self,
-            key: <$t as Item>::LocalityKey,
+            key: impl LocalityPath,
             item: $t,
         ) -> std::result::Result<Key<$t>, $t> {
             TypeContainer::<$t>::fill(self).fill_slot(key, item)
         }
 
-        fn fill_context(&mut self, key: <$t as Item>::LocalityKey) {
-            TypeContainer::<$t>::fill(self).fill_context(key);
+        fn fill_locality(&mut self, key: impl LocalityPath) -> Option<LocalityKey>{
+            TypeContainer::<$t>::fill(self).fill_locality(key)
         }
 
     };
@@ -163,7 +171,7 @@ macro_rules! multi_type_container {
         }
 
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotContext<$t>)> {
+        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotLocality<$t>)> {
             TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
         }
     };
@@ -179,7 +187,7 @@ macro_rules! multi_type_container {
         }
 
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotContext<$t>)> {
+        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotLocality<$t>)> {
             (self.get_mut_any(key.any())? as &mut dyn std::any::Any)
                 .downcast_mut::<<Self as TypeContainer<$t>>::Sub>()
                 .expect("Should be correct type")
@@ -196,18 +204,8 @@ macro_rules! multi_type_container {
             self.get_any(key)?.get_slot_any(key)
         }
 
-        fn get_context_any(&self, path: ContextPath) -> Option<AnySlotContext> {
-            let index = self.region().range_of(path)?;
-            if index.start() == index.end() {
-                self.get_any_index(*index.start())?.get_context_any(path)
-            } else {
-                log::warn!(
-                    "Illegal ContextPath: {:?} in region: {:?}",
-                    path,
-                    self.region()
-                );
-                None
-            }
+        fn get_locality_any(&self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<AnySlotLocality> {
+            self.get_any_index(self.type_to_index(ty)?)?.get_locality_any(path,ty)
         }
 
         fn first_key(&self, key: std::any::TypeId) -> Option<AnyKey> {
@@ -224,39 +222,29 @@ macro_rules! multi_type_container {
 
         fn fill_slot_any(
             &mut self,
-            path: ContextPath,
+            path: &dyn LocalityPath,
             item: Box<dyn std::any::Any>,
         ) -> std::result::Result<AnyKey, String> {
-            let region = self.region();
-            let index = region.range_of(path).ok_or_else(|| {
-                format!(
-                    "Context path {:?} not in range of region: {:?}",
-                    path,
-                    region
-                )
-            })?;
-            if index.start() == index.end() {
-                self.get_mut_any_index(*index.start())
+            let borrow: &dyn std::any::Any=&*item;
+            let ty=borrow.type_id();
+            let region=self.region();
+            if let Some(index) = self.type_to_index(ty) {
+                self.get_mut_any_index(index)
                     .ok_or_else(|| format!("Context not allocated: {:?} in region: {:?}", path,region))?
                     .fill_slot_any(path, item)
             } else {
                 Err(format!(
-                    "Illegal ContextPath: {:?} in region: {:?}",
+                    "Illegal LocalityKey: {:?} in region: {:?}",
                     path,
                     region
                 ))
             }
         }
 
-        fn fill_context_any(&mut self, path: Path, ty: std::any::TypeId) -> Option<ContextPath> {
-            let range = self.region().range_of(path)?;
+        fn fill_locality_any(&mut self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<LocalityKey> {
             if let Some(index) = self.type_to_index(ty) {
                 // Container exists
-                if range.contains(&index) {
-                    self.get_mut_any_index(index)?.fill_context_any(path, ty)
-                } else {
-                    None
-                }
+                self.get_mut_any_index(index)?.fill_locality_any(path, ty)
             } else {
                 // Container doesn't exist
                 None

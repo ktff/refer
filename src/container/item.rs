@@ -20,7 +20,7 @@ where
     type Container = ItemContainer<T>;
 
     fn new_container(&mut self, region: Path) -> Self::Container {
-        ItemContainer::new(Context::new_default(
+        ItemContainer::new(Locality::new_default(
             region.leaf().expect("Too large path region"),
         ))
     }
@@ -28,14 +28,14 @@ where
 
 /// A collection of 1 item.
 pub struct ItemContainer<T: Item, S: Shell<T = T> = VecShell<T>> {
-    context: Context<T>,
+    locality: Locality<T>,
     slot: Option<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>,
 }
 
 impl<T: Item, S: Shell<T = T>> ItemContainer<T, S> {
-    pub fn new(context: Context<T>) -> Self {
+    pub fn new(locality: Locality<T>) -> Self {
         Self {
-            context,
+            locality,
             slot: None,
         }
     }
@@ -50,8 +50,8 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
        Self: 'a;
 
     #[inline(always)]
-    fn context(&self) -> &Context<T> {
-        &self.context
+    fn locality(&self) -> &Locality<T> {
+        &self.locality
     }
 
     fn first(&self) -> Option<NonZeroUsize> {
@@ -71,7 +71,7 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
         self.slot
             .as_ref()
             .filter(|_| index == 1)
-            .map(|(item, shell)| UnsafeSlot::new(self.context.slot_context(), item, shell))
+            .map(|(item, shell)| UnsafeSlot::new(self.locality.slot_locality(), item, shell))
     }
 
     fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_> {
@@ -81,7 +81,7 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
             .map(|(item, shell)| {
                 (
                     ONE,
-                    UnsafeSlot::new(self.context.slot_context(), item, shell),
+                    UnsafeSlot::new(self.locality.slot_locality(), item, shell),
                 )
             })
             .into_iter()
@@ -93,7 +93,7 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
         } else {
             self.slot = Some((
                 SyncUnsafeCell::new(item),
-                SyncUnsafeCell::new(S::new_in(self.context.allocator())),
+                SyncUnsafeCell::new(S::new_in(self.locality.allocator())),
             ));
             Ok(ONE)
         }
@@ -128,7 +128,7 @@ where
     T::LocalityData: Default,
 {
     fn default() -> Self {
-        Self::new(Context::new_default(
+        Self::new(Locality::new_default(
             LeafPath::new(Path::default()).expect("Base index larger than usize"),
         ))
     }

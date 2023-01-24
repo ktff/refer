@@ -1,4 +1,4 @@
-use super::{Index, Path, INDEX_BASE_BITS};
+use super::{Index, Path, RegionPath, INDEX_BASE_BITS};
 use std::{
     any, fmt,
     hash::{Hash, Hasher},
@@ -6,7 +6,7 @@ use std::{
     ptr::Pointee,
 };
 
-use crate::core::{AnyItem, DynItem};
+use crate::core::{AnyItem, DynItem, LocalityPath, LocalityRegion};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -66,6 +66,12 @@ impl<T: DynItem + ?Sized> Key<T> {
 
     pub fn any(self) -> AnyKey {
         Key(self.0, PhantomData)
+    }
+}
+
+impl<T: DynItem + ?Sized> LocalityPath for Key<T> {
+    fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
+        Some(LocalityRegion::Index(region.index_of(*self)))
     }
 }
 

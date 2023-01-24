@@ -2,8 +2,8 @@
 
 #[macro_use]
 pub mod container;
-mod context;
 mod error;
+mod locality;
 #[macro_use]
 mod item;
 mod key;
@@ -11,13 +11,12 @@ pub mod permit;
 mod reference;
 mod shell;
 mod slot;
-// mod trait_registry;
 
 pub use container::{AnyContainer, Container};
-pub use context::*;
 pub use error::*;
 pub use item::*;
 pub use key::*;
+pub use locality::*;
 pub use permit::{
     AnyPermit, ExclusivePermit, Permit, SlotSplitPermit, TypePermit, TypeSplitPermit,
 };

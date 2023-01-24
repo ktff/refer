@@ -23,7 +23,7 @@ where
     type Container = VecContainer<T>;
 
     fn new_container(&mut self, region: Path) -> Self::Container {
-        VecContainer::new(Context::new_default(
+        VecContainer::new(Locality::new_default(
             region.leaf().expect("Too large path region"),
         ))
     }
@@ -31,20 +31,20 @@ where
 
 /// A simple vec container of items of the same type.
 pub struct VecContainer<T: Item, S: Shell<T = T> = VecShell<T>> {
-    context: Context<T>,
+    locality: Locality<T>,
     slots: Vec<Slot<T, S>, T::Alloc>,
     free_head: Option<NonZeroUsize>,
     count: usize,
 }
 
 impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
-    pub fn new(context: Context<T>) -> Self {
-        let mut slots = Vec::new_in(context.allocator().clone());
+    pub fn new(locality: Locality<T>) -> Self {
+        let mut slots = Vec::new_in(locality.allocator().clone());
         slots.push(Slot::None(None));
         Self {
             slots,
             free_head: None,
-            context,
+            locality,
             count: 0,
         }
     }
@@ -103,7 +103,7 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
                 if let Slot::Some(ref item, ref shell) = slot {
                     Some((
                         NonZeroUsize::new(start + i).expect("Zero index was allocated"),
-                        UnsafeSlot::new(self.context.slot_context(), item, shell),
+                        UnsafeSlot::new(self.locality.slot_locality(), item, shell),
                     ))
                 } else {
                     None
@@ -120,8 +120,8 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
         Self: 'a;
 
     #[inline(always)]
-    fn context(&self) -> &Context<T> {
-        &self.context
+    fn locality(&self) -> &Locality<T> {
+        &self.locality
     }
 
     fn first(&self) -> Option<NonZeroUsize> {
@@ -148,7 +148,7 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
     fn get(&self, index: usize) -> Option<UnsafeSlot<T, Self::Shell>> {
         self.slots.get(index).and_then(|slot| {
             if let Slot::Some(item, shell) = slot {
-                Some(UnsafeSlot::new(self.context.slot_context(), item, shell))
+                Some(UnsafeSlot::new(self.locality.slot_locality(), item, shell))
             } else {
                 None
             }
@@ -165,7 +165,7 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
                 &mut self.slots[index.get()],
                 Slot::Some(
                     SyncUnsafeCell::new(item),
-                    SyncUnsafeCell::new(S::new_in(self.context.allocator())),
+                    SyncUnsafeCell::new(S::new_in(self.locality.allocator())),
                 ),
             ) {
                 Slot::None(next) => {
@@ -177,10 +177,10 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
             }
         } else {
             let index = NonZeroUsize::new(self.slots.len()).expect("Zero index");
-            if self.context.leaf_path().contains(index) {
+            if self.locality.locality_key().contains(index) {
                 self.slots.push(Slot::Some(
                     SyncUnsafeCell::new(item),
-                    SyncUnsafeCell::new(S::new_in(self.context.allocator())),
+                    SyncUnsafeCell::new(S::new_in(self.locality.allocator())),
                 ));
                 self.count += 1;
                 Ok(index)
@@ -228,7 +228,7 @@ where
     T::LocalityData: Default,
 {
     fn default() -> Self {
-        Self::new(Context::new_default(
+        Self::new(Locality::new_default(
             LeafPath::new(Path::default()).expect("Base index larger than usize"),
         ))
     }

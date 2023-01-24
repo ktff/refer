@@ -46,17 +46,16 @@ macro_rules! impl_item {
     ($ty:ty) => {
         impl $crate::core::Item for $ty {
             type Alloc = std::alloc::Global;
-            type LocalityKey = ();
             type LocalityData = ();
             type Iter<'a> = std::iter::Empty<$crate::core::AnyRef>;
 
-            fn iter_references(&self, _: $crate::core::SlotContext<'_, Self>) -> Self::Iter<'_> {
+            fn iter_references(&self, _: $crate::core::SlotLocality<'_, Self>) -> Self::Iter<'_> {
                 std::iter::empty()
             }
 
             fn remove_reference(
                 &mut self,
-                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::SlotLocality<'_, Self>,
                 _: $crate::core::AnyKey,
             ) -> bool {
                 false
@@ -64,7 +63,7 @@ macro_rules! impl_item {
 
             fn replace_reference(
                 &mut self,
-                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::SlotLocality<'_, Self>,
                 _: $crate::core::AnyKey,
                 _: $crate::core::AnyKey,
             ) {
@@ -72,7 +71,7 @@ macro_rules! impl_item {
 
             fn duplicate_reference(
                 &mut self,
-                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::SlotLocality<'_, Self>,
                 _: $crate::core::AnyKey,
                 _: $crate::core::AnyKey,
             ) -> Option<$crate::core::Path> {
@@ -81,16 +80,16 @@ macro_rules! impl_item {
 
             fn duplicate(
                 &self,
-                _: $crate::core::SlotContext<'_, Self>,
-                _: $crate::core::SlotContext<'_, Self>,
+                _: $crate::core::SlotLocality<'_, Self>,
+                _: $crate::core::SlotLocality<'_, Self>,
             ) -> Option<Self> {
                 Some(self.clone())
             }
 
             fn displace(
                 &mut self,
-                _: $crate::core::SlotContext<'_, Self>,
-                _: Option<$crate::core::SlotContext<'_, Self>>,
+                _: $crate::core::SlotLocality<'_, Self>,
+                _: Option<$crate::core::SlotLocality<'_, Self>>,
             ) {
             }
 

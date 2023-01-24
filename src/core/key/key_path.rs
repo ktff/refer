@@ -1,4 +1,4 @@
-use super::{Key, LeafPath, Path};
+use super::{Key, LeafPath, LocalityKey, Path};
 use crate::core::{AnyItem, DynItem};
 use std::{
     any::{self},
@@ -118,6 +118,12 @@ impl<T: DynItem + ?Sized> From<Key<T>> for KeyPath<T> {
 
 impl<T: AnyItem + ?Sized> From<LeafPath> for KeyPath<T> {
     fn from(path: LeafPath) -> Self {
+        Self::new(path.path())
+    }
+}
+
+impl<T: AnyItem + ?Sized> From<LocalityKey> for KeyPath<T> {
+    fn from(path: LocalityKey) -> Self {
         Self::new(path.path())
     }
 }

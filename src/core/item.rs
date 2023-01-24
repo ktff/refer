@@ -1,8 +1,7 @@
-use super::{AnyKey, AnyRef, AnySlotContext, Path, SlotContext, TypeInfo};
+use super::{AnyKey, AnyRef, AnySlotLocality, Path, SlotLocality, TypeInfo};
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
-    fmt::Debug,
     marker::Unsize,
     ptr::Pointee,
 };
@@ -17,9 +16,6 @@ pub type ItemTraits = &'static [(TypeId, &'static (dyn Any + Send + Sync))];
 pub trait Item: Sized + Any + Sync + Send {
     type Alloc: Allocator + Any + Clone + 'static + Send + Sync;
 
-    /// Locality of item.
-    type LocalityKey: Debug + Copy;
-
     /// Data shared by local items.
     type LocalityData: Any + Send + Sync;
 
@@ -28,17 +24,17 @@ pub trait Item: Sized + Any + Sync + Send {
     /// All internal references.
     ///
     /// Must have stable iteration order.
-    fn iter_references(&self, context: SlotContext<'_, Self>) -> Self::Iter<'_>;
+    fn iter_references(&self, locality: SlotLocality<'_, Self>) -> Self::Iter<'_>;
 
     /// True if this should also be removed, else should remove all references to other.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn remove_reference(&mut self, context: SlotContext<'_, Self>, other: AnyKey) -> bool;
+    fn remove_reference(&mut self, locality: SlotLocality<'_, Self>, other: AnyKey) -> bool;
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn replace_reference(&mut self, context: SlotContext<'_, Self>, other: AnyKey, to: AnyKey);
+    fn replace_reference(&mut self, locality: SlotLocality<'_, Self>, other: AnyKey, to: AnyKey);
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
@@ -47,11 +43,11 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Will be called for references of self, but can be called for other references.
     fn displace_reference(
         &mut self,
-        context: SlotContext<'_, Self>,
+        locality: SlotLocality<'_, Self>,
         other: AnyKey,
         to: AnyKey,
     ) -> Option<Path> {
-        self.replace_reference(context, other, to);
+        self.replace_reference(locality, other, to);
         None
     }
 
@@ -65,21 +61,25 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Will be called for references of self, but can be called for other references.
     fn duplicate_reference(
         &mut self,
-        context: SlotContext<'_, Self>,
+        locality: SlotLocality<'_, Self>,
         other: AnyKey,
         to: AnyKey,
     ) -> Option<Path>;
 
-    /// Clone this item from context to context.
+    /// Clone this item from locality to locality.
     /// None if it can't be duplicated/cloned.
     // /// If Some, displace must also me Some.
-    fn duplicate(&self, _from: SlotContext<'_, Self>, _to: SlotContext<'_, Self>) -> Option<Self> {
+    fn duplicate(
+        &self,
+        _from: SlotLocality<'_, Self>,
+        _to: SlotLocality<'_, Self>,
+    ) -> Option<Self> {
         None
     }
 
     // /// Localized Items vs Global Items
-    // /// - Localized items depend on their context.
-    // /// - Global items don't depend on their context.
+    // /// - Localized items depend on their locality.
+    // /// - Global items don't depend on their locality.
     // /// Global items can always be moved.
     // fn global() -> bool {
     //     // A safe default.
@@ -88,11 +88,11 @@ pub trait Item: Sized + Any + Sync + Send {
 
     /// This is being displaced.
     ///
-    /// If not placed in a new context, drop local data and any remaining reference should be considered invalid.
+    /// If not placed in a new locality, drop local data and any remaining reference should be considered invalid.
     ///
     /// If method is not empty, don't make Item Clone, instead use fn duplicate.
     // /// If this method is empty, consider returning true from fn global.
-    fn displace(&mut self, from: SlotContext<'_, Self>, to: Option<SlotContext<'_, Self>>);
+    fn displace(&mut self, from: SlotLocality<'_, Self>, to: Option<SlotLocality<'_, Self>>);
 
     /// TypeIds of traits with their Metadata that this Item implements.
     /// Including Self and AnyItem.
@@ -112,34 +112,34 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
 
     fn iter_references_any(
         &self,
-        context: AnySlotContext<'_>,
+        locality: AnySlotLocality<'_>,
     ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
-    fn remove_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey) -> bool;
+    fn remove_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey) -> bool;
 
-    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: AnyKey);
+    fn replace_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey, to: AnyKey);
 
     fn displace_reference_any(
         &mut self,
-        context: AnySlotContext<'_>,
+        locality: AnySlotLocality<'_>,
         other: AnyKey,
         to: AnyKey,
     ) -> Option<Path>;
 
     fn duplicate_reference_any(
         &mut self,
-        context: AnySlotContext<'_>,
+        locality: AnySlotLocality<'_>,
         other: AnyKey,
         to: AnyKey,
     ) -> Option<Path>;
 
     fn duplicate_any(
         &self,
-        _from: AnySlotContext<'_>,
-        _to: AnySlotContext<'_>,
+        _from: AnySlotLocality<'_>,
+        _to: AnySlotLocality<'_>,
     ) -> Option<Box<dyn AnyItem>>;
 
-    fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>);
+    fn displace_any(&mut self, from: AnySlotLocality<'_>, to: Option<AnySlotLocality<'_>>);
 
     /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
     /// Including Self and AnyItem.
@@ -161,9 +161,9 @@ impl<T: Item> AnyItem for T {
 
     fn iter_references_any(
         &self,
-        context: AnySlotContext<'_>,
+        locality: AnySlotLocality<'_>,
     ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
-        let iter = self.iter_references(context.downcast());
+        let iter = self.iter_references(locality.downcast());
         if let (0, Some(0)) = iter.size_hint() {
             None
         } else {
@@ -171,42 +171,42 @@ impl<T: Item> AnyItem for T {
         }
     }
 
-    fn remove_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey) -> bool {
-        self.remove_reference(context.downcast(), other)
+    fn remove_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey) -> bool {
+        self.remove_reference(locality.downcast(), other)
     }
 
-    fn replace_reference_any(&mut self, context: AnySlotContext<'_>, other: AnyKey, to: AnyKey) {
-        self.replace_reference(context.downcast(), other, to)
+    fn replace_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey, to: AnyKey) {
+        self.replace_reference(locality.downcast(), other, to)
     }
 
     fn displace_reference_any(
         &mut self,
-        context: AnySlotContext<'_>,
+        locality: AnySlotLocality<'_>,
         other: AnyKey,
         to: AnyKey,
     ) -> Option<Path> {
-        self.displace_reference(context.downcast(), other, to)
+        self.displace_reference(locality.downcast(), other, to)
     }
 
     fn duplicate_reference_any(
         &mut self,
-        context: AnySlotContext<'_>,
+        locality: AnySlotLocality<'_>,
         other: AnyKey,
         to: AnyKey,
     ) -> Option<Path> {
-        self.duplicate_reference(context.downcast(), other, to)
+        self.duplicate_reference(locality.downcast(), other, to)
     }
 
     fn duplicate_any(
         &self,
-        from: AnySlotContext<'_>,
-        to: AnySlotContext<'_>,
+        from: AnySlotLocality<'_>,
+        to: AnySlotLocality<'_>,
     ) -> Option<Box<dyn AnyItem>> {
         self.duplicate(from.downcast(), to.downcast())
             .map(|x| Box::new(x) as Box<dyn AnyItem>)
     }
 
-    fn displace_any(&mut self, from: AnySlotContext<'_>, to: Option<AnySlotContext<'_>>) {
+    fn displace_any(&mut self, from: AnySlotLocality<'_>, to: Option<AnySlotLocality<'_>>) {
         self.displace(from.downcast(), to.map(|to| to.downcast()))
     }
 

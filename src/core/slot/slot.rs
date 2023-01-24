@@ -1,5 +1,5 @@
 use crate::core::{
-    permit, AnyKey, AnyShell, AnySlot, Item, Key, Path, Permit, Shell, SlotContext, UnsafeSlot,
+    permit, AnyKey, AnyShell, AnySlot, Item, Key, Path, Permit, Shell, SlotLocality, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -20,8 +20,8 @@ impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
         self.key
     }
 
-    pub fn context(&self) -> SlotContext<'a, T> {
-        self.slot.context()
+    pub fn locality(&self) -> SlotLocality<'a, T> {
+        self.slot.locality()
     }
 
     pub fn upcast(self) -> AnySlot<'a, R, A> {
@@ -50,13 +50,13 @@ impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>, A: Into<permit::Item>>
     }
 
     pub fn iter_references(&self) -> T::Iter<'_> {
-        self.item().iter_references(self.context())
+        self.item().iter_references(self.locality())
     }
 
-    /// Can panic if context isn't for this type.
-    pub fn duplicate(&self, to: SlotContext<T>) -> Option<T> {
-        let context = self.context();
-        self.item().duplicate(context, to)
+    /// Can panic if locality isn't for this type.
+    pub fn duplicate(&self, to: SlotLocality<T>) -> Option<T> {
+        let locality = self.locality();
+        self.item().duplicate(locality, to)
     }
 }
 
@@ -67,23 +67,23 @@ impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Item>> Slot<'a, T, S, permit:
     }
 
     pub fn replace_reference(&mut self, other: AnyKey, to: AnyKey) {
-        let context = self.context();
-        self.item_mut().replace_reference(context, other, to);
+        let locality = self.locality();
+        self.item_mut().replace_reference(locality, other, to);
     }
 
     pub fn displace_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let context = self.context();
-        self.item_mut().displace_reference(context, other, to)
+        let locality = self.locality();
+        self.item_mut().displace_reference(locality, other, to)
     }
 
     pub fn duplicate_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let context = self.context();
-        self.item_mut().duplicate_reference(context, other, to)
+        let locality = self.locality();
+        self.item_mut().duplicate_reference(locality, other, to)
     }
 
     pub fn displace(&mut self) {
-        let context = self.context();
-        self.item_mut().displace(context, None)
+        let locality = self.locality();
+        self.item_mut().displace(locality, None)
     }
 }
 
@@ -108,8 +108,9 @@ impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Shell>> Slot<'a, T, S, permit
     }
 
     pub fn shell_add_many(&mut self, from: AnyKey, count: usize) {
-        let context = self.context();
-        self.shell_mut().add_many_any(from, count, context.upcast());
+        let locality = self.locality();
+        self.shell_mut()
+            .add_many_any(from, count, locality.upcast());
     }
 
     pub fn shell_replace(&mut self, from: AnyKey, to: AnyKey) {
