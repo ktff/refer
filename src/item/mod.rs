@@ -4,6 +4,9 @@
 // pub mod tagged_edge;
 // pub mod vertice;
 
+// TODO: Versioned Item. Versioned<I:Item>{version: Version, state: State<I>, item: I}
+// TODO  enum State<I> { Active, Removed(Version), Replaced(Key<Versioned<I>>)}
+
 // #[macro_export]
 // macro_rules! delegate_item {
 //     (impl for $t:ty => $d:ty = $e:tt) => {
