@@ -6,10 +6,6 @@ use std::{
     ptr::Pointee,
 };
 
-// TODO: Najradije bi uklonio operaciju move. Ako nije bitno za Item gdje se nalazi onda move nije potreban. A ako je bitno
-// TODO  onda njegova poicija je dio njegovog identiteta ili nije. Ako je nije dio identiteta onda se ima drugih opcija, poput delegata, ili versioninga, i slično.
-// TODO  A ako je dio identiteta onda promjena koja ga je učinila je velika promjena i bilo bi ok delegirati korisinicima da se sami nose s potrebnim izmjenama. Clone več ima smisla.
-
 pub type ItemTraits = &'static [(TypeId, &'static (dyn Any + Send + Sync))];
 
 /// An item of a model.
