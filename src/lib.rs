@@ -27,8 +27,12 @@
 //!
 //! # Features
 //! - Reference management, through Item and Shell family of traits.
+//!      - Responsible for: What I reference and what references me?
 //! - Memory management, through Container family of traits.
-//! - Access management, through Collection family of traits.
+//!      - Responsible for: Does *mut Slot exist? (In pointer terms: is it safe to dereference?)
+//! - Access management, through Permit family of types.
+//!      - Responsible for: Do we have exclusive or shared access? (In pointer terms: is it safe to dereference as & or &mut?)
+//!      - Responsible for: To which parts of the slot we have access? (In pointer terms: is it safe to access the item, the shell, or both?)
 //!
 //! # Architecture
 //! There are several pieces that interact/are composable with one another:
@@ -49,6 +53,11 @@
 //! Items are trait families that are intended to be implemented for the model.
 //!
 //! Models aren't represented in any way by the library besides providing some examples/generic implementations.
+//!
+//! Based on observations:
+//! - Edge = reference
+//! - Node = structure
+//! - Graph = memory
 
 //? Important decisions:
 //? - Generic backing up whole graph by a file/disk for the purpose of persistence is not to be supported out of the box.
