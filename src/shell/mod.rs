@@ -1,4 +1,5 @@
 pub mod no_shell;
+#[cfg(feature = "shard")]
 pub mod shard_shell;
 pub mod vec_shell;
 

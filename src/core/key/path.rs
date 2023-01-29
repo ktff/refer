@@ -1,5 +1,3 @@
-use bitvec::macros::internal::funty::Integral;
-
 use super::*;
 use crate::core::{AnyItem, DynItem, Item, LocalityPath, LocalityRegion};
 use std::{
@@ -292,7 +290,8 @@ impl RegionPath {
     }
 
     pub fn max_index(&self) -> usize {
-        1.checked_shl(self.len.get() as u32)
+        1usize
+            .checked_shl(self.len.get() as u32)
             .map(|r| r - 1)
             .unwrap_or(usize::MAX)
     }
@@ -335,7 +334,8 @@ impl RegionPath {
 }
 
 fn usize_mask(len: u32) -> usize {
-    1.checked_shl(len)
+    1usize
+        .checked_shl(len)
         .map(|mask| mask - 1)
         .unwrap_or(usize::MAX)
 }

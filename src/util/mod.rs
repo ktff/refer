@@ -1,6 +1,11 @@
+#![allow(dead_code)]
+
 pub mod ord_iter;
+#[cfg(feature = "shard")]
 pub mod shard_alloc;
+#[cfg(feature = "shard")]
 pub mod shard_box;
+#[cfg(feature = "shard")]
 pub mod shard_vec;
 
 use std::cmp::Ordering::*;
