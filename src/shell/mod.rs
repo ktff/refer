@@ -3,6 +3,9 @@ pub mod no_shell;
 pub mod shard_shell;
 pub mod vec_shell;
 
+pub use no_shell::NoShell;
+pub use vec_shell::VecShell;
+
 // TODO: Test for shells
 
 // TODO: Shellovi za dvostruki rep:

@@ -93,15 +93,15 @@ impl<'a, A: Into<Shell>, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
         &mut self,
         from: AnyKey,
         to: Key<T>,
-    ) -> Result<core::DynRef<T>> {
+    ) -> Result<core::Ref<T>> {
         self.peek_dyn(to)?.shell_add(from);
-        Ok(core::DynRef::new(to))
+        Ok(core::Ref::new(to))
     }
 
     pub fn disconnect_dyn<T: core::DynItem + ?Sized>(
         &mut self,
         from: AnyKey,
-        to: core::DynRef<T>,
+        to: core::Ref<T>,
     ) -> Result<()> {
         Ok(self.peek_dyn(to.key())?.shell_remove(from))
     }

@@ -98,7 +98,7 @@ impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
     pub fn sidecast<U: DynItem + ?Sized>(self) -> Result<DynSlot<'a, U, R, A>, Self> {
         if let Some(metadata) = self.slot.metadata::<U>() {
             Ok(DynSlot {
-                key: Key::new_cast(self.key.index()),
+                key: self.key().any().assume(),
                 metadata,
                 slot: self.slot,
                 access: self.access,

@@ -2,9 +2,11 @@
 /// that has access to self to access the field of I.
 /// Implements AnyContainer and MultiTypeContainer for type C by delegating to it's internal containers through expressions e
 /// and index that must correspond to index of internal container in this container region.
+///
+/// There is also a single field form
 #[macro_export]
 macro_rules! delegate_container {
-    (impl for $c:ty {<$t:ty> => 0: $i:ty = $e:tt;} in $path:tt) => {
+    (impl for $c:ty {<$t:ty> => $i:ty = $e:tt;}) => {
         impl $crate::core::container::TypeContainer<$t> for $c {
             type Sub =  $i;
 
@@ -211,8 +213,8 @@ mod tests {
     }
 
     delegate_container!(impl for SingleFieldContainer {
-        <i32> => 0: VecContainer<i32> = a;
-    } in region);
+        <i32> => VecContainer<i32> = a;
+    });
 
     fn single_container() -> SingleFieldContainer {
         SingleFieldContainer {

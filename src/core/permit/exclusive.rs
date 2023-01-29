@@ -524,7 +524,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         let other = items.slot(from).get().expect("Should be valid key");
         for other_rf in other.iter_references() {
             other_rf
-                .get(shells.borrow_mut())
+                .get_dyn(shells.borrow_mut())
                 .shell_replace(from.upcast(), to.upcast());
         }
     }
@@ -537,7 +537,9 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         let other = items.slot(from).get_dyn().expect("Should be valid key");
         if let Some(references) = other.iter_references_any() {
             for other_rf in references {
-                other_rf.get(shells.borrow_mut()).shell_replace(from, to);
+                other_rf
+                    .get_dyn(shells.borrow_mut())
+                    .shell_replace(from, to);
             }
         };
     }
@@ -642,9 +644,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         if let Some(references) = from_shell.iter_any() {
             for (count, other_rf) in references.dedup() {
                 if moved(other_rf.key()) {
-                    other_rf.get(items.borrow_mut()).replace_reference(from, to);
+                    other_rf
+                        .get_dyn(items.borrow_mut())
+                        .replace_reference(from, to);
                 } else {
-                    let mut other = other_rf.get(items.borrow_mut());
+                    let mut other = other_rf.get_dyn(items.borrow_mut());
                     if let Some(under_prefix) = other.displace_reference(from, to) {
                         // Register move
                         match moves.entry(other_rf.key()) {
@@ -704,7 +708,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         if let Some(references) = from_shell.iter_any() {
             for (count, other_ref) in references.dedup().filter(|(_, rf)| !attached(rf.key())) {
                 // NOTE: Duplicate items aren't attached at this point
-                let mut other = other_ref.get(items.borrow_mut());
+                let mut other = other_ref.get_dyn(items.borrow_mut());
                 if let Some(under_prefix) = other.duplicate_reference(from, to) {
                     match duplicates.entry(other_ref.key()) {
                         Entry::Vacant(entry) => {

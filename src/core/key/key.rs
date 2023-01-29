@@ -34,16 +34,14 @@ impl<T: Pointee<Metadata = ()> + DynItem + ?Sized> Key<T> {
     }
 }
 
-impl<T: DynItem + ?Sized> Key<T> {
-    /// Constructors of Key should strive to guarantee that T is indeed at Index.
-    pub fn new_cast(index: Index) -> Self {
-        Key(index, PhantomData)
-    }
-}
-
 impl AnyKey {
     pub fn new_any(index: Index) -> Self {
         Key(index, PhantomData)
+    }
+
+    /// Make assumption that this is Key for T.
+    pub fn assume<T: DynItem + ?Sized>(self) -> Key<T> {
+        Key(self.0, PhantomData)
     }
 }
 

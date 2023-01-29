@@ -60,6 +60,13 @@ impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>, A: Into<permit::Item>>
     }
 }
 
+impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Item>> Slot<'a, T, S, permit::Ref, A> {
+    pub fn to_item(&self) -> &'a T {
+        // SAFETY: We have read access to the item for lifetime of 'a.
+        unsafe { &*self.slot.item().get() }
+    }
+}
+
 impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Item>> Slot<'a, T, S, permit::Mut, A> {
     pub fn item_mut(&mut self) -> &mut T {
         // SAFETY: We have mut access to the item.
@@ -92,6 +99,13 @@ impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>, A: Into<permit::Shell>>
 {
     pub fn shell(&self) -> &S {
         // SAFETY: We have at least read access to the shell. R
+        unsafe { &*self.slot.shell().get() }
+    }
+}
+
+impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Shell>> Slot<'a, T, S, permit::Ref, A> {
+    pub fn to_shell(&self) -> &'a S {
+        // SAFETY: We have read access to the shell for 'a lifetime.
         unsafe { &*self.slot.shell().get() }
     }
 }

@@ -30,6 +30,7 @@ where
 }
 
 /// A simple vec container of items of the same type.
+/// Allocates by pushing to a vec, if there is no previously freed slot.
 pub struct VecContainer<T: Item, S: Shell<T = T> = VecShell<T>> {
     locality: Locality<T>,
     slots: Vec<Slot<T, S>, T::Alloc>,
@@ -52,6 +53,10 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
     /// Number items in this collection
     pub fn len(&self) -> usize {
         self.count
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
     }
 
     /// Memory used directly by this container.

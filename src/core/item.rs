@@ -6,6 +6,20 @@ use std::{
     ptr::Pointee,
 };
 
+// TODO: Clone ima samo smisla s itemima koji imaju više verzija. Ako se nema vise verzija onda po samoj naravi je Item jedinstven po svojem mjestu u grafu. To nije istina samo ako se
+// TODO  je graf samosličan, primjer je stablo. Ali stablo nije primarni oblik grafa koji se hoće poduprijeti, nijedan oblik zapravo, samo generalni oblik grafa. A što se tiče više verzija
+// TODO  cak i tada nije bas uporabljivo. Postoje dvije varijante: 1. Postoji Version item na koji se pokazuje koji se ne klonira stoga je ovo beskorisno. 2. Uistinu se pookazuje na neki
+// TODO  Item, ali kako ce to funkcionirati? Item koji pokazuje na dupliciran mora napraviti nesto od sljedečeg: Imati Vec<> s razlicitim verzijama dupliranog. 2. Nista nemijenjati. 3.
+// TODO sebe duplicirati, sto nije bas doboro jer tom logikom ce se cijeli graph duplicirati.
+// TODO: Clone se da izvesti preko dyn Trait, gdje je zadaca onoga koji klonira item da provjeri pokazatelje na taj item imaju li trait za kloniranje itema preko kojeg se može pitati
+// TODO  žele li biti klonirani te izvesti kloniranje. Gurnuti ovu sposobnost u zasebni trait je odlična opcija.
+
+// TODO: Najradije bi uklonio operaciju move. Ako nije bitno za Item gdje se nalazi onda move nije potreban. A ako je bitno
+// TODO  onda njegova poicija je dio njegovog identiteta ili nije. Ako je nije dio identiteta onda se ima drugih opcija, poput delegata, ili versioninga, i slično.
+// TODO  A ako je dio identiteta onda promjena koja ga je učinila je velika promjena i bilo bi ok delegirati korisinicima da se sami nose s potrebnim izmjenama. Clone več ima smisla.
+
+// TODO: NA TEMELJU OVOGA GORE PRBEACI DISPLACEMENT I DUPLICATE U ZASEBNE TRAITOVE.
+
 pub type ItemTraits = &'static [(TypeId, &'static (dyn Any + Send + Sync))];
 
 /// An item of a model.
@@ -218,8 +232,7 @@ impl<T: Item> AnyItem for T {
     }
 }
 
-/// Adds static with all of the traits and their metadata.fn Item::traits().
-/// Self and AnyItem is always included.
+/// Statically constructs ItemTraits with all of the listed traits, Self, and AnyItem.
 /// An example: `item_traits_method!(Node<T>: dyn Node);`
 #[macro_export]
 macro_rules! item_traits_method {
