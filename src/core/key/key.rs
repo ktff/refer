@@ -25,6 +25,7 @@ pub type AnyKey = Key<dyn AnyItem>;
 ///     - Does *mut (T,Shell) exist? (In pointer terms: is it safe to dereference?) (Responsibility of Container system)
 ///     - Do we have exclusive or shared access? (In pointer terms: is it safe to dereference as & or &mut?) (Responsibility of Permit system)
 ///     - To which parts of the slot we have access? (In pointer terms: is it safe to access the item, the slot, or both?) (Responsibility of Permit system)
+#[repr(transparent)]
 pub struct Key<T: DynItem + ?Sized>(Index, PhantomData<&'static T>);
 
 impl<T: Pointee<Metadata = ()> + DynItem + ?Sized> Key<T> {
@@ -65,6 +66,15 @@ impl<T: DynItem + ?Sized> Key<T> {
     pub fn any(self) -> AnyKey {
         Key(self.0, PhantomData)
     }
+
+    // pub fn upcast_array<U: DynItem + ?Sized>(array: &[Key<T>]) -> &[Key<U>]
+    // where
+    //     T: Unsize<U>,
+    // {
+    //     // SAFETY: This is safe since Key<T> and Key<U> have the same layout
+    //     // and a single Key<T> can be upcast to a single Key<U>.
+    //     unsafe { &*(array as *const [Key<T>] as *const [Key<U>]) }
+    // }
 }
 
 impl<T: DynItem + ?Sized> LocalityPath for Key<T> {

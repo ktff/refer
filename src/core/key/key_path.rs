@@ -9,6 +9,7 @@ use std::{
 
 pub type AnyPath = KeyPath<dyn AnyItem>;
 
+#[repr(transparent)]
 pub struct KeyPath<T: DynItem + ?Sized>(Path, PhantomData<&'static T>);
 
 impl<T: AnyItem + ?Sized> KeyPath<T> {

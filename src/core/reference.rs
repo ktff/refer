@@ -7,6 +7,7 @@ use std::{
 
 pub type AnyRef = Ref<dyn AnyItem>;
 
+#[repr(transparent)]
 pub struct Ref<T: DynItem + ?Sized>(Key<T>);
 
 impl<T: DynItem + ?Sized> Ref<T> {

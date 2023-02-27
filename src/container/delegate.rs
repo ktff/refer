@@ -233,7 +233,7 @@ mod tests {
             container.access_mut().slot(key).get().unwrap().item(),
             &item
         );
-        let mut iter = container.access_mut().ty::<i32>().path().iter().unwrap();
+        let mut iter = container.access_mut().ty::<i32>().on_path().iter().unwrap();
         assert_eq!(iter.next().unwrap().item(), &item);
         assert!(iter.next().is_none());
     }
@@ -260,7 +260,7 @@ mod tests {
             container
                 .access_mut()
                 .ty::<i32>()
-                .path()
+                .on_path()
                 .iter()
                 .unwrap()
                 .count(),

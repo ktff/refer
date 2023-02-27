@@ -85,7 +85,7 @@ impl<'a, R, T: core::DynItem + ?Sized, A, C: AnyContainer + ?Sized> TypePermit<'
 }
 
 impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> TypePermit<'a, T, R, A, C> {
-    pub fn path(self) -> PathPermit<'a, T, R, A, C> {
+    pub fn on_path(self) -> PathPermit<'a, T, R, A, C> {
         PathPermit::new(self)
     }
 

@@ -1,5 +1,6 @@
 use crate::core::{
-    permit, AnyKey, AnyShell, AnySlot, Item, Key, Path, Permit, Shell, SlotLocality, UnsafeSlot,
+    permit, AnyKey, AnyShell, AnySlot, DynItem, Item, Key, Path, Permit, Shell, SlotLocality,
+    UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -116,24 +117,24 @@ impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Shell>> Slot<'a, T, S, permit
         unsafe { &mut *self.slot.shell().get() }
     }
 
-    pub fn shell_add(&mut self, from: AnyKey) {
+    pub fn shell_add<F: DynItem + ?Sized>(&mut self, from: Key<F>) {
         let alloc = self.slot.allocator();
-        self.shell_mut().add(from, alloc);
+        self.shell_mut().add(from.any(), alloc);
     }
 
-    pub fn shell_add_many(&mut self, from: AnyKey, count: usize) {
+    pub fn shell_add_many<F: DynItem + ?Sized>(&mut self, from: Key<F>, count: usize) {
         let locality = self.locality();
         self.shell_mut()
-            .add_many_any(from, count, locality.upcast());
+            .add_many_any(from.any(), count, locality.upcast());
     }
 
-    pub fn shell_replace(&mut self, from: AnyKey, to: AnyKey) {
+    pub fn shell_replace<F: DynItem + ?Sized>(&mut self, from: Key<F>, to: Key<F>) {
         let alloc = self.slot.allocator();
-        self.shell_mut().replace(from, to, alloc);
+        self.shell_mut().replace(from.any(), to.any(), alloc);
     }
 
-    pub fn shell_remove(&mut self, from: AnyKey) {
-        self.shell_mut().remove(from);
+    pub fn shell_remove<F: DynItem + ?Sized>(&mut self, from: Key<F>) {
+        self.shell_mut().remove(from.any());
     }
 }
 
@@ -188,46 +189,20 @@ where
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>> Deref for Slot<'a, T, S, R, permit::Item> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.item()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Item> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.item_mut()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>> Deref for Slot<'a, T, S, R, permit::Slot> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.item()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Slot> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.item_mut()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>> Deref
-    for Slot<'a, T, S, R, permit::Shell>
+impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>, A: Into<permit::Item>> Deref
+    for Slot<'a, T, S, R, A>
 {
-    type Target = S;
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.shell()
+        self.item()
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Shell> {
+impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Item>> DerefMut
+    for Slot<'a, T, S, permit::Mut, A>
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.shell_mut()
+        self.item_mut()
     }
 }

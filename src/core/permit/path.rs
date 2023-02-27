@@ -1,7 +1,6 @@
 use super::*;
 use crate::core::{
     container::RegionContainer, container::TypeContainer, AnyContainer, Container, DynItem, Path,
-    Result,
 };
 use std::{
     any::TypeId,
@@ -51,15 +50,15 @@ impl<'a, R, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> PathPermit<'a, T, 
 }
 
 impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> PathPermit<'a, T, R, A, C> {
-    pub fn iter(self) -> Result<impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>> {
+    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>> {
         let Self { permit, path } = self;
         assert!(permit.container_path().contains(path));
-        Ok(permit
+        permit
             .iter_slot(path.of())
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
-            .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, permit.access()) }))
+            .map(move |(key, slot)| unsafe { core::Slot::new(key, slot, permit.access()) })
     }
 
     /// Splits on lower level, or returns self if level is higher.
@@ -170,6 +169,17 @@ impl<'a, T: DynItem + ?Sized, A, C: AnyContainer + ?Sized> PathPermit<'a, T, Mut
             permit: self.permit.borrow_mut(),
             path: self.path,
         }
+    }
+}
+
+impl<'a, R, T: core::Item, A, C: Container<T> + ?Sized> IntoIterator
+    for PathPermit<'a, T, R, A, C>
+{
+    type Item = core::Slot<'a, T, C::Shell, R, A>;
+    type IntoIter = impl Iterator<Item = core::Slot<'a, T, C::Shell, R, A>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 

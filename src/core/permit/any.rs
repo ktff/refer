@@ -54,6 +54,10 @@ impl<'a, R, A, C: AnyContainer + ?Sized> AnyPermit<'a, R, A, C> {
         TypePermit::new(self)
     }
 
+    pub fn on_key<T: core::DynItem + ?Sized>(self, key: Key<T>) -> SlotPermit<'a, T, R, A, C> {
+        self.slot(key)
+    }
+
     /// Iterates over valid slot permit of type in ascending order.
     pub fn iter(self, key: TypeId) -> impl Iterator<Item = SlotPermit<'a, dyn AnyItem, R, A, C>> {
         self.keys(key).map(move |key| {

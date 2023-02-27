@@ -525,7 +525,7 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
         for other_rf in other.iter_references() {
             other_rf
                 .get_dyn(shells.borrow_mut())
-                .shell_replace(from.upcast(), to.upcast());
+                .shell_replace(from, to);
         }
     }
 
@@ -570,11 +570,11 @@ impl<'a, C: AnyContainer + ?Sized> ExclusivePermit<'a, C> {
                     // We don't care so much about this reference missing.
                     let _ = shells
                         .peek_dyn(rf.key())
-                        .map(|mut slot| slot.shell_remove(key.upcast()));
+                        .map(|mut slot| slot.shell_remove(key));
                 }
                 (None, Some(rf)) => {
                     match shells.peek_dyn(rf.key()) {
-                        Ok(mut shell_slot) => shell_slot.shell_add(key.upcast()),
+                        Ok(mut shell_slot) => shell_slot.shell_add(key),
                         Err(error) => {
                             // Rollback and return error
                             for cmp in crate::util::pair_up(&old, &new).take(i) {

@@ -1,6 +1,6 @@
 use crate::core::{
-    permit, AnyItem, AnyKey, AnyRef, AnyShell, AnySlotLocality, AnyUnsafeSlot, DynItem, Item, Key,
-    Path, Permit, ReferError, Shell, TypeInfo,
+    permit, AnyItem, AnyRef, AnyShell, AnySlotLocality, AnyUnsafeSlot, DynItem, Item, Key, Path,
+    Permit, ReferError, Shell, TypeInfo,
 };
 
 use std::{
@@ -197,27 +197,36 @@ impl<'a, T: DynItem + ?Sized, A: Into<permit::Item>> DynSlot<'a, T, permit::Mut,
         (self.any_item_mut() as &mut dyn Any).downcast_mut::<U>()
     }
 
-    pub fn remove_reference(&mut self, other: AnyKey) -> bool {
-        let locality = self.locality();
-        self.any_item_mut().remove_reference_any(locality, other)
-    }
-
-    pub fn replace_reference(&mut self, other: AnyKey, to: AnyKey) {
+    pub fn remove_reference<F: DynItem + ?Sized>(&mut self, other: Key<F>) -> bool {
         let locality = self.locality();
         self.any_item_mut()
-            .replace_reference_any(locality, other, to);
+            .remove_reference_any(locality, other.any())
     }
 
-    pub fn displace_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
+    pub fn replace_reference<F: DynItem + ?Sized>(&mut self, other: Key<F>, to: Key<F>) {
         let locality = self.locality();
         self.any_item_mut()
-            .displace_reference_any(locality, other, to)
+            .replace_reference_any(locality, other.any(), to.any());
     }
 
-    pub fn duplicate_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
+    pub fn displace_reference<F: DynItem + ?Sized>(
+        &mut self,
+        other: Key<F>,
+        to: Key<F>,
+    ) -> Option<Path> {
         let locality = self.locality();
         self.any_item_mut()
-            .duplicate_reference_any(locality, other, to)
+            .displace_reference_any(locality, other.any(), to.any())
+    }
+
+    pub fn duplicate_reference<F: DynItem + ?Sized>(
+        &mut self,
+        other: Key<F>,
+        to: Key<F>,
+    ) -> Option<Path> {
+        let locality = self.locality();
+        self.any_item_mut()
+            .duplicate_reference_any(locality, other.any(), to.any())
     }
 
     pub fn displace(&mut self) {
@@ -247,23 +256,23 @@ impl<'a, T: DynItem + ?Sized, A: Into<permit::Shell>> DynSlot<'a, T, permit::Mut
         (self.shell_mut() as &mut dyn Any).downcast_mut::<S>()
     }
 
-    pub fn shell_add(&mut self, from: AnyKey) {
+    pub fn shell_add<F: DynItem + ?Sized>(&mut self, from: Key<F>) {
         let locality = self.locality();
-        self.shell_mut().add_any(from, locality);
+        self.shell_mut().add_any(from.any(), locality);
     }
 
-    pub fn shell_add_many(&mut self, from: AnyKey, count: usize) {
+    pub fn shell_add_many<F: DynItem + ?Sized>(&mut self, from: Key<F>, count: usize) {
         let locality = self.locality();
-        self.shell_mut().add_many_any(from, count, locality);
+        self.shell_mut().add_many_any(from.any(), count, locality);
     }
 
-    pub fn shell_replace(&mut self, from: AnyKey, to: AnyKey) {
+    pub fn shell_replace<F: DynItem + ?Sized>(&mut self, from: Key<F>, to: Key<F>) {
         let locality = self.locality();
-        self.shell_mut().replace_any(from, to, locality);
+        self.shell_mut().replace_any(from.any(), to.any(), locality);
     }
 
-    pub fn shell_remove(&mut self, from: AnyKey) {
-        self.shell_mut().remove_any(from);
+    pub fn shell_remove<F: DynItem + ?Sized>(&mut self, from: Key<F>) {
+        self.shell_mut().remove_any(from.any());
     }
 
     pub fn shell_clear(&mut self) {

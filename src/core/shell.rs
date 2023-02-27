@@ -4,6 +4,7 @@ use std::any::Any;
 
 /// A shell of an item. In which references are recorded.
 pub trait Shell: Sized + Any + Sync + Send {
+    // TODO: T se cini samo kao smetnja, mozda je bolje da se ukloni.
     type T: Item;
 
     type Iter<'a>: Iterator<Item = AnyRef> + 'a

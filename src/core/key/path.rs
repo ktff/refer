@@ -9,6 +9,7 @@ use std::{
 
 /// Path in container
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[repr(transparent)]
 pub struct Path(Index);
 
 impl Path {

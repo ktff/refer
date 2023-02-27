@@ -212,7 +212,7 @@ mod tests {
             container
                 .access_mut()
                 .ty()
-                .path()
+                .on_path()
                 .iter()
                 .unwrap()
                 .map(|slot| (slot.key(), *slot.item()))
