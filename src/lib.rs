@@ -13,6 +13,7 @@
 #![feature(unsize)]
 #![feature(arbitrary_self_types)]
 #![feature(const_type_id)]
+#![feature(specialization)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs
@@ -72,13 +73,13 @@
 //? - Focus is on processing.
 //? - Focus is on parallel processing through aliasing rules. That is to say, without atomics and locks.
 
-#[macro_use]
-pub mod container;
+// #[macro_use]
+// pub mod container;
 #[macro_use]
 pub mod core;
-#[macro_use]
-pub mod item;
-// pub mod model;
-pub mod shell;
+// #[macro_use]
+// pub mod item;
+// // pub mod model;
+// pub mod shell;
 // Generic things
 pub mod util;
