@@ -40,9 +40,7 @@ pub trait RegionContainer {
 #[macro_export]
 macro_rules! region_container {
     (impl Container<$t:ty> ) => {
-        type Shell = <<Self as RegionContainer>::Sub as Container<$t>>::Shell;
-
-        type SlotIter<'a> = impl Iterator<Item = (Key<T>, UnsafeSlot<'a, T, Self::Shell>)> + Send
+        type SlotIter<'a> = impl Iterator<Item = (Key<T>, UnsafeSlot<'a, T>)> + Send
                                                                                 where
                                                                                     Self: 'a;
 
@@ -76,12 +74,12 @@ macro_rules! region_container {
         }
 
         #[inline(always)]
-        fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t, Self::Shell>> {
+        fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t>> {
             let index = self.region().index_of(key);
             self.get(index)?.get_slot(key)
         }
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotLocality<$t>)> {
+        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, SlotLocality<$t>)> {
             let index = self.region().index_of(key);
             self.get_mut(index)?.unfill_slot(key)
         }
@@ -92,7 +90,7 @@ macro_rules! region_container {
         }
 
         #[inline(always)]
-        fn get_slot_any(&self, key: AnyKey) -> Option<AnyUnsafeSlot> {
+        fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot> {
             let index = self.region().index_of(key);
             self.get(index)?.get_slot_any(key)
         }
@@ -105,12 +103,12 @@ macro_rules! region_container {
             self.locality(path)?.get_locality_any(path, ty)
         }
 
-        fn first_key(&self, key: std::any::TypeId) -> Option<AnyKey> {
+        fn first_key(&self, key: std::any::TypeId) -> Option<Key> {
             self.iter(..)?
                 .find_map(|container| container.first_key(key))
         }
 
-        fn next_key(&self, ty: TypeId, key: AnyKey) -> Option<AnyKey> {
+        fn next_key(&self, ty: TypeId, key: Key) -> Option<Key> {
             let index = self.region().index_of(key);
             if let Some(container) = self.get(index) {
                 if let Some(key) = container.next_key(ty, key) {
@@ -122,7 +120,7 @@ macro_rules! region_container {
                 .find_map(|container| container.first_key(ty))
         }
 
-        fn last_key(&self, key: std::any::TypeId) -> Option<AnyKey> {
+        fn last_key(&self, key: std::any::TypeId) -> Option<Key> {
             self.iter(..)?
                 .rev()
                 .find_map(|container| container.last_key(key))
@@ -132,7 +130,7 @@ macro_rules! region_container {
             &mut self,
             path: &dyn LocalityPath,
             item: Box<dyn std::any::Any>,
-        ) -> std::result::Result<AnyKey, String> {
+        ) -> std::result::Result<Key, String> {
             if let Some(sub) = self.fill(path) {
                 sub.fill_slot_any(path, item)
             } else {
@@ -152,7 +150,7 @@ macro_rules! region_container {
             self.fill(path)?.fill_locality_any(path, ty)
         }
 
-        fn unfill_slot_any(&mut self, key: AnyKey) {
+        fn unfill_slot_any(&mut self, key: Key) {
             let index = self.region().index_of(key);
             if let Some(container) = self.get_mut(index) {
                 container.unfill_slot_any(key);

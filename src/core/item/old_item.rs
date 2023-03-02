@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, AnySlotLocality, Path, SlotLocality, TypeInfo};
+use super::{AnyRef, AnySlotLocality, Key, Path, SlotLocality, TypeInfo};
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
@@ -39,12 +39,12 @@ pub trait Item: Sized + Any + Sync + Send {
     /// True if this should also be removed, else should remove all references to other.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn remove_reference(&mut self, locality: SlotLocality<'_, Self>, other: AnyKey) -> bool;
+    fn remove_reference(&mut self, locality: SlotLocality<'_, Self>, other: Key) -> bool;
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
     /// Will be called for references of self, but can be called for other references.
-    fn replace_reference(&mut self, locality: SlotLocality<'_, Self>, other: AnyKey, to: AnyKey);
+    fn replace_reference(&mut self, locality: SlotLocality<'_, Self>, other: Key, to: Key);
 
     /// Should replace all of it's references to other with to, 1 to 1.
     ///
@@ -54,8 +54,8 @@ pub trait Item: Sized + Any + Sync + Send {
     fn displace_reference(
         &mut self,
         locality: SlotLocality<'_, Self>,
-        other: AnyKey,
-        to: AnyKey,
+        other: Key,
+        to: Key,
     ) -> Option<Path> {
         self.replace_reference(locality, other, to);
         None
@@ -72,8 +72,8 @@ pub trait Item: Sized + Any + Sync + Send {
     fn duplicate_reference(
         &mut self,
         locality: SlotLocality<'_, Self>,
-        other: AnyKey,
-        to: AnyKey,
+        other: Key,
+        to: Key,
     ) -> Option<Path>;
 
     /// Clone this item from locality to locality.
@@ -125,22 +125,22 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
         locality: AnySlotLocality<'_>,
     ) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>>;
 
-    fn remove_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey) -> bool;
+    fn remove_reference_any(&mut self, locality: AnySlotLocality<'_>, other: Key) -> bool;
 
-    fn replace_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey, to: AnyKey);
+    fn replace_reference_any(&mut self, locality: AnySlotLocality<'_>, other: Key, to: Key);
 
     fn displace_reference_any(
         &mut self,
         locality: AnySlotLocality<'_>,
-        other: AnyKey,
-        to: AnyKey,
+        other: Key,
+        to: Key,
     ) -> Option<Path>;
 
     fn duplicate_reference_any(
         &mut self,
         locality: AnySlotLocality<'_>,
-        other: AnyKey,
-        to: AnyKey,
+        other: Key,
+        to: Key,
     ) -> Option<Path>;
 
     fn duplicate_any(
@@ -181,19 +181,19 @@ impl<T: Item> AnyItem for T {
         }
     }
 
-    fn remove_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey) -> bool {
+    fn remove_reference_any(&mut self, locality: AnySlotLocality<'_>, other: Key) -> bool {
         self.remove_reference(locality.downcast(), other)
     }
 
-    fn replace_reference_any(&mut self, locality: AnySlotLocality<'_>, other: AnyKey, to: AnyKey) {
+    fn replace_reference_any(&mut self, locality: AnySlotLocality<'_>, other: Key, to: Key) {
         self.replace_reference(locality.downcast(), other, to)
     }
 
     fn displace_reference_any(
         &mut self,
         locality: AnySlotLocality<'_>,
-        other: AnyKey,
-        to: AnyKey,
+        other: Key,
+        to: Key,
     ) -> Option<Path> {
         self.displace_reference(locality.downcast(), other, to)
     }
@@ -201,8 +201,8 @@ impl<T: Item> AnyItem for T {
     fn duplicate_reference_any(
         &mut self,
         locality: AnySlotLocality<'_>,
-        other: AnyKey,
-        to: AnyKey,
+        other: Key,
+        to: Key,
     ) -> Option<Path> {
         self.duplicate_reference(locality.downcast(), other, to)
     }

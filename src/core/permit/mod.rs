@@ -1,16 +1,20 @@
+mod add;
 mod any;
-mod exclusive;
 mod path;
+// mod remove;
 mod slot;
 mod slot_split;
+mod subject;
 mod ty;
 mod type_split;
 
+pub use add::AddPermit;
 pub use any::AnyPermit;
-pub use exclusive::ExclusivePermit;
 pub use path::PathPermit;
+// pub use remove::RemovePermit;
 pub use slot::SlotPermit;
 pub use slot_split::SlotSplitPermit;
+pub use subject::SubjectPermit;
 pub use ty::TypePermit;
 pub use type_split::TypeSplitPermit;
 
@@ -34,27 +38,11 @@ impl From<Mut> for Ref {
     }
 }
 
-pub struct Slot;
-
-pub struct Item;
-impl From<Slot> for Item {
-    fn from(_: Slot) -> Self {
-        Item
-    }
+pub struct Permit<R> {
+    _marker: PhantomData<R>,
 }
 
-pub struct Shell;
-impl From<Slot> for Shell {
-    fn from(_: Slot) -> Self {
-        Shell
-    }
-}
-
-pub struct Permit<R, A> {
-    _marker: PhantomData<(R, A)>,
-}
-
-impl<R, A> Permit<R, A> {
+impl<R> Permit<R> {
     /// UNSAFE: So that it's constructed sparingly.
     pub unsafe fn new() -> Self {
         Self {
@@ -69,30 +57,17 @@ impl<R, A> Permit<R, A> {
     }
 }
 
-impl<R> Permit<R, Slot> {
-    pub fn split(self) -> (Permit<R, Item>, Permit<R, Shell>) {
-        (
-            Permit {
-                _marker: PhantomData,
-            },
-            Permit {
-                _marker: PhantomData,
-            },
-        )
-    }
-}
-
-impl<A> Permit<Mut, A> {
-    pub fn borrow(&self) -> Permit<Ref, A> {
+impl Permit<Mut> {
+    pub fn borrow(&self) -> Permit<Ref> {
         Permit {
             _marker: PhantomData,
         }
     }
 }
 
-impl<A> Copy for Permit<Ref, A> {}
+impl Copy for Permit<Ref> {}
 
-impl<A> Clone for Permit<Ref, A> {
+impl Clone for Permit<Ref> {
     fn clone(&self) -> Self {
         Permit {
             _marker: PhantomData,
@@ -100,24 +75,8 @@ impl<A> Clone for Permit<Ref, A> {
     }
 }
 
-impl<A: Into<B>, B> From<Permit<Mut, A>> for Permit<Ref, B> {
-    fn from(_: Permit<Mut, A>) -> Self {
-        Permit {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<R> From<Permit<R, Slot>> for Permit<R, Item> {
-    fn from(_: Permit<R, Slot>) -> Self {
-        Permit {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<R> From<Permit<R, Slot>> for Permit<R, Shell> {
-    fn from(_: Permit<R, Slot>) -> Self {
+impl From<Permit<Mut>> for Permit<Ref> {
+    fn from(_: Permit<Mut>) -> Self {
         Permit {
             _marker: PhantomData,
         }

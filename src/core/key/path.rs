@@ -227,19 +227,19 @@ impl LeafPath {
 
     /// Panics if index is out of range.
     #[inline(always)]
-    pub fn key_of<T: Item>(&self, index: NonZeroUsize) -> Key<T> {
+    pub fn key_of<T: Item>(&self, index: NonZeroUsize) -> Key<Ptr, T> {
         assert!(self.contains(index), "Index has too many bits");
 
         let index = self.path | (index.get() as IndexBase);
         // SAFETY: This is safe since argument `index` is NonZero and
         //         applying `or` operation with path will not result in zero.
         let index = unsafe { Index::new_unchecked(index) };
-        Key::new(index)
+        Key::new_ptr(index)
     }
 
     /// May panic/return out of path index if key isn't of this path.
     #[inline(always)]
-    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<T>) -> usize {
+    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<Ptr, T>) -> usize {
         // Xor is intentional so to catch keys that don't correspond to this path
         (key.index().get() ^ self.path) as usize
     }
@@ -316,7 +316,7 @@ impl RegionPath {
 
     /// May panic/return invalid index if key isn't of this path.
     #[inline(always)]
-    pub fn index_of<T: DynItem + ?Sized>(&self, key: Key<T>) -> usize {
+    pub fn index_of<T: DynItem + ?Sized>(&self, key: Key<Ptr, T>) -> usize {
         ((key.index().get() ^ self.path) >> self.remaining_len.get()) as usize
     }
 

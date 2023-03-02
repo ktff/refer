@@ -1,4 +1,4 @@
-use super::{AnyKey, AnyRef, AnySlotLocality, Item};
+use super::{AnyRef, AnySlotLocality, Item, Key};
 pub use crate::util::ord_iter::AscendingIterator;
 use std::any::Any;
 
@@ -16,12 +16,12 @@ pub trait Shell: Sized + Any + Sync + Send {
     fn iter(&self) -> AscendingIterator<Self::Iter<'_>>;
 
     /// Additive if called for same `from` multiple times.
-    fn add(&mut self, from: impl Into<AnyKey>, alloc: &<Self::T as Item>::Alloc);
+    fn add(&mut self, from: impl Into<Key>, alloc: &<Self::T as Item>::Alloc);
 
-    fn replace(&mut self, from: impl Into<AnyKey>, to: AnyKey, alloc: &<Self::T as Item>::Alloc);
+    fn replace(&mut self, from: impl Into<Key>, to: Key, alloc: &<Self::T as Item>::Alloc);
 
     /// Subtracts if called for same `from` multiple times.
-    fn remove(&mut self, from: impl Into<AnyKey>);
+    fn remove(&mut self, from: impl Into<Key>);
 
     /// Should clear itself and shrink.
     /// Must not have any remaining local allocation.
@@ -32,13 +32,13 @@ pub trait Shell: Sized + Any + Sync + Send {
 pub trait AnyShell: Any {
     fn iter_any(&self) -> Option<AscendingIterator<Box<dyn Iterator<Item = AnyRef> + '_>>>;
 
-    fn add_any(&mut self, from: AnyKey, locality: AnySlotLocality);
+    fn add_any(&mut self, from: Key, locality: AnySlotLocality);
 
-    fn add_many_any(&mut self, from: AnyKey, count: usize, locality: AnySlotLocality);
+    fn add_many_any(&mut self, from: Key, count: usize, locality: AnySlotLocality);
 
-    fn replace_any(&mut self, from: AnyKey, to: AnyKey, locality: AnySlotLocality);
+    fn replace_any(&mut self, from: Key, to: Key, locality: AnySlotLocality);
 
-    fn remove_any(&mut self, from: AnyKey);
+    fn remove_any(&mut self, from: Key);
 
     fn clear_any(&mut self, locality: AnySlotLocality);
 }
@@ -53,24 +53,24 @@ impl<T: Shell> AnyShell for T {
         }
     }
 
-    fn add_any(&mut self, from: AnyKey, locality: AnySlotLocality) {
+    fn add_any(&mut self, from: Key, locality: AnySlotLocality) {
         let locality = locality.downcast::<T::T>();
         self.add(from, locality.allocator());
     }
 
-    fn add_many_any(&mut self, from: AnyKey, count: usize, locality: AnySlotLocality) {
+    fn add_many_any(&mut self, from: Key, count: usize, locality: AnySlotLocality) {
         let locality = locality.downcast::<T::T>();
         for _ in 0..count {
             self.add(from, locality.allocator());
         }
     }
 
-    fn replace_any(&mut self, from: AnyKey, to: AnyKey, locality: AnySlotLocality) {
+    fn replace_any(&mut self, from: Key, to: Key, locality: AnySlotLocality) {
         let locality = locality.downcast::<T::T>();
         self.replace(from, to, locality.allocator());
     }
 
-    fn remove_any(&mut self, from: AnyKey) {
+    fn remove_any(&mut self, from: Key) {
         self.remove(from);
     }
 

@@ -1,27 +1,19 @@
-use crate::core::{AnyItem, AnyShell, AnySlotLocality, DynItem};
+use crate::core::{AnyItem, AnySlotLocality, DynItem};
 use getset::CopyGetters;
 use log::*;
 use std::{any::TypeId, cell::SyncUnsafeCell};
 
+// TODO: Try to unify with UnsafeSlot.
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct AnyUnsafeSlot<'a> {
     locality: AnySlotLocality<'a>,
     item: &'a SyncUnsafeCell<dyn AnyItem>,
-    shell: &'a SyncUnsafeCell<dyn AnyShell>,
 }
 
 impl<'a> AnyUnsafeSlot<'a> {
-    pub fn new(
-        locality: AnySlotLocality<'a>,
-        item: &'a SyncUnsafeCell<dyn AnyItem>,
-        shell: &'a SyncUnsafeCell<dyn AnyShell>,
-    ) -> Self {
-        Self {
-            locality,
-            item,
-            shell,
-        }
+    pub fn new(locality: AnySlotLocality<'a>, item: &'a SyncUnsafeCell<dyn AnyItem>) -> Self {
+        Self { locality, item }
     }
 
     pub fn item_type_id(&self) -> std::any::TypeId {
@@ -53,7 +45,6 @@ impl<'a> Clone for AnyUnsafeSlot<'a> {
         Self {
             locality: self.locality,
             item: self.item,
-            shell: self.shell,
         }
     }
 }

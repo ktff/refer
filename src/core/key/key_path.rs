@@ -1,4 +1,4 @@
-use super::{Key, LeafPath, LocalityKey, Path};
+use super::{Key, LeafPath, LocalityKey, Path, Ptr};
 use crate::core::{AnyItem, DynItem};
 use std::{
     any::{self},
@@ -61,7 +61,7 @@ impl<T: DynItem + ?Sized> KeyPath<T> {
     }
 
     /// True if self start of given key.
-    pub fn contains_key(self, key: Key<T>) -> bool {
+    pub fn contains_key(self, key: Key<Ptr, T>) -> bool {
         self.0.contains_index(key.index())
     }
 }
@@ -111,8 +111,8 @@ impl<T: DynItem + ?Sized> Default for KeyPath<T> {
     }
 }
 
-impl<T: DynItem + ?Sized> From<Key<T>> for KeyPath<T> {
-    fn from(key: Key<T>) -> Self {
+impl<P: Copy, T: DynItem + ?Sized> From<Key<P, T>> for KeyPath<T> {
+    fn from(key: Key<P, T>) -> Self {
         KeyPath(key.path(), PhantomData)
     }
 }

@@ -6,10 +6,7 @@ use std::{num::NonZeroUsize, ops::RangeBounds};
 /// A container of items.
 /// Should clear on drop.
 pub trait LeafContainer<T: Item> {
-    /// Shell of item.
-    type Shell: Shell<T = T>;
-
-    type Iter<'a>: Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, Self::Shell>)> + Send
+    type Iter<'a>: Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T>)> + Send
     where
         Self: 'a;
 
@@ -27,7 +24,7 @@ pub trait LeafContainer<T: Item> {
 
     /// Implementations should have #[inline(always)]
     /// Bijection between index and slot MUST be enforced.
-    fn get(&self, index: usize) -> Option<UnsafeSlot<T, Self::Shell>>;
+    fn get(&self, index: usize) -> Option<UnsafeSlot<T>>;
 
     /// Iterates in ascending order for indices in range.
     /// Iterator MUST NOT return the same slot more than once.
@@ -37,7 +34,7 @@ pub trait LeafContainer<T: Item> {
     fn fill(&mut self, item: T) -> std::result::Result<NonZeroUsize, T>;
 
     /// Removes from container.
-    fn unfill(&mut self, index: usize) -> Option<(T, Self::Shell)>;
+    fn unfill(&mut self, index: usize) -> Option<T>;
 
     /// Unfill all slots and clear their content.
     fn clear(&mut self) {
@@ -45,10 +42,9 @@ pub trait LeafContainer<T: Item> {
             loop {
                 // Drop slot
                 match self.unfill(now.get()) {
-                    Some((mut item, mut shell)) => {
+                    Some(item) => {
                         // Drop local
-                        shell.clear(self.locality().allocator());
-                        item.displace(self.locality().slot_locality(), None);
+                        item.localized_drop(self.locality().slot_locality());
                     }
                     None => warn!(
                         "{:?}::{} returned invalid index: {}",
@@ -80,13 +76,11 @@ macro_rules! leaf_container {
         }
     };
     (impl Container<$t:ty>) => {
-        type Shell = <Self as LeafContainer<$t>>::Shell;
-
-        type SlotIter<'a> =  impl Iterator<Item = (Key<$t>, UnsafeSlot<'a, $t, Self::Shell>)> + Send
+        type SlotIter<'a> =  impl Iterator<Item = (Key<$t>, UnsafeSlot<'a, $t>)> + Send
             where Self:'a;
 
         #[inline(always)]
-        fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t, Self::Shell>> {
+        fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t>> {
             let index = self.locality().locality_key().index_of(key);
             self.get(index)
         }
@@ -109,10 +103,10 @@ macro_rules! leaf_container {
             Some(*self.locality().locality_key())
         }
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, Self::Shell, SlotLocality<$t>)> {
+        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, SlotLocality<$t>)> {
             let index = self.locality().locality_key().index_of(key);
             self.unfill(index)
-                .map(move |(item, shell)| (item, shell, self.locality().slot_locality()))
+                .map(move |item| (item, self.locality().slot_locality()))
         }
     };
     (impl AnyContainer<$t:ty>) => {
@@ -121,7 +115,7 @@ macro_rules! leaf_container {
         }
 
         #[inline(always)]
-        fn get_slot_any(&self, key: AnyKey) -> Option<AnyUnsafeSlot>{
+        fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot>{
             self.get_slot(Key::new(key.index())).map(|slot| slot.upcast())
         }
 
@@ -133,7 +127,7 @@ macro_rules! leaf_container {
             }
         }
 
-        fn first_key(&self, key: TypeId) -> Option<AnyKey>{
+        fn first_key(&self, key: TypeId) -> Option<Key>{
             if key == TypeId::of::<$t>() {
                 self.first().map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
             } else {
@@ -141,12 +135,12 @@ macro_rules! leaf_container {
             }
         }
 
-        fn next_key(&self, _: TypeId, key: AnyKey) -> Option<AnyKey>{
+        fn next_key(&self, _: TypeId, key: Key) -> Option<Key>{
             let index = self.locality().locality_key().index_of(key);
             self.next(NonZeroUsize::new(index)?).map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
         }
 
-        fn last_key(&self, key: TypeId) -> Option<AnyKey>{
+        fn last_key(&self, key: TypeId) -> Option<Key>{
             if key == TypeId::of::<$t>() {
                 self.last().map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
             } else {
@@ -160,7 +154,7 @@ macro_rules! leaf_container {
             set
         }
 
-        fn fill_slot_any(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<AnyKey, String>{
+        fn fill_slot_any(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<Key, String>{
             match item.downcast::<$t>() {
                 Ok(item)=>{
                     if let Ok(index)=self.fill(Box::into_inner(item)){
@@ -184,7 +178,7 @@ macro_rules! leaf_container {
 
         }
 
-        fn unfill_slot_any(&mut self, key: AnyKey){
+        fn unfill_slot_any(&mut self, key: Key){
             self.unfill_slot(Key::new(key.index()));
         }
     }

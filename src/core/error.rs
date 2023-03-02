@@ -4,7 +4,7 @@ use std::{
     fmt::Display,
 };
 
-use super::LocalityPath;
+use super::{LocalityPath, Ptr};
 
 /// Collection level errors.
 /// Non fatal in theory but can be fatal in practice.
@@ -12,6 +12,8 @@ use super::LocalityPath;
 pub enum ReferError {
     /// Collection for type and locality is full.
     OutOfKeys { ty: TypeInfo, locality: String },
+    /// Expected for Item to be drain.
+    ItemNotDrain { ty: TypeInfo, index: Index },
     /// Item it was representing doesn't exist on given path.
     InvalidKey {
         ty: TypeInfo,
@@ -40,7 +42,7 @@ impl ReferError {
         }
     }
 
-    pub fn invalid_key<T: Any + ?Sized>(key: Key<T>, container: Path) -> Self {
+    pub fn invalid_key<T: Any + ?Sized>(key: Key<Ptr, T>, container: Path) -> Self {
         Self::InvalidKey {
             ty: TypeInfo::of::<T>(),
             index: key.index(),
@@ -48,7 +50,7 @@ impl ReferError {
         }
     }
 
-    pub fn invalid_op<T: Any + ?Sized>(key: Key<T>, op: &'static str) -> Self {
+    pub fn invalid_op<T: Any + ?Sized>(key: Key<Ptr, T>, op: &'static str) -> Self {
         Self::InvalidOperation {
             ty: TypeInfo::of::<T>(),
             index: key.index(),
@@ -56,7 +58,14 @@ impl ReferError {
         }
     }
 
-    pub fn is_invalid_key<T: ?Sized + 'static>(&self, key: Key<T>) -> bool {
+    pub fn not_drain<T: Any + ?Sized>(key: Key<Ptr, T>) -> Self {
+        Self::ItemNotDrain {
+            ty: TypeInfo::of::<T>(),
+            index: key.index(),
+        }
+    }
+
+    pub fn is_invalid_key<T: ?Sized + 'static>(&self, key: Key<Ptr, T>) -> bool {
         match self {
             Self::InvalidKey { index, .. } => key.index() == *index,
             _ => false,
@@ -78,7 +87,7 @@ impl Display for ReferError {
                 container: path,
             } => write!(
                 f,
-                "Item for key {}#{} doesn't exist in container {}.",
+                "Item on key {}#{} doesn't exist in container {}.",
                 ty, key, path
             ),
             Self::InvalidCastType {
@@ -97,6 +106,9 @@ impl Display for ReferError {
                     "Item for key {}#{} doesn't support operation '{}'.",
                     ty, key, op
                 )
+            }
+            Self::ItemNotDrain { ty, index: key } => {
+                write!(f, "Item on key {}#{} is not drain.", ty, key)
             }
         }
     }

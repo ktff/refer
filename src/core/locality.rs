@@ -43,6 +43,7 @@ impl<T: Item> Locality<T> {
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct SlotLocality<'a, T: Item> {
+    // TODO: Key?, If KeyPath is really needed, then it can be a different kind of SlotLocality.
     prefix: KeyPath<T>,
     data: &'a T::LocalityData,
     allocator: &'a T::Alloc,
