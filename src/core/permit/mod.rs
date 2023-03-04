@@ -1,7 +1,7 @@
 mod add;
 mod any;
 mod path;
-// mod remove;
+mod remove;
 mod slot;
 mod slot_split;
 mod subject;
@@ -11,7 +11,7 @@ mod type_split;
 pub use add::AddPermit;
 pub use any::AnyPermit;
 pub use path::PathPermit;
-// pub use remove::RemovePermit;
+pub use remove::RemovePermit;
 pub use slot::SlotPermit;
 pub use slot_split::SlotSplitPermit;
 pub use subject::SubjectPermit;

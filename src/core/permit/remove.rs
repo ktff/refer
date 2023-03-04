@@ -1,6 +1,8 @@
 use crate::core::{container::RegionContainer, container::TypeContainer, *};
 use std::ops::{Deref, DerefMut, RangeBounds};
 
+/// Permit to remove items from a container.
+/// No Key<Ref> can live across possible calls to remove.
 pub struct RemovePermit<'a, C: AnyContainer + ?Sized> {
     permit: Permit<permit::Mut>,
     container: &'a mut C,
@@ -69,71 +71,60 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
         )
     }
 
-    /// Expects that slot exists
-    fn drop_slot<T: Item>(&mut self, key: Key<Refer, T>)
+    /// Some(true) if removed.
+    /// Some(false) if not removed because there are edgeless references to it.
+    /// None if key doesn't exist.
+    /// Can have side effects that also invalidate other Key<Ptr>.
+    pub fn remove<T: Item>(&mut self, key: Key<Ptr, T>) -> Option<bool>
     where
         C: Container<T>,
     {
-        let (item, locality) = self.unfill_slot(key.into()).expect("Should be present");
-        item.localized_drop(locality);
-    }
-
-    fn resolve_remove(&mut self, mut remove: Vec<Key>) {
-        // Recursive remove
-        while let Some(other) = remove.pop() {
-            // Detach
-            if self.detach(other, &mut remove).is_ok() {
-                // Drop
-                self.unfill_slot_any(other);
+        // Standalone check
+        if T::IsStandalone {
+            if self.access().slot(key).get().ok()?.edgeless_ref() {
+                return Some(false);
             }
         }
-    }
-}
-
-impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
-    // TODO: Incorporate Ref
-
-    /// May have side effects that invalidate other Keys.
-    pub fn remove<T: Item>(&mut self, key: Key<T>) -> Result<()>
-    where
-        C: Container<T>,
-    {
-        // Detach
-
-        // item <--> others
-        let mut remove = Vec::new();
-        self.detach(key.any(), &mut remove)?;
 
         // Drop
-        let (item, locality) = self.unfill_slot(key).expect("Should be present");
-        item.localized_drop(locality);
+        let (item, locality) = self.unfill_slot(key)?;
+        let edges = item.localized_drop(locality);
+
+        // Detach
+        let mut remove = Vec::new();
+        self.remove_edges(key.any(), edges, &mut remove);
 
         // Propagate change
-        self.resolve_remove(remove);
-
-        Ok(())
-    }
-
-    /// Detaches item from others.
-    ///
-    /// Err if key doesn't exist.
-    fn detach(&mut self, subject: Key, remove: &mut Vec<Key>) -> Result<()> {
-        // Access
-        let (item, mut others) = self.access_mut().split_of(subject);
-
-        // Disconnect from others
-        for edge in item.get_dyn()?.edges(None) {
-            others
-                .slot(edge.key())
-                .and_then(|slot| slot.get_dyn().ok())
-                .map(|mut other| {
-                    if !other.remove_edge(edge.reverse(subject)) {
-                        remove.push(edge.key());
-                    }
-                });
+        while let Some(other) = remove.pop() {
+            // Standalone items can always remove edges so remove doesn't contain such items.
+            if let Some(edges) = self.localized_drop(other) {
+                self.remove_edges(other, edges, &mut remove);
+            }
         }
 
-        Ok(())
+        Some(true)
+    }
+
+    fn remove_edges(
+        &mut self,
+        subject: Key,
+        edges: Vec<PartialEdge<Key<Owned>>>,
+        remove: &mut Vec<Key>,
+    ) {
+        for edge in edges {
+            if let Ok(mut object) = self.access_mut().slot(edge.object.ptr()).get_dyn() {
+                let (object_key, rev_edge) = edge.reverse(subject);
+                match object.remove_edge(object_key, rev_edge) {
+                    Ok(subject) => std::mem::forget(subject),
+                    Err(object_key) => {
+                        remove.push(object_key.ptr());
+                        std::mem::forget(object_key);
+                    }
+                }
+            } else {
+                std::mem::forget(edge.object);
+            }
+        }
     }
 }
 

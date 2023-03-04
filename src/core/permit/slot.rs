@@ -15,7 +15,9 @@ impl<'a, R, K, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'
     }
 }
 
+// TODO: Version with Owned where it's properly disposed of.
 impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
+    // TODO: Merge get_dyn and get into one method.
     /// Err if doesn't exist.
     pub fn get_dyn(self) -> Result<core::DynSlot<'a, T, R>> {
         let Self { permit, key } = self;
@@ -33,7 +35,7 @@ impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized>
     pub fn get_dyn(self) -> core::DynSlot<'a, T, R> {
         SlotPermit::new(self.permit, self.key.ptr())
             .get_dyn()
-            .expect("Reference is invalid.")
+            .expect("Reference is invalid for given container.")
     }
 }
 
@@ -73,7 +75,7 @@ impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, core::Ref
     pub fn get(self) -> core::Slot<'a, T, R> {
         SlotPermit::new(self.permit, self.key.ptr())
             .get()
-            .expect("Reference is invalid.")
+            .expect("Reference is invalid for given container.")
     }
 }
 

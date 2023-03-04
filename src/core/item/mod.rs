@@ -3,6 +3,7 @@ mod any;
 pub use any::*;
 
 use super::{Key, Owned, PartialEdge, Ptr, Ref, Side, SlotLocality};
+use either::Either;
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
@@ -25,33 +26,32 @@ pub trait Item: Sized + Any + Sync + Send {
 
     type Edges<'a>: Iterator<Item = PartialEdge<Key<Ref<'a>>>>;
 
-    type DroppedEdges<'a>: Iterator<Item = PartialEdge<Key<Owned>>> + 'a;
-
     /// Edges where self is side.
     ///
     /// Must have stable iteration order.
     fn edges(&self, locality: SlotLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
 
-    /// Replace one Ref of a with b and return replaced Ref.
-    fn replace_object<T: DynItem + ?Sized>(
-        &mut self,
-        locality: SlotLocality<'_, Self>,
-        a: Key<Ptr, T>,
-        b: Key<Owned, T>,
-    ) -> Key<Owned, T>;
+    // /// Replace one Ref of a with b and return replaced Ref.
+    // fn replace_object<T: DynItem + ?Sized>(
+    //     &mut self,
+    //     locality: SlotLocality<'_, Self>,
+    //     a: Key<Ptr, T>,
+    //     b: Key<Owned, T>,
+    // ) -> Key<Owned, T>;
 
     /// Should remove edge and return object ref.
-    /// On None, localized_drop should be called.
+    /// Ok success.
+    /// Err if can't remove it, which may cause for this item to be removed.
     #[must_use]
     fn try_remove_edge<T: DynItem + ?Sized>(
         &mut self,
         locality: SlotLocality<'_, Self>,
         this: Key<Owned, Self>,
         edge: PartialEdge<Key<Ptr, T>>,
-    ) -> Option<Key<Owned, T>>;
+    ) -> Result<Key<Owned, T>, Key<Owned, Self>>;
 
     /// Caller should properly dispose of the edges.
-    fn localized_drop(self, locality: SlotLocality<'_, Self>) -> Self::DroppedEdges<'_>;
+    fn localized_drop(self, locality: SlotLocality<'_, Self>) -> Vec<PartialEdge<Key<Owned>>>;
 
     /// TypeIds of traits with their Metadata that this Item implements.
     /// Including Self and AnyItem.
@@ -88,6 +88,18 @@ pub trait StandaloneItem: DrainItem {
         this: Key<Owned, Self>,
         edge: PartialEdge<Key<Ptr, T>>,
     ) -> Key<Owned, T>;
+}
+
+pub trait IsStandaloneItem: Item {
+    const IsStandalone: bool;
+}
+
+impl<I: Item> IsStandaloneItem for I {
+    default const IsStandalone: bool = false;
+}
+
+impl<I: StandaloneItem> IsStandaloneItem for I {
+    const IsStandalone: bool = true;
 }
 
 // TODO: Auto include other traits, DrainItem, StandaloneItem, etc.

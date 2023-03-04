@@ -56,10 +56,13 @@ impl<T> PartialEdge<T> {
     }
 
     /// Current subject becomes new object.
-    pub fn reverse<F>(self, object: F) -> PartialEdge<F> {
-        PartialEdge {
-            subject: !self.subject,
-            object,
-        }
+    pub fn reverse<F>(self, object: F) -> (T, PartialEdge<F>) {
+        (
+            self.object,
+            PartialEdge {
+                subject: !self.subject,
+                object,
+            },
+        )
     }
 }

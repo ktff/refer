@@ -27,22 +27,23 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
         source: Key<Owned>,
     ) -> Result<Key<Owned>, Key<Owned>>;
 
-    #[must_use]
-    fn replace_object_any(
-        &mut self,
-        locality: AnySlotLocality<'_>,
-        a: Key,
-        b: Key<Owned>,
-    ) -> Key<Owned>;
+    // #[must_use]
+    // fn replace_object_any(
+    //     &mut self,
+    //     locality: AnySlotLocality<'_>,
+    //     a: Key,
+    //     b: Key<Owned>,
+    // ) -> Key<Owned>;
 
-    /// On None, self should be removed.
+    /// Ok success.
+    /// Err if can't remove it.
     #[must_use]
     fn remove_edge_any(
         &mut self,
         locality: AnySlotLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
-    ) -> Option<Key<Owned>>;
+    ) -> Result<Key<Owned>, Key<Owned>>;
 
     // TODO: Use prefix any_ everywhere?
 
@@ -93,22 +94,23 @@ impl<T: Item> AnyItem for T {
         Err(source)
     }
 
-    fn replace_object_any(
-        &mut self,
-        locality: AnySlotLocality<'_>,
-        a: Key,
-        b: Key<Owned>,
-    ) -> Key<Owned> {
-        self.replace_object(locality.downcast(), a, b)
-    }
+    // fn replace_object_any(
+    //     &mut self,
+    //     locality: AnySlotLocality<'_>,
+    //     a: Key,
+    //     b: Key<Owned>,
+    // ) -> Key<Owned> {
+    //     self.replace_object(locality.downcast(), a, b)
+    // }
 
     fn remove_edge_any(
         &mut self,
         locality: AnySlotLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
-    ) -> Option<Key<Owned>> {
+    ) -> Result<Key<Owned>, Key<Owned>> {
         self.try_remove_edge(locality.downcast(), this.assume(), edge)
+            .map_err(Key::any)
     }
 
     default fn any_create_ref(&mut self, _: AnySlotLocality<'_>) -> Option<Key<Owned>> {

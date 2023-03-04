@@ -58,6 +58,7 @@ impl<'a, T: Item> SlotLocality<'a, T> {
         }
     }
 
+    // TODO: Rename any?
     pub fn upcast(self) -> AnySlotLocality<'a> {
         AnySlotLocality {
             prefix: self.prefix.path(),

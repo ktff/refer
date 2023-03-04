@@ -64,6 +64,10 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, T, R> {
         self.item().edges(self.locality(), side)
     }
 
+    pub fn edgeless_ref(&self) -> bool {
+        self.item().any_edgeless_ref(self.locality().upcast())
+    }
+
     // /// Can panic if locality isn't for this type.
     // pub fn duplicate(&self, to: SlotLocality<T>) -> Option<T> {
     //     let locality = self.locality();

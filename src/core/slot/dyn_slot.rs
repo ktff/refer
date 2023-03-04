@@ -236,18 +236,19 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
             .map_err(|source| source.assume())
     }
 
-    /// True success.
-    /// False if self should be removed.
+    /// Ok success.
+    /// Err if can't remove it.
     #[must_use]
     pub fn remove_edge<F: DynItem + ?Sized>(
         &mut self,
         this: Key<Owned, T>,
         edge: PartialEdge<Key<Ptr, F>>,
-    ) -> Option<Key<Owned, F>> {
+    ) -> Result<Key<Owned, F>, Key<Owned, T>> {
         self.any_localized(|item, locality| {
             item.remove_edge_any(locality, this.any(), edge.map(|key| key.any()))
         })
-        .map(|object| object.assume())
+        .map(Key::assume)
+        .map_err(Key::assume)
     }
 
     pub fn any_delete_ref(&mut self, this: Key<Owned>) {

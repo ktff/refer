@@ -56,6 +56,11 @@ impl<'a, T: DynItem + ?Sized> Key<Ref<'a>, T> {
     pub unsafe fn new_ref(index: Index) -> Self {
         Self(index, PhantomData)
     }
+
+    /// UNSAFE: Caller must guarantee that it T will be alive for 'b lifetime.
+    pub unsafe fn extend<'b>(self) -> Key<Ref<'b>, T> {
+        Key(self.0, PhantomData)
+    }
 }
 
 impl<T: Pointee<Metadata = ()> + DynItem + ?Sized> Key<Ptr, T> {
@@ -88,7 +93,7 @@ impl<P, T: DynItem + ?Sized> Key<P, T> {
         self.0
     }
 
-    pub fn ptr(self) -> Key<Ptr, T> {
+    pub fn ptr(&self) -> Key<Ptr, T> {
         Key(self.0, PhantomData)
     }
 

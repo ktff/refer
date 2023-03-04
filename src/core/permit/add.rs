@@ -8,6 +8,9 @@ use std::{
 
 use super::SubjectPermit;
 
+//? NOTE: This Permit must not allow for remove operations to be called during it's lifetime,
+//?       as this would allow for a Key<Ref> to live across a remove operation, so it must not
+//?       expose &mut C outside self.
 /// Permit for adding items to a container.
 pub struct AddPermit<'a, C: AnyContainer + ?Sized> {
     permit: Permit<permit::Mut>,
@@ -152,9 +155,7 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
     //         }
     //     }
     // }
-}
 
-impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
     pub fn add<T: Item>(&mut self, locality: &impl LocalityPath, item: T) -> Result<Key<Ref<'a>, T>>
     where
         C: Container<T>,

@@ -10,9 +10,9 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    AddPermit, AnyPermit, AnySlotLocality, AnyUnsafeSlot, Item, ItemTraits, Key, KeyPath,
-    LocalityKey, LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath, SlotLocality,
-    UnsafeSlot,
+    permit::RemovePermit, AddPermit, AnyPermit, AnySlotLocality, AnyUnsafeSlot, Item, ItemTraits,
+    Key, KeyPath, LocalityKey, LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath,
+    SlotLocality, UnsafeSlot,
 };
 use crate::core::permit;
 use std::{
@@ -98,14 +98,22 @@ pub trait AnyContainer: Any + Sync + Send {
     /// None if there is no locality for given type under given key.
     fn fill_locality_any(&mut self, key: &dyn LocalityPath, ty: TypeId) -> Option<LocalityKey>;
 
+    /// Panics if item is edgeless referenced.
     /// Caller should properly dispose of the edges.
-    fn localized_drop_any(&mut self, key: Key) -> Vec<PartialEdge<Key<Owned>>>;
+    fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>;
 
-    fn exclusive(&mut self) -> AddPermit<'_, Self>
+    fn access_add(&mut self) -> AddPermit<'_, Self>
     where
         Self: Sized,
     {
         AddPermit::new(self)
+    }
+
+    fn access_remove(&mut self) -> RemovePermit<'_, Self>
+    where
+        Self: Sized,
+    {
+        RemovePermit::new(self)
     }
 
     fn access_mut(&mut self) -> AnyPermit<permit::Mut, Self>
