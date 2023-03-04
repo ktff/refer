@@ -80,8 +80,8 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
         C: Container<T>,
     {
         // Standalone check
-        if T::IsStandalone {
-            if self.access().slot(key).get().ok()?.edgeless_ref() {
+        if T::IS_STANDALONE {
+            if self.access().slot(key).get().ok()?.has_owners() {
                 return Some(false);
             }
         }

@@ -1,8 +1,7 @@
 use super::{Index, Path, RegionPath, INDEX_BASE_BITS};
 use log::*;
 use std::{
-    any::{self, Any},
-    fmt,
+    any, fmt,
     hash::{Hash, Hasher},
     marker::{PhantomData, Unsize},
     ptr::Pointee,
@@ -32,9 +31,17 @@ pub struct Owned;
 /// Key space is unified across types, that means that an item at some index determines its own type, not the key.
 /// Another way of looking at it by drawing parallels with pointers:
 /// - Key is a pointer to an item in constrained memory space as defined by a container.
+///
+/// - Guarantees of lifetime through which access and lifetime management is more ergonomic are:
+///     - Ptr which is similar to *const T in that there is no guarantee.
+///     - Ref which is similar to &'a T in that item should be alive for 'a lifetime. Enforced by the type system.
+///     - Owned which is similar to Arc<T> in that the item should be alive while it's alive.
+///       Partially enforced by traits, and partially by the type system, but at most cases it should be handled with care, else it can lead to item leaks.
+///
 /// - The item at some index has type, but a key with the same index can be cast to different types.
+///
 /// - Hence Key<T> is similar to *mut T where following checks are delegated to other parts of the library:
-///     - Does *mut T exist? (In pointer terms: is it safe to dereference?) (Responsibility of Container system)
+///     - Does *mut T exist? (In pointer terms: is it safe to dereference at all?) (Responsibility of Container system)
 ///     - Do we have exclusive or shared access? (In pointer terms: is it safe to dereference as & or &mut?) (Responsibility of Permit system)
 ///     - To which parts of the slot we have access? (In pointer terms: is it safe to access the item, the slot, or both?) (Responsibility of Permit system)
 #[repr(transparent)]
@@ -107,15 +114,6 @@ impl<P, T: DynItem + ?Sized> Key<P, T> {
     pub fn any(self) -> Key<P> {
         Key(self.0, PhantomData)
     }
-
-    // pub fn upcast_array<U: DynItem + ?Sized>(array: &[Key<T>]) -> &[Key<U>]
-    // where
-    //     T: Unsize<U>,
-    // {
-    //     // SAFETY: This is safe since Key<T> and Key<U> have the same layout
-    //     // and a single Key<T> can be upcast to a single Key<U>.
-    //     unsafe { &*(array as *const [Key<T>] as *const [Key<U>]) }
-    // }
 }
 
 impl<'a, T: DynItem + ?Sized> Key<Ref<'a>, T> {

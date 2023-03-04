@@ -48,12 +48,12 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     // TODO: Use prefix any_ everywhere?
 
     #[must_use]
-    fn any_create_ref(&mut self, locality: AnySlotLocality<'_>) -> Option<Key<Owned>>;
+    fn any_inc_owners(&mut self, locality: AnySlotLocality<'_>) -> Option<Key<Owned>>;
 
-    fn any_delete_ref(&mut self, locality: AnySlotLocality<'_>, this: Key<Owned>);
+    fn any_dec_owners(&mut self, locality: AnySlotLocality<'_>, this: Key<Owned>);
 
     /// True if there is Ref without edge to this item.
-    fn any_edgeless_ref(&self, locality: AnySlotLocality<'_>) -> bool;
+    fn any_has_owner(&self, locality: AnySlotLocality<'_>) -> bool;
 
     /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
     /// Including Self and AnyItem.
@@ -113,13 +113,13 @@ impl<T: Item> AnyItem for T {
             .map_err(Key::any)
     }
 
-    default fn any_create_ref(&mut self, _: AnySlotLocality<'_>) -> Option<Key<Owned>> {
+    default fn any_inc_owners(&mut self, _: AnySlotLocality<'_>) -> Option<Key<Owned>> {
         None
     }
 
-    default fn any_delete_ref(&mut self, _: AnySlotLocality<'_>, _: Key<Owned>) {}
+    default fn any_dec_owners(&mut self, _: AnySlotLocality<'_>, _: Key<Owned>) {}
 
-    default fn any_edgeless_ref(&self, _: AnySlotLocality<'_>) -> bool {
+    default fn any_has_owner(&self, _: AnySlotLocality<'_>) -> bool {
         false
     }
 
@@ -146,15 +146,15 @@ default impl<T: DrainItem> AnyItem for T {
 }
 
 impl<T: StandaloneItem> AnyItem for T {
-    fn any_create_ref(&mut self, locality: AnySlotLocality<'_>) -> Option<Key<Owned>> {
-        Some(self.create_ref(locality.downcast()).any())
+    fn any_inc_owners(&mut self, locality: AnySlotLocality<'_>) -> Option<Key<Owned>> {
+        Some(self.inc_owners(locality.downcast()).any())
     }
 
-    fn any_delete_ref(&mut self, locality: AnySlotLocality<'_>, this: Key<Owned>) {
-        self.delete_ref(locality.downcast(), this.assume());
+    fn any_dec_owners(&mut self, locality: AnySlotLocality<'_>, this: Key<Owned>) {
+        self.dec_owners(locality.downcast(), this.assume());
     }
 
-    fn any_edgeless_ref(&self, locality: AnySlotLocality<'_>) -> bool {
-        self.edgeless_ref(locality.downcast())
+    fn any_has_owner(&self, locality: AnySlotLocality<'_>) -> bool {
+        self.has_owner(locality.downcast())
     }
 }

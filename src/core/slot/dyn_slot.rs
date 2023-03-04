@@ -253,7 +253,7 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
 
     pub fn any_delete_ref(&mut self, this: Key<Owned>) {
         assert_eq!(self.key, this, "Provided key isn't of this slot");
-        self.any_localized(|item, locality| item.any_delete_ref(locality, this))
+        self.any_localized(|item, locality| item.any_dec_owners(locality, this))
     }
 
     // pub fn remove_reference<F: DynItem + ?Sized>(&mut self, other: Key<F>) -> bool {

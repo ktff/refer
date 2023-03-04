@@ -1,6 +1,7 @@
 use crate::core::{
     permit::{self, SubjectPermit},
-    AnyContainer, AnyItem, AnySlot, Item, Key, Permit, Ptr, Ref, Side, SlotLocality, UnsafeSlot,
+    AnyContainer, AnyItem, AnySlot, Grc, Item, Key, Permit, Ptr, Ref, Side, SlotLocality,
+    StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -64,8 +65,8 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, T, R> {
         self.item().edges(self.locality(), side)
     }
 
-    pub fn edgeless_ref(&self) -> bool {
-        self.item().any_edgeless_ref(self.locality().upcast())
+    pub fn has_owners(&self) -> bool {
+        self.item().any_has_owner(self.locality().upcast())
     }
 
     // /// Can panic if locality isn't for this type.
@@ -118,6 +119,17 @@ impl<'a, T: Item> Slot<'a, T, permit::Mut> {
     //     let locality = self.locality();
     //     self.item_mut().displace(locality, None)
     // }
+}
+
+impl<'a, T: StandaloneItem> Slot<'a, T, permit::Mut> {
+    /// Caller should properly dispose of Grc once done with it.
+    pub fn own(&mut self) -> Grc<T> {
+        self.localized(|item, locality| Grc::new(item.inc_owners(locality)))
+    }
+
+    pub fn release(&mut self, grc: Grc<T>) {
+        self.localized(|item, locality| item.dec_owners(locality, grc.into_owned_key()))
+    }
 }
 
 impl<'a, T: Item, R> Copy for Slot<'a, T, R> where Permit<R>: Copy {}

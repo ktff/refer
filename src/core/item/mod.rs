@@ -3,7 +3,6 @@ mod any;
 pub use any::*;
 
 use super::{Key, Owned, PartialEdge, Ptr, Ref, Side, SlotLocality};
-use either::Either;
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
@@ -30,14 +29,6 @@ pub trait Item: Sized + Any + Sync + Send {
     ///
     /// Must have stable iteration order.
     fn edges(&self, locality: SlotLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
-
-    // /// Replace one Ref of a with b and return replaced Ref.
-    // fn replace_object<T: DynItem + ?Sized>(
-    //     &mut self,
-    //     locality: SlotLocality<'_, Self>,
-    //     a: Key<Ptr, T>,
-    //     b: Key<Owned, T>,
-    // ) -> Key<Owned, T>;
 
     /// Should remove edge and return object ref.
     /// Ok success.
@@ -69,15 +60,15 @@ pub trait DrainItem: Item {
     ) -> Key<Owned, Self>;
 }
 
-/// Item that doesn't depend on any edge so it can have Refs without edges.
+/// Item that doesn't depend on any edge so it can have Key<Owned> without edges.
 pub trait StandaloneItem: DrainItem {
     #[must_use]
-    fn create_ref(&mut self, locality: SlotLocality<'_, Self>) -> Key<Owned, Self>;
+    fn inc_owners(&mut self, locality: SlotLocality<'_, Self>) -> Key<Owned, Self>;
 
-    fn delete_ref(&mut self, locality: SlotLocality<'_, Self>, this: Key<Owned, Self>);
+    fn dec_owners(&mut self, locality: SlotLocality<'_, Self>, this: Key<Owned, Self>);
 
-    /// True if there is Ref without edge to this item.
-    fn edgeless_ref(&self, locality: SlotLocality<'_, Self>) -> bool;
+    /// True if there is counted Owned somewhere.
+    fn has_owner(&self, locality: SlotLocality<'_, Self>) -> bool;
 
     /// Must remove edge and return object ref.
     /// This also means try_remove_edge will always return Some.
@@ -91,15 +82,15 @@ pub trait StandaloneItem: DrainItem {
 }
 
 pub trait IsStandaloneItem: Item {
-    const IsStandalone: bool;
+    const IS_STANDALONE: bool;
 }
 
 impl<I: Item> IsStandaloneItem for I {
-    default const IsStandalone: bool = false;
+    default const IS_STANDALONE: bool = false;
 }
 
 impl<I: StandaloneItem> IsStandaloneItem for I {
-    const IsStandalone: bool = true;
+    const IS_STANDALONE: bool = true;
 }
 
 // TODO: Auto include other traits, DrainItem, StandaloneItem, etc.
