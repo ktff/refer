@@ -32,20 +32,23 @@ pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
 /// - expose internal containers as & and &mut.
 /// - clear it self up during drop.
 ///
+/// TODO: Eliminate this sentence.
 /// May panic if argument keys don't correspond to this container.
-pub trait Container<T: Item>: AnyContainer {
+///
+/// UNSAFE: Implementations MUST follow get_slot & iter_slot SAFETY contracts.
+pub unsafe trait Container<T: Item>: AnyContainer {
     type SlotIter<'a>: Iterator<Item = (Key<Ref<'a>, T>, UnsafeSlot<'a, T>)> + Send
     where
         Self: 'a;
 
     /// Implementations should have #[inline(always)]
-    /// Bijection between keys and slots MUST be enforced.
+    /// SAFETY: Bijection between keys and slots MUST be enforced.
     fn get_slot(&self, key: Key<Ptr, T>) -> Option<UnsafeSlot<T>>;
 
     fn get_locality(&self, key: &impl LocalityPath) -> Option<SlotLocality<T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
-    /// Iterator MUST NOT return the same slot more than once.
+    /// SAFETY: Iterator MUST NOT return the same slot more than once.
     fn iter_slot(&self, path: KeyPath<T>) -> Option<Self::SlotIter<'_>>;
 
     /// None if there is no more place in locality.
@@ -59,7 +62,8 @@ pub trait Container<T: Item>: AnyContainer {
     fn unfill_slot(&mut self, key: Key<Ptr, T>) -> Option<(T, SlotLocality<T>)>;
 }
 
-pub trait AnyContainer: Any + Sync + Send {
+/// UNSAFE: Implementations MUST follow get_slot_any & next_key SAFETY contracts.
+pub unsafe trait AnyContainer: Any + Sync + Send {
     /// Path of container shared for all items in the container.
     fn container_path(&self) -> Path;
 
@@ -68,6 +72,8 @@ pub trait AnyContainer: Any + Sync + Send {
 
     /// Returns following key after given in ascending order
     /// for the type at the key.
+    ///
+    /// SAFETY: MUST have bijection over input_key and output_key and input_key != output_key.
     fn next_key(&self, ty: TypeId, key: Key) -> Option<Key<Ref>>;
 
     /// Returns last key for given type
@@ -77,7 +83,7 @@ pub trait AnyContainer: Any + Sync + Send {
     fn types(&self) -> HashMap<TypeId, ItemTraits>;
 
     /// Implementations should have #[inline(always)]
-    /// Bijection between keys and slots MUST be enforced.
+    /// SAFETY: Bijection between keys and slots MUST be enforced.
     fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot>;
 
     /// None if there is no locality for given type under given key.

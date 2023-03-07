@@ -10,17 +10,20 @@ pub trait TypeContainer<T: Item> {
     fn fill(&mut self) -> &mut Self::Sub;
 }
 
-pub trait MultiTypeContainer {
+/// UNSAFE: Implementations MUST follow get_any_index & get_any SAFETY contracts.
+pub unsafe trait MultiTypeContainer {
     /// Implementations should have #[inline(always)]
     fn region(&self) -> RegionPath;
 
     fn type_to_index(&self, type_id: TypeId) -> Option<usize>;
 
     /// Implementations should have #[inline(always)]
+    /// SAFETY: Bijection between index and container MUST be enforced.
     fn get_any_index(&self, index: usize) -> Option<&dyn AnyContainer>;
 
     fn get_mut_any_index(&mut self, index: usize) -> Option<&mut dyn AnyContainer>;
 
+    /// SAFETY: Bijection between key and container MUST be enforced.
     #[inline(always)]
     fn get_any(&self, key: Key) -> Option<&dyn AnyContainer> {
         let index = self.region().index_of(key);

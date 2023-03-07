@@ -1,7 +1,8 @@
 use super::*;
 use std::ops::RangeBounds;
 
-pub trait RegionContainer {
+/// UNSAFE: Implementations MUST follow get and iter SAFETY contracts.
+pub unsafe trait RegionContainer {
     type Sub: AnyContainer;
 
     type Iter<'a>: DoubleEndedIterator<Item = &'a Self::Sub> + Send
@@ -16,13 +17,13 @@ pub trait RegionContainer {
     fn region(&self) -> RegionPath;
 
     /// Implementations should have #[inline(always)]
-    /// Bijection between index and container MUST be enforced.
+    /// SAFETY: Bijection between index and container MUST be enforced.
     fn get(&self, index: usize) -> Option<&Self::Sub>;
 
     fn get_mut(&mut self, index: usize) -> Option<&mut Self::Sub>;
 
     /// Iterates in ascending order for indices in range.
-    /// Iterator MUST NOT return the same container more than once.
+    /// SAFETY: Iterator MUST NOT return the same container more than once.
     fn iter(&self, range: impl RangeBounds<usize>) -> Option<Self::Iter<'_>>;
 
     /// Iterates in ascending order for indices in range.

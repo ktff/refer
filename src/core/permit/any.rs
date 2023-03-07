@@ -9,6 +9,9 @@ use std::{
     ops::{Deref, RangeBounds},
 };
 
+//? NOTE: To je malo previse za sad, ali ako se svi permiti ujedine u jedan type, onda.
+// TODO: Lifetime split? '1 za lifetime keyeva (nema Add & Remove Item), '2 za item access.
+
 pub struct AnyPermit<'a, R, C: ?Sized> {
     permit: Permit<R>,
     container: &'a C,

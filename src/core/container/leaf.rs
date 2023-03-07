@@ -5,7 +5,9 @@ use std::{num::NonZeroUsize, ops::RangeBounds};
 
 /// A container of items.
 /// Should clear on drop.
-pub trait LeafContainer<T: Item> {
+///
+/// UNSAFE: Implementations MUST follow next, get, and iter SAFETY contracts.
+pub unsafe trait LeafContainer<T: Item> {
     type Iter<'a>: Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T>)> + Send
     where
         Self: 'a;
@@ -17,17 +19,19 @@ pub trait LeafContainer<T: Item> {
     fn first(&self) -> Option<NonZeroUsize>;
 
     /// Returns following index after given in ascending order with a slot.
+    ///
+    /// SAFETY: MUST have bijection over input_index and output_index and input_index != output_index.
     fn next(&self, after: NonZeroUsize) -> Option<NonZeroUsize>;
 
     /// Returns last index with a slot.
     fn last(&self) -> Option<NonZeroUsize>;
 
     /// Implementations should have #[inline(always)]
-    /// Bijection between index and slot MUST be enforced.
+    /// SAFETY: Bijection between index and slot MUST be enforced.
     fn get(&self, index: usize) -> Option<UnsafeSlot<T>>;
 
     /// Iterates in ascending order for indices in range.
-    /// Iterator MUST NOT return the same slot more than once.
+    /// SAFETY: Iterator MUST NOT return the same slot more than once.
     fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_>;
 
     /// None if there is no more place in container.

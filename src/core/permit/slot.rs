@@ -15,7 +15,6 @@ impl<'a, R, K, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'
     }
 }
 
-// TODO: Version with Owned where it's properly disposed of.
 impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
     // TODO: Merge get_dyn and get into one method.
     /// Err if doesn't exist.
