@@ -12,7 +12,6 @@ pub enum Side {
 }
 
 impl Side {
-    // TODO: with_object ?
     pub fn object<T>(self, object: T) -> PartialEdge<T> {
         PartialEdge {
             subject: self,

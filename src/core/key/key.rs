@@ -7,7 +7,7 @@ use std::{
     ptr::Pointee,
 };
 
-use crate::core::{AnyItem, DynItem, LocalityPath, LocalityRegion};
+use crate::core::{AnyItem, DynItem, Item, LocalityPath, LocalityRegion};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -47,7 +47,7 @@ pub struct Owned;
 #[repr(transparent)]
 pub struct Key<K = Ptr, T: DynItem + ?Sized = dyn AnyItem>(Index, PhantomData<(&'static T, K)>);
 
-impl<T: DynItem + ?Sized> Key<Owned, T> {
+impl<T: Item> Key<Owned, T> {
     /// UNSAFE: This isn't unsafe per se since safety checks will still be made, but they can panic if
     /// caller allows for this key to outlive Item on index.
     ///
@@ -70,7 +70,7 @@ impl<'a, T: DynItem + ?Sized> Key<Ref<'a>, T> {
     }
 }
 
-impl<T: Pointee<Metadata = ()> + DynItem + ?Sized> Key<Ptr, T> {
+impl<T: Item> Key<Ptr, T> {
     /// Constructors of Key should strive to guarantee that T is indeed at Index.
     pub fn new_ptr(index: Index) -> Self {
         Key(index, PhantomData)
@@ -188,8 +188,6 @@ impl<P: KeySign, T: DynItem + ?Sized> fmt::Display for Key<P, T> {
         write!(f, "#{}:{}{}", self.0, P::sign(), any::type_name::<T>())
     }
 }
-
-// TODO: Warn on Owned drop, requires !Copy
 
 trait KeySign {
     fn sign() -> &'static str;

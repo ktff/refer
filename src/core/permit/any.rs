@@ -1,6 +1,8 @@
 use super::*;
 use crate::core::{
-    container::RegionContainer, container::TypeContainer, AnyContainer, AnyItem, Container, Key,
+    container::RegionContainer,
+    container::{self, TypeContainer},
+    AnyContainer, AnyItem, Container, Key,
 };
 use std::{
     any::TypeId,
@@ -42,13 +44,6 @@ impl<'a, R, C: AnyContainer + ?Sized> AnyPermit<'a, R, C> {
         self.container
     }
 
-    pub fn slot<K, T: core::DynItem + ?Sized>(self, key: Key<K, T>) -> SlotPermit<'a, R, K, T, C>
-    where
-        C: AnyContainer,
-    {
-        self.ty().slot(key)
-    }
-
     pub fn ty<T: core::DynItem + ?Sized>(self) -> TypePermit<'a, T, R, C>
     where
         C: AnyContainer,
@@ -56,11 +51,11 @@ impl<'a, R, C: AnyContainer + ?Sized> AnyPermit<'a, R, C> {
         TypePermit::new(self)
     }
 
-    pub fn on_key<K, T: core::DynItem + ?Sized>(
-        self,
-        key: Key<K, T>,
-    ) -> SlotPermit<'a, R, K, T, C> {
-        self.slot(key)
+    pub fn slot<K, T: core::DynItem + ?Sized>(self, key: Key<K, T>) -> SlotPermit<'a, R, K, T, C>
+    where
+        C: AnyContainer,
+    {
+        self.ty().slot(key)
     }
 
     /// Iterates over valid slot permit of type in ascending order.
@@ -181,47 +176,6 @@ impl<'a, C: ?Sized> AnyPermit<'a, Mut, C> {
 
     pub fn borrow_mut(&mut self) -> AnyPermit<Mut, C> {
         self.into()
-    }
-
-    // TODO: Move peek to Key.
-
-    pub fn peek<'b, T: core::Item>(
-        &'b mut self,
-        key: Key<core::Ref<'b>, T>,
-    ) -> core::Slot<'b, T, Mut>
-    where
-        C: Container<T>,
-    {
-        self.borrow_mut().slot(key).get()
-    }
-
-    pub fn peek_dyn<'b, T: core::DynItem + ?Sized>(
-        &'b mut self,
-        key: Key<core::Ref<'b>, T>,
-    ) -> core::DynSlot<'b, T, Mut>
-    where
-        C: AnyContainer,
-    {
-        self.borrow_mut().slot(key).get_dyn()
-    }
-}
-
-impl<'a, C: ?Sized> AnyPermit<'a, Ref, C> {
-    pub fn peek<T: core::Item>(self, key: Key<core::Ref<'a>, T>) -> core::Slot<'a, T, Ref>
-    where
-        C: Container<T>,
-    {
-        self.slot(key).get()
-    }
-
-    pub fn peek_dyn<T: core::DynItem + ?Sized>(
-        self,
-        key: Key<core::Ref<'a>, T>,
-    ) -> core::DynSlot<'a, T, Ref>
-    where
-        C: AnyContainer,
-    {
-        self.slot(key).get_dyn()
     }
 }
 

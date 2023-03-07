@@ -33,10 +33,12 @@ impl<T: DynItem + ?Sized> Grc<T> {
 
     /// Callers should make sure that the key is properly disposed of, else T will leak.
     pub fn into_owned_key(self) -> Key<Owned, T> {
-        let index = self.index();
-        std::mem::forget(self);
-        // SAFETY: We are effectively moving Key out of self.
-        unsafe { Key::new_owned(index) }
+        // SAFETY: We are immediately forgetting self so read/copy is safe.
+        unsafe {
+            let key = std::ptr::read(&self.0);
+            std::mem::forget(self);
+            key
+        }
     }
 }
 
