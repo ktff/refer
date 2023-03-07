@@ -1,4 +1,4 @@
-use crate::core::{AnyItem, AnySlotLocality, DynItem};
+use crate::core::{AnyItem, AnyItemLocality, DynItem};
 use getset::CopyGetters;
 use log::*;
 use std::{any::TypeId, cell::SyncUnsafeCell};
@@ -7,12 +7,12 @@ use std::{any::TypeId, cell::SyncUnsafeCell};
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct AnyUnsafeSlot<'a> {
-    locality: AnySlotLocality<'a>,
+    locality: AnyItemLocality<'a>,
     item: &'a SyncUnsafeCell<dyn AnyItem>,
 }
 
 impl<'a> AnyUnsafeSlot<'a> {
-    pub fn new(locality: AnySlotLocality<'a>, item: &'a SyncUnsafeCell<dyn AnyItem>) -> Self {
+    pub fn new(locality: AnyItemLocality<'a>, item: &'a SyncUnsafeCell<dyn AnyItem>) -> Self {
         Self { locality, item }
     }
 
@@ -36,6 +36,8 @@ impl<'a> AnyUnsafeSlot<'a> {
             panic!("Metadata type mismatch");
         }
     }
+
+    // TODO: unsafe downcast_try
 }
 
 impl<'a> Copy for AnyUnsafeSlot<'a> {}
@@ -51,7 +53,7 @@ impl<'a> Clone for AnyUnsafeSlot<'a> {
 
 // Deref to locality
 impl<'a> std::ops::Deref for AnyUnsafeSlot<'a> {
-    type Target = AnySlotLocality<'a>;
+    type Target = AnyItemLocality<'a>;
 
     fn deref(&self) -> &Self::Target {
         &self.locality

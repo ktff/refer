@@ -2,7 +2,7 @@ mod any;
 
 pub use any::*;
 
-use super::{Key, Owned, PartialEdge, Ptr, Ref, Side, SlotLocality};
+use super::{ItemLocality, Key, Owned, PartialEdge, Ptr, Ref, Side};
 use std::{
     alloc::Allocator,
     any::{Any, TypeId},
@@ -28,7 +28,7 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Edges where self is side.
     ///
     /// Must have stable iteration order.
-    fn edges(&self, locality: SlotLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
+    fn edges(&self, locality: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
 
     /// Should remove edge and return object ref.
     /// Ok success.
@@ -36,13 +36,13 @@ pub trait Item: Sized + Any + Sync + Send {
     #[must_use]
     fn try_remove_edge<T: DynItem + ?Sized>(
         &mut self,
-        locality: SlotLocality<'_, Self>,
+        locality: ItemLocality<'_, Self>,
         this: Key<Owned, Self>,
         edge: PartialEdge<Key<Ptr, T>>,
     ) -> Result<Key<Owned, T>, Key<Owned, Self>>;
 
     /// Caller should properly dispose of the edges.
-    fn localized_drop(self, locality: SlotLocality<'_, Self>) -> Vec<PartialEdge<Key<Owned>>>;
+    fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<PartialEdge<Key<Owned>>>;
 
     /// TypeIds of traits with their Metadata that this Item implements.
     /// Including Self and AnyItem.
@@ -55,7 +55,7 @@ pub trait DrainItem: Item {
     #[must_use]
     fn add_drain_edge<T: DynItem + ?Sized>(
         &mut self,
-        locality: SlotLocality<'_, Self>,
+        locality: ItemLocality<'_, Self>,
         source: Key<Owned, T>,
     ) -> Key<Owned, Self>;
 }
@@ -63,19 +63,19 @@ pub trait DrainItem: Item {
 /// Item that doesn't depend on any edge so it can have Key<Owned> without edges.
 pub trait StandaloneItem: DrainItem {
     #[must_use]
-    fn inc_owners(&mut self, locality: SlotLocality<'_, Self>) -> Key<Owned, Self>;
+    fn inc_owners(&mut self, locality: ItemLocality<'_, Self>) -> Key<Owned, Self>;
 
-    fn dec_owners(&mut self, locality: SlotLocality<'_, Self>, this: Key<Owned, Self>);
+    fn dec_owners(&mut self, locality: ItemLocality<'_, Self>, this: Key<Owned, Self>);
 
     /// True if there is counted Owned somewhere.
-    fn has_owner(&self, locality: SlotLocality<'_, Self>) -> bool;
+    fn has_owner(&self, locality: ItemLocality<'_, Self>) -> bool;
 
     /// Must remove edge and return object ref.
     /// This also means try_remove_edge will always return Some.
     #[must_use]
     fn remove_edge<T: DynItem + ?Sized>(
         &mut self,
-        locality: SlotLocality<'_, Self>,
+        locality: ItemLocality<'_, Self>,
         this: Key<Owned, Self>,
         edge: PartialEdge<Key<Ptr, T>>,
     ) -> Key<Owned, T>;

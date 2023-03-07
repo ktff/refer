@@ -24,7 +24,6 @@ pub enum ReferError {
         expected: TypeInfo,
         found: TypeInfo,
         index: Index,
-        container: Path,
     },
     /// Item doesn't support operation.
     InvalidOperation {
@@ -94,11 +93,10 @@ impl Display for ReferError {
                 expected,
                 found,
                 index,
-                container: path,
             } => write!(
                 f,
-                "Item on key {}:{} in container {} can't be casted to {}.",
-                index, found, path, expected
+                "Item on key {}:{} can't be casted to {}.",
+                index, found, expected
             ),
             Self::InvalidOperation { ty, index: key, op } => {
                 write!(

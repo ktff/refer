@@ -128,9 +128,9 @@ impl<T: DynItem + ?Sized> Key<Owned, T> {
     }
 }
 
-impl<T: DynItem + ?Sized> LocalityPath for Key<Ptr, T> {
+impl<P, T: DynItem + ?Sized> LocalityPath for Key<P, T> {
     fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
-        Some(LocalityRegion::Index(region.index_of(*self)))
+        Some(LocalityRegion::Index(region.index_of(self.ptr())))
     }
 
     fn upcast(&self) -> &dyn LocalityPath {

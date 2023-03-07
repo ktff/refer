@@ -10,9 +10,9 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    permit::RemovePermit, AddPermit, AnyPermit, AnySlotLocality, AnyUnsafeSlot, Item, ItemTraits,
-    Key, KeyPath, LocalityKey, LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath,
-    SlotLocality, UnsafeSlot,
+    permit::RemovePermit, AddPermit, AnyContainerLocality, AnyItemLocality, AnyPermit,
+    AnyUnsafeSlot, ContainerLocality, Item, ItemLocality, ItemTraits, Key, KeyPath, LocalityKey,
+    LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
 };
 use crate::core::permit;
 use std::{
@@ -37,7 +37,7 @@ pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
 ///
 /// UNSAFE: Implementations MUST follow get_slot & iter_slot SAFETY contracts.
 pub unsafe trait Container<T: Item>: AnyContainer {
-    type SlotIter<'a>: Iterator<Item = (Key<Ref<'a>, T>, UnsafeSlot<'a, T>)> + Send
+    type SlotIter<'a>: Iterator<Item = UnsafeSlot<'a, T>> + Send
     where
         Self: 'a;
 
@@ -45,7 +45,7 @@ pub unsafe trait Container<T: Item>: AnyContainer {
     /// SAFETY: Bijection between keys and slots MUST be enforced.
     fn get_slot(&self, key: Key<Ptr, T>) -> Option<UnsafeSlot<T>>;
 
-    fn get_locality(&self, key: &impl LocalityPath) -> Option<SlotLocality<T>>;
+    fn get_locality(&self, key: &impl LocalityPath) -> Option<ContainerLocality<T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
     /// SAFETY: Iterator MUST NOT return the same slot more than once.
@@ -59,7 +59,7 @@ pub unsafe trait Container<T: Item>: AnyContainer {
     fn fill_locality(&mut self, key: &impl LocalityPath) -> Option<LocalityKey>;
 
     /// Removes from container.
-    fn unfill_slot(&mut self, key: Key<Ptr, T>) -> Option<(T, SlotLocality<T>)>;
+    fn unfill_slot(&mut self, key: Key<Ptr, T>) -> Option<(T, ItemLocality<T>)>;
 }
 
 /// UNSAFE: Implementations MUST follow get_slot_any & next_key SAFETY contracts.
@@ -87,7 +87,7 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
     fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot>;
 
     /// None if there is no locality for given type under given key.
-    fn get_locality_any(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnySlotLocality>;
+    fn get_locality_any(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnyContainerLocality>;
 
     /// Err if:
     /// - no more place in locality

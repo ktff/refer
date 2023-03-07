@@ -1,6 +1,6 @@
 use crate::core::{
     permit::{self, SubjectPermit},
-    AnyContainer, AnyItem, AnySlot, Grc, Item, Key, Permit, Ptr, Ref, Side, SlotLocality,
+    AnyContainer, AnyItem, AnySlot, Grc, Item, ItemLocality, Key, Permit, Ptr, Ref, Side,
     StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
@@ -9,39 +9,34 @@ use super::DynSlot;
 
 // TODO: Swap places of T & R in Slots. So that it looks like Slot<'a,Ref,Item>
 pub struct Slot<'a, T: Item, R> {
-    // TODO: Use Ref
-    key: Key<Ptr, T>,
     slot: UnsafeSlot<'a, T>,
     access: Permit<R>,
 }
 
 impl<'a, T: Item, R> Slot<'a, T, R> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(key: Key<Ptr, T>, slot: UnsafeSlot<'a, T>, access: Permit<R>) -> Self {
-        debug_assert!(slot.prefix().contains_key(key));
-        Self { key, slot, access }
+    pub unsafe fn new(slot: UnsafeSlot<'a, T>, access: Permit<R>) -> Self {
+        Self { slot, access }
     }
 
-    pub fn key(&self) -> Key<Ptr, T> {
-        self.key
+    pub fn key(&self) -> Key<Ref<'a>, T> {
+        self.locality().path()
     }
 
-    pub fn locality(&self) -> SlotLocality<'a, T> {
+    pub fn locality(&self) -> ItemLocality<'a, T> {
         self.slot.locality()
     }
 
     pub fn upcast(self) -> AnySlot<'a, R> {
         // SAFETY: We have the same access to the slot.
-        unsafe { AnySlot::new_any(self.key.upcast(), self.slot.upcast(), self.access) }
+        unsafe { AnySlot::new_any(self.slot.any(), self.access) }
     }
 
-    // TODO: Is this needed any more?
     pub fn downgrade<F>(self) -> Slot<'a, T, F>
     where
         Permit<R>: Into<Permit<F>>,
     {
         Slot {
-            key: self.key,
             slot: self.slot,
             access: self.access.into(),
         }
@@ -66,7 +61,7 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, T, R> {
     }
 
     pub fn has_owners(&self) -> bool {
-        self.item().any_has_owner(self.locality().upcast())
+        self.item().any_has_owner(self.locality().any())
     }
 
     // /// Can panic if locality isn't for this type.
@@ -87,7 +82,7 @@ impl<'a, T: Item> Slot<'a, T, permit::Ref> {
 impl<'a, T: Item> Slot<'a, T, permit::Mut> {
     pub fn borrow(&self) -> Slot<T, permit::Ref> {
         // SAFETY: We have mut access to the item.
-        unsafe { Slot::new(self.key, self.slot, self.access.borrow()) }
+        unsafe { Slot::new(self.slot, self.access.borrow()) }
     }
 
     pub fn item_mut(&mut self) -> &mut T {
@@ -95,7 +90,7 @@ impl<'a, T: Item> Slot<'a, T, permit::Mut> {
         unsafe { &mut *self.slot.item().get() }
     }
 
-    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, SlotLocality<T>) -> R) -> R {
+    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, ItemLocality<T>) -> R) -> R {
         let locality = self.locality();
         func(self.item_mut(), locality)
     }
@@ -140,7 +135,6 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            key: self.key,
             slot: self.slot,
             access: self.access.clone(),
         }

@@ -8,7 +8,7 @@ use std::{num::NonZeroUsize, ops::RangeBounds};
 ///
 /// UNSAFE: Implementations MUST follow next, get, and iter SAFETY contracts.
 pub unsafe trait LeafContainer<T: Item> {
-    type Iter<'a>: Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T>)> + Send
+    type Iter<'a>: Iterator<Item = UnsafeSlot<'a, T>> + Send
     where
         Self: 'a;
 
@@ -48,7 +48,10 @@ pub unsafe trait LeafContainer<T: Item> {
                 match self.unfill(now.get()) {
                     Some(item) => {
                         // Drop local
-                        item.localized_drop(self.locality().slot_locality());
+                        let index = self.locality().locality_key().key_of::<T>(now).index();
+                        // SAFETY: Item is alive in this scope.
+                        let key = unsafe { Key::new_ref(index) };
+                        item.localized_drop(self.locality().item_locality(key));
                     }
                     None => warn!(
                         "{:?}::{} returned invalid index: {}",
@@ -90,7 +93,7 @@ macro_rules! leaf_container {
         }
 
         fn get_locality(&self, _: &impl LocalityPath) -> Option<SlotLocality<$t>> {
-            Some(self.locality().slot_locality())
+            Some(self.locality().item_locality())
         }
 
         fn iter_slot(&self, path: KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
@@ -110,7 +113,7 @@ macro_rules! leaf_container {
         fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, SlotLocality<$t>)> {
             let index = self.locality().locality_key().index_of(key);
             self.unfill(index)
-                .map(move |item| (item, self.locality().slot_locality()))
+                .map(move |item| (item, self.locality().item_locality()))
         }
     };
     (impl AnyContainer<$t:ty>) => {
@@ -125,7 +128,7 @@ macro_rules! leaf_container {
 
         fn get_locality_any(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnySlotLocality>{
             if ty == TypeId::of::<$t>() {
-                Some(self.locality.slot_locality().upcast())
+                Some(self.locality.item_locality().upcast())
             } else {
                 None
             }

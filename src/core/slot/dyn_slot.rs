@@ -1,5 +1,5 @@
 use crate::core::{
-    permit, AnyItem, AnySlotLocality, AnyUnsafeSlot, DynItem, Item, Key, Owned, PartialEdge,
+    permit, AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Item, Key, Owned, PartialEdge,
     Permit, Ptr, Ref, ReferError, Side, TypeInfo,
 };
 
@@ -12,22 +12,16 @@ use std::{
 pub type AnySlot<'a, R> = DynSlot<'a, dyn AnyItem, R>;
 
 pub struct DynSlot<'a, T: DynItem + ?Sized, R> {
-    // TODO: Use Ref
-    key: Key<Ptr, T>,
     metadata: T::Metadata,
     slot: AnyUnsafeSlot<'a>,
     access: Permit<R>,
 }
 
 impl<'a, R> AnySlot<'a, R> {
-    /// Key should correspond to the slot.
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new_any(key: Key, slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Self {
-        debug_assert!(slot.prefix().contains_index(key.index()));
+    pub unsafe fn new_any(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Self {
         let metadata = std::ptr::metadata(slot.item().get());
-
         Self {
-            key,
             metadata,
             slot,
             access,
@@ -39,39 +33,37 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
     /// Key should correspond to the slot.
     /// Err if item doesn't implement T.
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new(
-        key: Key<Ptr, T>,
-        slot: AnyUnsafeSlot<'a>,
-        access: Permit<R>,
-    ) -> Result<Self, ReferError> {
-        debug_assert!(slot.prefix().contains_index(key.index()));
+    pub unsafe fn new(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Result<Self, ReferError> {
         let metadata = slot
             .metadata::<T>()
             .ok_or_else(|| ReferError::InvalidCastType {
                 expected: TypeInfo::of::<T>(),
                 found: slot.item().get().type_info(),
-                index: key.index(),
-                container: slot.prefix(),
+                index: slot.locality().path().index(),
             })?;
 
         Ok(Self {
-            key,
             metadata,
             slot,
             access,
         })
     }
 
-    pub fn key(&self) -> Key<Ptr, T> {
-        self.key
+    pub fn key(&self) -> Key<Ref<'a>, T> {
+        self.locality().path().assume()
     }
 
     pub fn item_type_id(&self) -> std::any::TypeId {
         self.slot.item_type_id()
     }
 
-    pub fn locality(&self) -> AnySlotLocality<'a> {
+    pub fn locality(&self) -> AnyItemLocality<'a> {
         self.slot.locality()
+    }
+
+    pub fn any(self) -> AnySlot<'a, R> {
+        // SAFETY: We have the same access to the slot.
+        unsafe { AnySlot::new_any(self.slot, self.access) }
     }
 
     pub fn upcast<U: DynItem + ?Sized>(self) -> DynSlot<'a, U, R>
@@ -85,7 +77,6 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
         };
 
         DynSlot {
-            key: self.key.upcast(),
             metadata,
             slot: self.slot,
             access: self.access,
@@ -95,7 +86,6 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
     pub fn sidecast<U: DynItem + ?Sized>(self) -> Result<DynSlot<'a, U, R>, Self> {
         if let Some(metadata) = self.slot.metadata::<U>() {
             Ok(DynSlot {
-                key: self.key().any().assume(),
                 metadata,
                 slot: self.slot,
                 access: self.access,
@@ -108,7 +98,6 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
     pub fn downcast<U: Item>(self) -> Result<DynSlot<'a, U, R>, Self> {
         if TypeId::of::<U>() == self.item_type_id() {
             Ok(DynSlot {
-                key: Key::new_ptr(self.key.index()),
                 metadata: (),
                 slot: self.slot,
                 access: self.access,
@@ -118,13 +107,11 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
         }
     }
 
-    // TODO: Is this needed any more?
     pub fn downgrade<F>(self) -> DynSlot<'a, T, F>
     where
         Permit<R>: Into<Permit<F>>,
     {
         DynSlot {
-            key: self.key,
             metadata: self.metadata,
             slot: self.slot,
             access: self.access.into(),
@@ -211,14 +198,14 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
         (self.any_item_mut() as &mut dyn Any).downcast_mut::<U>()
     }
 
-    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, AnySlotLocality) -> R) -> R {
+    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, AnyItemLocality) -> R) -> R {
         let locality = self.locality();
         func(self.item_mut(), locality)
     }
 
     pub fn any_localized<R>(
         &mut self,
-        func: impl FnOnce(&mut dyn AnyItem, AnySlotLocality) -> R,
+        func: impl FnOnce(&mut dyn AnyItem, AnyItemLocality) -> R,
     ) -> R {
         let locality = self.locality();
         func(self.any_item_mut(), locality)
@@ -252,7 +239,7 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
     }
 
     pub fn any_delete_ref(&mut self, this: Key<Owned>) {
-        assert_eq!(self.key, this, "Provided key isn't of this slot");
+        assert_eq!(self.key(), this, "Provided key isn't of this slot");
         self.any_localized(|item, locality| item.any_dec_owners(locality, this))
     }
 
@@ -302,7 +289,6 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            key: self.key,
             metadata: self.metadata,
             slot: self.slot,
             access: self.access.clone(),

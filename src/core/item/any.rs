@@ -1,5 +1,5 @@
 use super::{DrainItem, Item, StandaloneItem};
-use crate::core::{AnySlotLocality, Key, Owned, PartialEdge, Ref, Side, TypeInfo};
+use crate::core::{AnyItemLocality, Key, Owned, PartialEdge, Ref, Side, TypeInfo};
 use std::{
     any::{Any, TypeId},
     marker::Unsize,
@@ -13,7 +13,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
 
     fn edges_any(
         &self,
-        locality: AnySlotLocality<'_>,
+        locality: AnyItemLocality<'_>,
         filter: Option<Side>,
     ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>>;
 
@@ -23,7 +23,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     #[must_use]
     fn add_drain_edge_any(
         &mut self,
-        locality: AnySlotLocality<'_>,
+        locality: AnyItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<Key<Owned>, Key<Owned>>;
 
@@ -40,7 +40,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     #[must_use]
     fn remove_edge_any(
         &mut self,
-        locality: AnySlotLocality<'_>,
+        locality: AnyItemLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
     ) -> Result<Key<Owned>, Key<Owned>>;
@@ -48,12 +48,12 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     // TODO: Use prefix any_ everywhere?
 
     #[must_use]
-    fn any_inc_owners(&mut self, locality: AnySlotLocality<'_>) -> Option<Key<Owned>>;
+    fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Key<Owned>>;
 
-    fn any_dec_owners(&mut self, locality: AnySlotLocality<'_>, this: Key<Owned>);
+    fn any_dec_owners(&mut self, locality: AnyItemLocality<'_>, this: Key<Owned>);
 
     /// True if there is Ref without edge to this item.
-    fn any_has_owner(&self, locality: AnySlotLocality<'_>) -> bool;
+    fn any_has_owner(&self, locality: AnyItemLocality<'_>) -> bool;
 
     /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
     /// Including Self and AnyItem.
@@ -75,7 +75,7 @@ impl<T: Item> AnyItem for T {
 
     fn edges_any(
         &self,
-        locality: AnySlotLocality<'_>,
+        locality: AnyItemLocality<'_>,
         filter: Option<Side>,
     ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>> {
         let edges = self.edges(locality.downcast(), filter);
@@ -88,7 +88,7 @@ impl<T: Item> AnyItem for T {
 
     default fn add_drain_edge_any(
         &mut self,
-        _: AnySlotLocality<'_>,
+        _: AnyItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<Key<Owned>, Key<Owned>> {
         Err(source)
@@ -105,7 +105,7 @@ impl<T: Item> AnyItem for T {
 
     fn remove_edge_any(
         &mut self,
-        locality: AnySlotLocality<'_>,
+        locality: AnyItemLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
     ) -> Result<Key<Owned>, Key<Owned>> {
@@ -113,13 +113,13 @@ impl<T: Item> AnyItem for T {
             .map_err(Key::any)
     }
 
-    default fn any_inc_owners(&mut self, _: AnySlotLocality<'_>) -> Option<Key<Owned>> {
+    default fn any_inc_owners(&mut self, _: AnyItemLocality<'_>) -> Option<Key<Owned>> {
         None
     }
 
-    default fn any_dec_owners(&mut self, _: AnySlotLocality<'_>, _: Key<Owned>) {}
+    default fn any_dec_owners(&mut self, _: AnyItemLocality<'_>, _: Key<Owned>) {}
 
-    default fn any_has_owner(&self, _: AnySlotLocality<'_>) -> bool {
+    default fn any_has_owner(&self, _: AnyItemLocality<'_>) -> bool {
         false
     }
 
@@ -138,7 +138,7 @@ impl<T: Item> AnyItem for T {
 default impl<T: DrainItem> AnyItem for T {
     fn add_drain_edge_any(
         &mut self,
-        locality: AnySlotLocality<'_>,
+        locality: AnyItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<Key<Owned>, Key<Owned>> {
         Ok(self.add_drain_edge(locality.downcast(), source).any())
@@ -146,15 +146,15 @@ default impl<T: DrainItem> AnyItem for T {
 }
 
 impl<T: StandaloneItem> AnyItem for T {
-    fn any_inc_owners(&mut self, locality: AnySlotLocality<'_>) -> Option<Key<Owned>> {
+    fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Key<Owned>> {
         Some(self.inc_owners(locality.downcast()).any())
     }
 
-    fn any_dec_owners(&mut self, locality: AnySlotLocality<'_>, this: Key<Owned>) {
+    fn any_dec_owners(&mut self, locality: AnyItemLocality<'_>, this: Key<Owned>) {
         self.dec_owners(locality.downcast(), this.assume());
     }
 
-    fn any_has_owner(&self, locality: AnySlotLocality<'_>) -> bool {
+    fn any_has_owner(&self, locality: AnyItemLocality<'_>) -> bool {
         self.has_owner(locality.downcast())
     }
 }

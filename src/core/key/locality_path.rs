@@ -1,11 +1,7 @@
 use super::RegionPath;
-use std::{
-    any::{Any, TypeId},
-    fmt::Debug,
-    ops::RangeInclusive,
-};
+use std::{any::TypeId, fmt::Debug, ops::RangeInclusive};
 
-pub trait LocalityPath: Debug + Any {
+pub trait LocalityPath: Debug {
     /// Maps self to LocalityRegion for given region.
     fn map(&self, region: RegionPath) -> Option<LocalityRegion>;
 

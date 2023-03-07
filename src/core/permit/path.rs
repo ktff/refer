@@ -58,7 +58,7 @@ impl<'a, R, T: core::Item, C: Container<T> + ?Sized> PathPermit<'a, T, R, C> {
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
-            .map(move |(key, slot)| unsafe { core::Slot::new(key.ptr(), slot, permit.access()) })
+            .map(move |slot| unsafe { core::Slot::new(slot, permit.access()) })
     }
 
     /// Splits on lower level, or returns self if level is higher.
