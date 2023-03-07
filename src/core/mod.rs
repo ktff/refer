@@ -40,7 +40,7 @@ NOTES
 //************************************* CONVENIENT ACCESS ************************************//
 
 #[allow(dead_code)]
-fn compile_check<'a, T: Item, C: Container<T>>(key: &Key<Owned, T>, container: &'a mut C) {
+fn compile_check<'a, T: Item, C: Container<T>>(key: &Grc<T>, container: &'a mut C) {
     let rf: Key<Ref, T> = key.borrow();
 
     // AnyPermit
@@ -75,7 +75,7 @@ fn compile_check<'a, T: Item, C: Container<T>>(key: &Key<Owned, T>, container: &
     key.get(container);
 }
 
-/// Enables key.get(permit) access.
+/// Enables key.get(permit) access when known Item is guaranteed to exist.
 pub trait KeyAccess<'a, R, C, A> {
     type T: Item;
     fn get(&self, access: A) -> Slot<'a, Self::T, R>;

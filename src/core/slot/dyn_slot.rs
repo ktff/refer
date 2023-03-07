@@ -230,16 +230,11 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
         .map_err(Key::assume)
     }
 
+    // TODO: rename
     pub fn any_delete_ref(&mut self, this: Key<Owned>) {
         assert_eq!(self.key(), this, "Provided key isn't of this slot");
         self.any_localized(|item, locality| item.any_dec_owners(locality, this))
     }
-
-    // pub fn remove_reference<F: DynItem + ?Sized>(&mut self, other: Key<F>) -> bool {
-    //     let locality = self.locality();
-    //     self.any_item_mut()
-    //         .remove_reference_any(locality, other.any())
-    // }
 
     /// Caller should properly dispose of Grc once done with it.
     /// Proper disposal is:

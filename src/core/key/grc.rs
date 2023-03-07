@@ -1,7 +1,9 @@
-use std::{marker::Unsize, ops::Deref};
-
 use super::*;
-use crate::core::{permit, AnyContainer, AnyItem, AnyPermit, DynItem};
+use crate::core::{
+    permit::{self, TypePermit},
+    AnyContainer, AnyItem, AnyPermit, Container, DynItem, KeyAccess, StandaloneItem,
+};
+use std::{marker::Unsize, ops::Deref};
 
 /// Edgeless reference.
 /// Dropping this will cause item leak, release instead.
@@ -25,10 +27,10 @@ impl<T: DynItem + ?Sized> Grc<T> {
     }
 
     /// Proper way of dropping this.
-    pub fn release<C: AnyContainer>(self, access: AnyPermit<permit::Mut, C>) {
-        // access.slot();
-        // TODO: Unifed DynSlot & Slot would help here
-        unimplemented!()
+    pub fn release_dyn<C: AnyContainer>(self, access: AnyPermit<permit::Mut, C>) {
+        // SAFETY: Key is valid until we release Key<Owned> in self.
+        let key = unsafe { Key::<Ref>::new_ref(self.index()) };
+        access.slot(key).get_dyn().release(self.any());
     }
 
     /// Callers should make sure that the key is properly disposed of, else T will leak.
@@ -39,6 +41,15 @@ impl<T: DynItem + ?Sized> Grc<T> {
             std::mem::forget(self);
             key
         }
+    }
+}
+
+impl<T: StandaloneItem> Grc<T> {
+    /// Proper way of dropping this.
+    pub fn release<C: Container<T>>(self, access: TypePermit<T, permit::Mut, C>) {
+        // SAFETY: Key is valid until we release Key<Owned> in self.
+        let key = unsafe { Key::new_ref(self.index()) };
+        key.get(access).release(self);
     }
 }
 
