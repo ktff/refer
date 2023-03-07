@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, SubjectPermit},
-    AnyContainer, AnyItem, AnySlot, Grc, Item, ItemLocality, Key, Permit, Ptr, Ref, Side,
-    StandaloneItem, UnsafeSlot,
+    AnyContainer, AnyItem, AnySlot, DrainItem, DynItem, Grc, Item, ItemLocality, Key, Owned,
+    PartialEdge, Permit, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -49,13 +49,17 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, T, R> {
         unsafe { &*self.slot.item().get() }
     }
 
-    // TODO: rename
-    pub fn iter_references(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.item()
-            .edges(self.locality(), Some(crate::core::Side::Source))
+    pub fn drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(crate::core::Side::Source))
             .map(|edge| edge.object)
     }
 
+    pub fn sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(crate::core::Side::Drain))
+            .map(|edge| edge.object)
+    }
+
+    /// Edges where self is side.
     pub fn edges(&self, side: Option<Side>) -> T::Edges<'_> {
         self.item().edges(self.locality(), side)
     }
@@ -63,12 +67,6 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, T, R> {
     pub fn has_owners(&self) -> bool {
         self.item().any_has_owner(self.locality().any())
     }
-
-    // /// Can panic if locality isn't for this type.
-    // pub fn duplicate(&self, to: SlotLocality<T>) -> Option<T> {
-    //     let locality = self.locality();
-    //     self.item().duplicate(locality, to)
-    // }
 }
 
 impl<'a, T: Item> Slot<'a, T, permit::Ref> {
@@ -95,35 +93,47 @@ impl<'a, T: Item> Slot<'a, T, permit::Mut> {
         func(self.item_mut(), locality)
     }
 
-    // pub fn replace_reference(&mut self, other: Key, to: Key) {
-    //     let locality = self.locality();
-    //     self.item_mut().replace_reference(locality, other, to);
-    // }
+    /// Returns with key to self.
+    #[must_use]
+    pub fn add_drain_edge<F: DynItem + ?Sized>(&mut self, source: Key<Owned, F>) -> Key<Owned, T>
+    where
+        T: DrainItem,
+    {
+        self.localized(|item, locality| item.add_drain_edge(locality, source.any()))
+    }
 
-    // pub fn displace_reference(&mut self, other: Key, to: Key) -> Option<Path> {
-    //     let locality = self.locality();
-    //     self.item_mut().displace_reference(locality, other, to)
-    // }
-
-    // pub fn duplicate_reference(&mut self, other: Key, to: Key) -> Option<Path> {
-    //     let locality = self.locality();
-    //     self.item_mut().duplicate_reference(locality, other, to)
-    // }
-
-    // pub fn displace(&mut self) {
-    //     let locality = self.locality();
-    //     self.item_mut().displace(locality, None)
-    // }
+    /// Ok success.
+    /// Err if can't remove it.
+    #[must_use]
+    pub fn try_remove_edge<F: DynItem + ?Sized>(
+        &mut self,
+        this: Key<Owned, T>,
+        edge: PartialEdge<Key<Ptr, F>>,
+    ) -> Result<Key<Owned, F>, Key<Owned, T>> {
+        self.localized(|item, locality| item.try_remove_edge(locality, this, edge))
+    }
 }
 
 impl<'a, T: StandaloneItem> Slot<'a, T, permit::Mut> {
     /// Caller should properly dispose of Grc once done with it.
+    /// Proper disposal is:
+    /// - Using it to construct an Item that will be added to a container.
+    /// - Calling release() on Grc.
     pub fn own(&mut self) -> Grc<T> {
         self.localized(|item, locality| Grc::new(item.inc_owners(locality)))
     }
 
     pub fn release(&mut self, grc: Grc<T>) {
         self.localized(|item, locality| item.dec_owners(locality, grc.into_owned_key()))
+    }
+
+    #[must_use]
+    pub fn remove_edge<F: DynItem + ?Sized>(
+        &mut self,
+        this: Key<Owned, T>,
+        edge: PartialEdge<Key<Ptr, F>>,
+    ) -> Key<Owned, F> {
+        self.localized(|item, locality| item.remove_edge(locality, this, edge))
     }
 }
 

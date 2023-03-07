@@ -170,10 +170,40 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
         //         are valid for at least 'a.
         let key = unsafe { Key::new_ref(key.index()) };
 
-        // SAFETY: We just added this item to the container
-        unsafe { self.access_mut().connect_source_edges(key) };
+        // We just added this item to the container
+        self.connect_source_edges(key);
 
         Ok(key)
+    }
+
+    /// Connects subjects source side edges to drain Items.
+    /// Caller must ensure that this is called only once, when subject was put into the slot.
+    fn connect_source_edges<T: Item>(&mut self, subject: Key<Ref, T>)
+    where
+        C: Container<T>,
+    {
+        let (subject, mut others) = self.access_mut().split_of(subject);
+        let subject = subject.get();
+        for edge in subject.edges(Some(Side::Source)) {
+            if let Some(drain) = others.slot(edge.object) {
+                // SAFETY: Subject,source,this exists at least for the duration of this function.
+                //         By adding it(Key) to the drain, anyone dropping the drain will know that
+                //         this subject needs to be notified. This ensures that edge in subject is
+                //         valid for it's lifetime.
+                let source = unsafe { Key::<_, T>::new_owned(subject.key().index()) };
+                let mut drain = drain.get_dyn();
+                let excess_key = match drain.add_drain_edge(source){
+                    Ok (key) => key,
+                    Err(_) => panic!(
+                        "Invalid item edge: subject {} -> object {}, object not drain, but owned reference of him exists.",
+                        subject.key(), drain.key(),
+                    )
+                };
+                drain.any_delete_ref(excess_key);
+            } else {
+                // We skip self references
+            }
+        }
     }
 
     // /// Removes previous item and sets new one in his place while updating references accordingly.

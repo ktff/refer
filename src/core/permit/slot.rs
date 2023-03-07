@@ -16,7 +16,6 @@ impl<'a, R, K, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'
 }
 
 impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
-    // TODO: Merge get_dyn and get into one method.
     /// Err if doesn't exist.
     pub fn get_dyn(self) -> Result<core::DynSlot<'a, T, R>> {
         let Self { permit, key } = self;
@@ -34,6 +33,25 @@ impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized>
     pub fn get_dyn(self) -> core::DynSlot<'a, T, R> {
         SlotPermit::new(self.permit, self.key.ptr())
             .get_dyn()
+            .expect("Reference is invalid for given container.")
+    }
+}
+
+impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
+    pub fn get(self) -> Result<core::Slot<'a, T, R>> {
+        let Self { permit, key } = self;
+        permit
+            .get_slot(key)
+            // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
+            .map(|slot| unsafe { core::Slot::new(slot, permit.access()) })
+            .ok_or_else(|| ReferError::invalid_key(key, permit.container_path()))
+    }
+}
+
+impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, core::Ref<'a>, T, C> {
+    pub fn get(self) -> core::Slot<'a, T, R> {
+        SlotPermit::new(self.permit, self.key.ptr())
+            .get()
             .expect("Reference is invalid for given container.")
     }
 }
@@ -56,25 +74,6 @@ impl<'a, R, K: Copy, T: core::Item, C: AnyContainer + ?Sized> SlotPermit<'a, R, 
         permit
             .step_into(index)
             .map(|permit| SlotPermit::new(permit, key))
-    }
-}
-
-impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
-    pub fn get(self) -> Result<core::Slot<'a, T, R>> {
-        let Self { permit, key } = self;
-        permit
-            .get_slot(key)
-            // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
-            .map(|slot| unsafe { core::Slot::new(slot, permit.access()) })
-            .ok_or_else(|| ReferError::invalid_key(key, permit.container_path()))
-    }
-}
-
-impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, core::Ref<'a>, T, C> {
-    pub fn get(self) -> core::Slot<'a, T, R> {
-        SlotPermit::new(self.permit, self.key.ptr())
-            .get()
-            .expect("Reference is invalid for given container.")
     }
 }
 

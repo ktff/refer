@@ -33,6 +33,7 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Should remove edge and return object ref.
     /// Ok success.
     /// Err if can't remove it, which may cause for this item to be removed.
+    /// Panics if edge is not found.
     #[must_use]
     fn try_remove_edge<T: DynItem + ?Sized>(
         &mut self,
@@ -51,7 +52,9 @@ pub trait Item: Sized + Any + Sync + Send {
 }
 
 /// Item which can be drain.
-pub trait DrainItem: Item {
+/// UNSAFE: Implementations MUST follow add_drain_edge SAFETY contract.
+pub unsafe trait DrainItem: Item {
+    /// SAFETY: add_drain_edge MUST ensure to add PartialEdge{object: source,side: Side::Drain} to edges of self.
     #[must_use]
     fn add_drain_edge<T: DynItem + ?Sized>(
         &mut self,

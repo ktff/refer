@@ -27,14 +27,6 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
         source: Key<Owned>,
     ) -> Result<Key<Owned>, Key<Owned>>;
 
-    // #[must_use]
-    // fn replace_object_any(
-    //     &mut self,
-    //     locality: AnySlotLocality<'_>,
-    //     a: Key,
-    //     b: Key<Owned>,
-    // ) -> Key<Owned>;
-
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
@@ -78,7 +70,7 @@ impl<T: Item> AnyItem for T {
         locality: AnyItemLocality<'_>,
         filter: Option<Side>,
     ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>> {
-        let edges = self.edges(locality.downcast(), filter);
+        let edges = self.edges(locality.downcast().expect("Unexpected item type"), filter);
         if let (0, Some(0)) = edges.size_hint() {
             None
         } else {
@@ -94,23 +86,18 @@ impl<T: Item> AnyItem for T {
         Err(source)
     }
 
-    // fn replace_object_any(
-    //     &mut self,
-    //     locality: AnySlotLocality<'_>,
-    //     a: Key,
-    //     b: Key<Owned>,
-    // ) -> Key<Owned> {
-    //     self.replace_object(locality.downcast(), a, b)
-    // }
-
     fn remove_edge_any(
         &mut self,
         locality: AnyItemLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
     ) -> Result<Key<Owned>, Key<Owned>> {
-        self.try_remove_edge(locality.downcast(), this.assume(), edge)
-            .map_err(Key::any)
+        self.try_remove_edge(
+            locality.downcast().expect("Unexpected item type"),
+            this.assume(),
+            edge,
+        )
+        .map_err(Key::any)
     }
 
     default fn any_inc_owners(&mut self, _: AnyItemLocality<'_>) -> Option<Key<Owned>> {
@@ -141,20 +128,28 @@ default impl<T: DrainItem> AnyItem for T {
         locality: AnyItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<Key<Owned>, Key<Owned>> {
-        Ok(self.add_drain_edge(locality.downcast(), source).any())
+        Ok(self
+            .add_drain_edge(locality.downcast().expect("Unexpected item type"), source)
+            .any())
     }
 }
 
 impl<T: StandaloneItem> AnyItem for T {
     fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Key<Owned>> {
-        Some(self.inc_owners(locality.downcast()).any())
+        Some(
+            self.inc_owners(locality.downcast().expect("Unexpected item type"))
+                .any(),
+        )
     }
 
     fn any_dec_owners(&mut self, locality: AnyItemLocality<'_>, this: Key<Owned>) {
-        self.dec_owners(locality.downcast(), this.assume());
+        self.dec_owners(
+            locality.downcast().expect("Unexpected item type"),
+            this.assume(),
+        );
     }
 
     fn any_has_owner(&self, locality: AnyItemLocality<'_>) -> bool {
-        self.has_owner(locality.downcast())
+        self.has_owner(locality.downcast().expect("Unexpected item type"))
     }
 }

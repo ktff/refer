@@ -1,9 +1,10 @@
-use crate::core::{AnyItem, AnyItemLocality, DynItem};
+use crate::core::{AnyItem, AnyItemLocality, DynItem, Item};
 use getset::CopyGetters;
 use log::*;
 use std::{any::TypeId, cell::SyncUnsafeCell};
 
-// TODO: Try to unify with UnsafeSlot.
+use super::UnsafeSlot;
+
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct AnyUnsafeSlot<'a> {
@@ -37,7 +38,21 @@ impl<'a> AnyUnsafeSlot<'a> {
         }
     }
 
-    // TODO: unsafe downcast_try
+    pub fn downcast<T: Item>(self) -> Option<UnsafeSlot<'a, T>> {
+        if TypeId::of::<T>() == self.item_type_id() {
+            // SAFETY: We know that the item is of type T, so we can safely cast it.
+            let item = unsafe {
+                &*(self.item as *const SyncUnsafeCell<dyn AnyItem> as *const SyncUnsafeCell<T>)
+            };
+
+            Some(UnsafeSlot::new(
+                self.locality.downcast().expect("Unexpected type"),
+                item,
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> Copy for AnyUnsafeSlot<'a> {}

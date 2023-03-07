@@ -1,13 +1,15 @@
 use crate::core::{
-    permit, AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Item, Key, Owned, PartialEdge,
+    permit, AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Grc, Item, Key, Owned, PartialEdge,
     Permit, Ptr, Ref, ReferError, Side, TypeInfo,
 };
 
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     marker::Unsize,
     ops::{Deref, DerefMut},
 };
+
+use super::Slot;
 
 pub type AnySlot<'a, R> = DynSlot<'a, dyn AnyItem, R>;
 
@@ -95,13 +97,10 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
         }
     }
 
-    pub fn downcast<U: Item>(self) -> Result<DynSlot<'a, U, R>, Self> {
-        if TypeId::of::<U>() == self.item_type_id() {
-            Ok(DynSlot {
-                metadata: (),
-                slot: self.slot,
-                access: self.access,
-            })
+    pub fn downcast<U: Item>(self) -> Result<Slot<'a, U, R>, Self> {
+        if let Some(slot) = self.slot.downcast() {
+            // SAFETY: We have the same access to the slot.
+            Ok(unsafe { Slot::new(slot, self.access) })
         } else {
             Err(self)
         }
@@ -145,13 +144,12 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, T, R> {
         (self.any_item() as &dyn Any).downcast_ref::<U>()
     }
 
-    // TODO: rename
-    pub fn iter_references_any(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.any_item()
-            .edges_any(self.locality(), Some(Side::Source))
-            .into_iter()
-            .flatten()
-            .map(|PartialEdge { object, .. }| object)
+    pub fn drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(Side::Source)).map(|edge| edge.object)
+    }
+
+    pub fn sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(Side::Drain)).map(|edge| edge.object)
     }
 
     // TODO: This lifetime is best for mut, but for ref it's possible to extend to 'a.
@@ -164,12 +162,6 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, T, R> {
             .into_iter()
             .flatten()
     }
-
-    // /// Can panic if locality isn't for this type.
-    // pub fn duplicate(&self, to: AnySlotLocality) -> Option<Box<dyn AnyItem>> {
-    //     let locality = self.locality();
-    //     self.any_item().duplicate_any(locality, to)
-    // }
 }
 
 impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
@@ -249,36 +241,24 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
     //         .remove_reference_any(locality, other.any())
     // }
 
-    // pub fn replace_reference<F: DynItem + ?Sized>(&mut self, other: Key<F>, to: Key<F>) {
-    //     let locality = self.locality();
-    //     self.any_item_mut()
-    //         .replace_reference_any(locality, other.any(), to.any());
-    // }
+    /// Caller should properly dispose of Grc once done with it.
+    /// Proper disposal is:
+    /// - Using it to construct an Item that will be added to a container.
+    /// - Calling release() on Grc.
+    ///
+    /// None if the item doesn't support ownership.
+    pub fn own(&mut self) -> Option<Grc<T>> {
+        self.any_localized(|item, locality| {
+            item.any_inc_owners(locality)
+                .map(|key| Grc::new(key.assume()))
+        })
+    }
 
-    // pub fn displace_reference<F: DynItem + ?Sized>(
-    //     &mut self,
-    //     other: Key<F>,
-    //     to: Key<F>,
-    // ) -> Option<Path> {
-    //     let locality = self.locality();
-    //     self.any_item_mut()
-    //         .displace_reference_any(locality, other.any(), to.any())
-    // }
-
-    // pub fn duplicate_reference<F: DynItem + ?Sized>(
-    //     &mut self,
-    //     other: Key<F>,
-    //     to: Key<F>,
-    // ) -> Option<Path> {
-    //     let locality = self.locality();
-    //     self.any_item_mut()
-    //         .duplicate_reference_any(locality, other.any(), to.any())
-    // }
-
-    // pub fn displace(&mut self) {
-    //     let locality = self.locality();
-    //     self.any_item_mut().displace_any(locality, None);
-    // }
+    pub fn release(&mut self, grc: Grc<T>) {
+        self.any_localized(|item, locality| {
+            item.any_dec_owners(locality, grc.into_owned_key().any())
+        })
+    }
 }
 
 impl<'a, T: DynItem + ?Sized, R> Copy for DynSlot<'a, T, R> where Permit<R>: Copy {}

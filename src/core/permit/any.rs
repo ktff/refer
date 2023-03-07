@@ -1,11 +1,9 @@
 use super::*;
 use crate::core::{
     container::RegionContainer, container::TypeContainer, AnyContainer, AnyItem, Container, Key,
-    Ptr, Side,
 };
 use std::{
     any::TypeId,
-    borrow::BorrowMut,
     ops::{Deref, RangeBounds},
 };
 
@@ -120,25 +118,6 @@ impl<'a, R, C: AnyContainer + ?Sized> AnyPermit<'a, R, C> {
     }
 }
 
-// impl<'a, A: Into<Shell>, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, A, C> {
-//     pub fn connect_dyn<T: core::DynItem + ?Sized>(
-//         &mut self,
-//         from: Key,
-//         to: Key<T>,
-//     ) -> Result<core::Key<Refer,T>> {
-//         self.peek_dyn(to)?.shell_add(from);
-//         Ok(core::Ref::new(to))
-//     }
-
-//     pub fn disconnect_dyn<T: core::DynItem + ?Sized>(
-//         &mut self,
-//         from: Key,
-//         to: core::Key<Refer,T>,
-//     ) -> Result<()> {
-//         Ok(self.peek_dyn(to.key())?.shell_remove(from))
-//     }
-// }
-
 impl<'a, C: AnyContainer + ?Sized> AnyPermit<'a, Mut, C> {
     pub fn split_types(self) -> TypeSplitPermit<'a, C>
     where
@@ -224,36 +203,6 @@ impl<'a, C: ?Sized> AnyPermit<'a, Mut, C> {
         C: AnyContainer,
     {
         self.borrow_mut().slot(key).get_dyn()
-    }
-
-    /// Connects subjects source side edges to drain Items.
-    /// UNSAFE: Caller must ensure that this is called only once, when subject was put into the slot.
-    pub unsafe fn connect_source_edges<T: core::Item>(&mut self, subject: Key<core::Ref, T>)
-    where
-        C: Container<T>,
-    {
-        let (subject, mut others) = self.borrow_mut().split_of(subject);
-        let subject = subject.get();
-        for edge in subject.edges(Some(Side::Source)) {
-            if let Some(drain) = others.slot(edge.object) {
-                // SAFETY: Subject,source,this exists at least for the duration of this function.
-                //         By adding it(Key) to the drain, anyone dropping the drain will know that
-                //         this subject needs to be notified. This ensures that edge in subject is
-                //         valid for it's lifetime.
-                let source = unsafe { Key::<_, T>::new_owned(subject.key().index()) };
-                let mut drain = drain.get_dyn();
-                let excess_key = match drain.add_drain_edge(source){
-                    Ok (key) => key,
-                    Err(_) => panic!(
-                        "Invalid item edge: subject {} -> object {}, object not drain, but owned reference of him exists.",
-                        subject.key(), drain.key(),
-                    )
-                };
-                drain.any_delete_ref(excess_key);
-            } else {
-                // We skip self references
-            }
-        }
     }
 }
 

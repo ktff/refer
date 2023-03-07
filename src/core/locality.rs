@@ -1,4 +1,7 @@
-use super::{Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath, Path, Ref};
+use super::{
+    permit, DrainItem, DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath,
+    Owned, PartialEdge, Path, Ref, Slot, StandaloneItem,
+};
 use getset::{CopyGetters, Getters};
 use std::any::Any;
 
@@ -69,6 +72,81 @@ impl<'a, K: LocalityPath + Copy, D: ?Sized, A: ?Sized> LocalityRef<'a, K, D, A> 
 }
 
 impl<'a, T: Item> ItemLocality<'a, T> {
+    /// Adds drain edge to drain.
+    /// UNSAFE: Caller must ensure to add returned key to this(source) Item edges as PartialEdge {object:key,side:Side::Source}.
+    #[must_use]
+    pub unsafe fn add_drain<D: DrainItem>(
+        &self,
+        drain: &mut Slot<D, permit::Mut>,
+    ) -> Key<Owned, D> {
+        let source = Key::<Owned, T>::new_owned(self.path.index());
+        drain.add_drain_edge(source)
+    }
+
+    /// Adds drain edge to drain.
+    /// UNSAFE: Caller must ensure to add returned key to this(source) Item edges as PartialEdge {object:key,side:Side::Source}.
+    #[must_use]
+    pub unsafe fn add_dyn_drain<D: DynItem + ?Sized>(
+        &self,
+        drain: &mut DynSlot<D, permit::Mut>,
+    ) -> Option<Key<Owned, D>> {
+        let source = Key::<Owned, T>::new_owned(self.path.index());
+        drain
+            .add_drain_edge(source)
+            .map(Key::assume)
+            .map_err(std::mem::forget)
+            .ok()
+    }
+
+    /// Removes edge from object.
+    /// Edge should have come from this Item edges.
+    /// Panics if edge is not in object.
+    pub fn remove_edge<D: StandaloneItem>(
+        &self,
+        edge: PartialEdge<Key<Owned, D>>,
+        object: &mut Slot<D, permit::Mut>,
+    ) {
+        let (object_key, edge) = edge.reverse(self.path().ptr());
+        let subject_key = object.remove_edge(object_key, edge);
+        std::mem::forget(subject_key);
+    }
+
+    /// Removes edge from object.
+    /// Edge should have come from this Item edges.
+    /// Err if object can't remove it.
+    /// Panics if edge is not in object.
+    #[must_use]
+    pub fn try_remove_edge<D: Item>(
+        &self,
+        edge: PartialEdge<Key<Owned, D>>,
+        object: &mut Slot<D, permit::Mut>,
+    ) -> Result<(), PartialEdge<Key<Owned, D>>> {
+        let subject = edge.subject;
+        let (object_key, edge) = edge.reverse(self.path().ptr());
+        object
+            .try_remove_edge(object_key, edge)
+            .map(|subject_key| std::mem::forget(subject_key))
+            .map_err(|object_key| subject.object(object_key))
+    }
+
+    /// Removes edge from object.
+    /// Edge should have come from this Item edges.
+    /// Err if object can't remove it.
+    /// Panics if edge is not in object.
+    #[must_use]
+    pub fn try_remove_dyn_edge<D: DynItem + ?Sized>(
+        &self,
+        edge: PartialEdge<Key<Owned, D>>,
+        object: &mut DynSlot<D, permit::Mut>,
+    ) -> Result<(), PartialEdge<Key<Owned, D>>> {
+        let subject = edge.subject;
+        let (object_key, edge) = edge.reverse(self.path().ptr());
+        object
+            .remove_edge(object_key, edge)
+            .map(|subject_key| std::mem::forget(subject_key))
+            .map_err(|object_key| subject.object(object_key))
+    }
+
     pub fn any(self) -> AnyItemLocality<'a> {
         AnyItemLocality {
             path: self.path.any(),
@@ -89,11 +167,7 @@ impl<'a, T: Item> ContainerLocality<'a, T> {
 }
 
 impl<'a> AnyItemLocality<'a> {
-    pub fn downcast<T: Item>(self) -> ItemLocality<'a, T> {
-        self.downcast_try().expect("Unexpected item type")
-    }
-
-    pub fn downcast_try<T: Item>(self) -> Option<ItemLocality<'a, T>> {
+    pub fn downcast<T: Item>(self) -> Option<ItemLocality<'a, T>> {
         if let Some(data) = self.data.downcast_ref() {
             Some(ItemLocality {
                 path: self.path.assume(),
@@ -110,11 +184,7 @@ impl<'a> AnyItemLocality<'a> {
 }
 
 impl<'a> AnyContainerLocality<'a> {
-    pub fn downcast<T: Item>(self) -> ContainerLocality<'a, T> {
-        self.downcast_try().expect("Unexpected item type")
-    }
-
-    pub fn downcast_try<T: Item>(self) -> Option<ContainerLocality<'a, T>> {
+    pub fn downcast<T: Item>(self) -> Option<ContainerLocality<'a, T>> {
         if let Some(data) = self.data.downcast_ref() {
             Some(ContainerLocality {
                 path: KeyPath::new(self.path),
