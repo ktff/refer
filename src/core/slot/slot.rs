@@ -1,19 +1,15 @@
 use crate::core::{
-    permit::{self, SubjectPermit},
-    AnyContainer, AnyItem, AnySlot, DrainItem, DynItem, Grc, Item, ItemLocality, Key, Owned,
-    PartialEdge, Permit, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
+    permit, AnyItem, AnySlot, DrainItem, DynItem, Grc, Item, ItemLocality, Key, Owned, PartialEdge,
+    Permit, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
-use super::DynSlot;
-
-// TODO: Swap places of T & R in Slots. So that it looks like Slot<'a,Ref,Item>
-pub struct Slot<'a, T: Item, R> {
+pub struct Slot<'a, R, T: Item> {
     slot: UnsafeSlot<'a, T>,
     access: Permit<R>,
 }
 
-impl<'a, T: Item, R> Slot<'a, T, R> {
+impl<'a, T: Item, R> Slot<'a, R, T> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
     pub unsafe fn new(slot: UnsafeSlot<'a, T>, access: Permit<R>) -> Self {
         Self { slot, access }
@@ -32,7 +28,7 @@ impl<'a, T: Item, R> Slot<'a, T, R> {
         unsafe { AnySlot::new_any(self.slot.any(), self.access) }
     }
 
-    pub fn downgrade<F>(self) -> Slot<'a, T, F>
+    pub fn downgrade<F>(self) -> Slot<'a, F, T>
     where
         Permit<R>: Into<Permit<F>>,
     {
@@ -43,7 +39,7 @@ impl<'a, T: Item, R> Slot<'a, T, R> {
     }
 }
 
-impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, T, R> {
+impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, R, T> {
     pub fn item(&self) -> &T {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
@@ -69,16 +65,15 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, T, R> {
     }
 }
 
-impl<'a, T: Item> Slot<'a, T, permit::Ref> {
-    // TODO: Should this replace item() ?
+impl<'a, T: Item> Slot<'a, permit::Ref, T> {
     pub fn to_item(&self) -> &'a T {
         // SAFETY: We have read access to the item for lifetime of 'a.
         unsafe { &*self.slot.item().get() }
     }
 }
 
-impl<'a, T: Item> Slot<'a, T, permit::Mut> {
-    pub fn borrow(&self) -> Slot<T, permit::Ref> {
+impl<'a, T: Item> Slot<'a, permit::Mut, T> {
+    pub fn borrow(&self) -> Slot<permit::Ref, T> {
         // SAFETY: We have mut access to the item.
         unsafe { Slot::new(self.slot, self.access.borrow()) }
     }
@@ -114,7 +109,7 @@ impl<'a, T: Item> Slot<'a, T, permit::Mut> {
     }
 }
 
-impl<'a, T: StandaloneItem> Slot<'a, T, permit::Mut> {
+impl<'a, T: StandaloneItem> Slot<'a, permit::Mut, T> {
     /// Caller should properly dispose of Grc once done with it.
     /// Proper disposal is:
     /// - Using it to construct an Item that will be added to a container.
@@ -137,9 +132,9 @@ impl<'a, T: StandaloneItem> Slot<'a, T, permit::Mut> {
     }
 }
 
-impl<'a, T: Item, R> Copy for Slot<'a, T, R> where Permit<R>: Copy {}
+impl<'a, T: Item, R> Copy for Slot<'a, R, T> where Permit<R>: Copy {}
 
-impl<'a, T: Item, R> Clone for Slot<'a, T, R>
+impl<'a, T: Item, R> Clone for Slot<'a, R, T>
 where
     Permit<R>: Clone,
 {
@@ -151,7 +146,7 @@ where
     }
 }
 
-impl<'a, T: Item, R: Into<permit::Ref>> Deref for Slot<'a, T, R> {
+impl<'a, T: Item, R: Into<permit::Ref>> Deref for Slot<'a, R, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -159,7 +154,7 @@ impl<'a, T: Item, R: Into<permit::Ref>> Deref for Slot<'a, T, R> {
     }
 }
 
-impl<'a, T: Item> DerefMut for Slot<'a, T, permit::Mut> {
+impl<'a, T: Item> DerefMut for Slot<'a, permit::Mut, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
     }

@@ -11,9 +11,9 @@ use std::{
 
 use super::Slot;
 
-pub type AnySlot<'a, R> = DynSlot<'a, dyn AnyItem, R>;
+pub type AnySlot<'a, R> = DynSlot<'a, R, dyn AnyItem>;
 
-pub struct DynSlot<'a, T: DynItem + ?Sized, R> {
+pub struct DynSlot<'a, R, T: DynItem + ?Sized = dyn AnyItem> {
     metadata: T::Metadata,
     slot: AnyUnsafeSlot<'a>,
     access: Permit<R>,
@@ -31,7 +31,7 @@ impl<'a, R> AnySlot<'a, R> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
+impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, R, T> {
     /// Key should correspond to the slot.
     /// None if item doesn't implement T.
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
@@ -70,7 +70,7 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
         unsafe { AnySlot::new_any(self.slot, self.access) }
     }
 
-    pub fn upcast<U: DynItem + ?Sized>(self) -> DynSlot<'a, U, R>
+    pub fn upcast<U: DynItem + ?Sized>(self) -> DynSlot<'a, R, U>
     where
         T: Unsize<U>,
     {
@@ -87,7 +87,7 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
         }
     }
 
-    pub fn sidecast<U: DynItem + ?Sized>(self) -> Result<DynSlot<'a, U, R>, Self> {
+    pub fn sidecast<U: DynItem + ?Sized>(self) -> Result<DynSlot<'a, R, U>, Self> {
         if let Some(metadata) = self.slot.metadata::<U>() {
             Ok(DynSlot {
                 metadata,
@@ -99,7 +99,7 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
         }
     }
 
-    pub fn downcast<U: Item>(self) -> Result<Slot<'a, U, R>, Self> {
+    pub fn downcast<U: Item>(self) -> Result<Slot<'a, R, U>, Self> {
         if let Some(slot) = self.slot.downcast() {
             // SAFETY: We have the same access to the slot.
             Ok(unsafe { Slot::new(slot, self.access) })
@@ -108,7 +108,7 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
         }
     }
 
-    pub fn downgrade<F>(self) -> DynSlot<'a, T, F>
+    pub fn downgrade<F>(self) -> DynSlot<'a, F, T>
     where
         Permit<R>: Into<Permit<F>>,
     {
@@ -120,7 +120,7 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, T, R> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, R, T> {
     pub fn any_item(&self) -> &dyn AnyItem {
         unsafe {
             let ptr = self.slot.item().get();
@@ -166,7 +166,7 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, T, R> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
+impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
     pub fn any_item_mut(&mut self) -> &mut dyn AnyItem {
         unsafe {
             let ptr = self.slot.item().get();
@@ -252,9 +252,9 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R> Copy for DynSlot<'a, T, R> where Permit<R>: Copy {}
+impl<'a, T: DynItem + ?Sized, R> Copy for DynSlot<'a, R, T> where Permit<R>: Copy {}
 
-impl<'a, T: DynItem + ?Sized, R> Clone for DynSlot<'a, T, R>
+impl<'a, T: DynItem + ?Sized, R> Clone for DynSlot<'a, R, T>
 where
     Permit<R>: Clone,
 {
@@ -267,7 +267,7 @@ where
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, R, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -275,7 +275,7 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R> 
     }
 }
 
-impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut> {
+impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, permit::Mut, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
     }

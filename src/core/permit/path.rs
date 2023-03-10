@@ -50,7 +50,7 @@ impl<'a, R, T: DynItem + ?Sized, C: AnyContainer + ?Sized> PathPermit<'a, T, R, 
 }
 
 impl<'a, R, T: core::Item, C: Container<T> + ?Sized> PathPermit<'a, T, R, C> {
-    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, T, R>> {
+    pub fn iter(self) -> impl Iterator<Item = core::Slot<'a, R, T>> {
         let Self { permit, path } = self;
         assert!(permit.container_path().contains(path));
         permit
@@ -172,8 +172,8 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer + ?Sized> PathPermit<'a, T, Mut, C
 }
 
 impl<'a, R, T: core::Item, C: Container<T> + ?Sized> IntoIterator for PathPermit<'a, T, R, C> {
-    type Item = core::Slot<'a, T, R>;
-    type IntoIter = impl Iterator<Item = core::Slot<'a, T, R>>;
+    type Item = core::Slot<'a, R, T>;
+    type IntoIter = impl Iterator<Item = core::Slot<'a, R, T>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()

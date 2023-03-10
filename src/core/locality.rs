@@ -77,7 +77,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     #[must_use]
     pub unsafe fn add_drain<D: DrainItem>(
         &self,
-        drain: &mut Slot<D, permit::Mut>,
+        drain: &mut Slot<permit::Mut, D>,
     ) -> Key<Owned, D> {
         let source = Key::<Owned, T>::new_owned(self.path.index());
         drain.add_drain_edge(source)
@@ -88,7 +88,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     #[must_use]
     pub unsafe fn add_dyn_drain<D: DynItem + ?Sized>(
         &self,
-        drain: &mut DynSlot<D, permit::Mut>,
+        drain: &mut DynSlot<permit::Mut, D>,
     ) -> Option<Key<Owned, D>> {
         let source = Key::<Owned, T>::new_owned(self.path.index());
         drain
@@ -104,7 +104,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     pub fn remove_edge<D: StandaloneItem>(
         &self,
         edge: PartialEdge<Key<Owned, D>>,
-        object: &mut Slot<D, permit::Mut>,
+        object: &mut Slot<permit::Mut, D>,
     ) {
         let (object_key, edge) = edge.reverse(self.path().ptr());
         let subject_key = object.remove_edge(object_key, edge);
@@ -119,7 +119,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     pub fn try_remove_edge<D: Item>(
         &self,
         edge: PartialEdge<Key<Owned, D>>,
-        object: &mut Slot<D, permit::Mut>,
+        object: &mut Slot<permit::Mut, D>,
     ) -> Result<(), PartialEdge<Key<Owned, D>>> {
         let subject = edge.subject;
         let (object_key, edge) = edge.reverse(self.path().ptr());
@@ -137,7 +137,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     pub fn try_remove_dyn_edge<D: DynItem + ?Sized>(
         &self,
         edge: PartialEdge<Key<Owned, D>>,
-        object: &mut DynSlot<D, permit::Mut>,
+        object: &mut DynSlot<permit::Mut, D>,
     ) -> Result<(), PartialEdge<Key<Owned, D>>> {
         let subject = edge.subject;
         let (object_key, edge) = edge.reverse(self.path().ptr());

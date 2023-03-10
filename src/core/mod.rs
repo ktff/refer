@@ -76,14 +76,14 @@ fn compile_check<'a, T: Item, C: Container<T>>(key: &Grc<T>, container: &'a mut 
 /// Enables key.get(permit) access when known Item is guaranteed to exist.
 pub trait KeyAccess<'a, R, C, A> {
     type T: Item;
-    fn get(&self, access: A) -> Slot<'a, Self::T, R>;
+    fn get(&self, access: A) -> Slot<'a, R, Self::T>;
 }
 
 impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Ref, C, AnyPermit<'a, permit::Ref, C>>
     for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: AnyPermit<'a, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: AnyPermit<'a, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.ty().slot(*self).get()
     }
 }
@@ -92,7 +92,7 @@ impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Ref, C, TypePermit<'a, 
     for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.slot(*self).get()
     }
 }
@@ -101,7 +101,7 @@ impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Mut, C, AnyPermit<'a, p
     for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: AnyPermit<'a, permit::Mut, C>) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: AnyPermit<'a, permit::Mut, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.ty().slot(*self).get()
     }
 }
@@ -110,14 +110,14 @@ impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Mut, C, TypePermit<'a, 
     for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: TypePermit<'a, T, permit::Mut, C>) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: TypePermit<'a, T, permit::Mut, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.slot(*self).get()
     }
 }
 
 impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Mut, C, &'a mut C> for Key<Ref<'a>, T> {
     type T = T;
-    fn get(&self, access: &'a mut C) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: &'a mut C) -> Slot<'a, permit::Mut, Self::T> {
         access.access_mut().ty().slot(*self).get()
     }
 }
@@ -126,7 +126,7 @@ impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Ref, C, AnyPermit<'a, p
     for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: AnyPermit<'a, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: AnyPermit<'a, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.ty().slot(self.borrow()).get()
     }
 }
@@ -135,7 +135,7 @@ impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Ref, C, TypePermit<'a, 
     for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.slot(self.borrow()).get()
     }
 }
@@ -144,7 +144,7 @@ impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Mut, C, AnyPermit<'a, p
     for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: AnyPermit<'a, permit::Mut, C>) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: AnyPermit<'a, permit::Mut, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.ty().slot(self.borrow()).get()
     }
 }
@@ -153,14 +153,14 @@ impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Mut, C, TypePermit<'a, 
     for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: TypePermit<'a, T, permit::Mut, C>) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: TypePermit<'a, T, permit::Mut, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.slot(self.borrow()).get()
     }
 }
 
 impl<'a, T: Item, C: Container<T>> KeyAccess<'a, permit::Mut, C, &'a mut C> for Key<Owned, T> {
     type T = T;
-    fn get(&self, access: &'a mut C) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: &'a mut C) -> Slot<'a, permit::Mut, Self::T> {
         access.access_mut().ty().slot(self.borrow()).get()
     }
 }
@@ -169,7 +169,7 @@ impl<'a: 'b, 'b, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'b AnyPermit<'a, permit::Ref, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: &'b AnyPermit<'a, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'b AnyPermit<'a, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.ty().slot(*self).get()
     }
 }
@@ -178,7 +178,7 @@ impl<'a: 'b, 'b, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'b TypePermit<'a, T, permit::Ref, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: &'b TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'b TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.slot(*self).get()
     }
 }
@@ -187,7 +187,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Mut, C, &'a mut AnyPermit<'b, permit::Mut, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: &'a mut AnyPermit<'b, permit::Mut, C>) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: &'a mut AnyPermit<'b, permit::Mut, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.borrow_mut().ty().slot(*self).get()
     }
 }
@@ -199,7 +199,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     fn get(
         &self,
         access: &'a mut TypePermit<'b, T, permit::Mut, C>,
-    ) -> Slot<'a, Self::T, permit::Mut> {
+    ) -> Slot<'a, permit::Mut, Self::T> {
         access.borrow_mut().slot(*self).get()
     }
 }
@@ -208,7 +208,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'a AnyPermit<'b, permit::Mut, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: &'a AnyPermit<'b, permit::Mut, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'a AnyPermit<'b, permit::Mut, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.borrow().ty().slot(*self).get()
     }
 }
@@ -217,7 +217,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'a TypePermit<'b, T, permit::Mut, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get(&self, access: &'a TypePermit<'b, T, permit::Mut, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'a TypePermit<'b, T, permit::Mut, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.borrow().slot(*self).get()
     }
 }
@@ -226,7 +226,7 @@ impl<'a: 'b, 'b, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'b AnyPermit<'a, permit::Ref, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: &'b AnyPermit<'a, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'b AnyPermit<'a, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.ty().slot(self.borrow()).get()
     }
 }
@@ -235,7 +235,7 @@ impl<'a: 'b, 'b, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'b TypePermit<'a, T, permit::Ref, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: &'b TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'b TypePermit<'a, T, permit::Ref, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.slot(self.borrow()).get()
     }
 }
@@ -244,7 +244,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Mut, C, &'a mut AnyPermit<'b, permit::Mut, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: &'a mut AnyPermit<'b, permit::Mut, C>) -> Slot<'a, Self::T, permit::Mut> {
+    fn get(&self, access: &'a mut AnyPermit<'b, permit::Mut, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.borrow_mut().ty().slot(self.borrow()).get()
     }
 }
@@ -256,7 +256,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     fn get(
         &self,
         access: &'a mut TypePermit<'b, T, permit::Mut, C>,
-    ) -> Slot<'a, Self::T, permit::Mut> {
+    ) -> Slot<'a, permit::Mut, Self::T> {
         access.borrow_mut().slot(self.borrow()).get()
     }
 }
@@ -265,7 +265,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'a AnyPermit<'b, permit::Mut, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: &'a AnyPermit<'b, permit::Mut, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'a AnyPermit<'b, permit::Mut, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.borrow().ty().slot(self.borrow()).get()
     }
 }
@@ -274,7 +274,7 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     KeyAccess<'a, permit::Ref, C, &'a TypePermit<'b, T, permit::Mut, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get(&self, access: &'a TypePermit<'b, T, permit::Mut, C>) -> Slot<'a, Self::T, permit::Ref> {
+    fn get(&self, access: &'a TypePermit<'b, T, permit::Mut, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.borrow().slot(self.borrow()).get()
     }
 }

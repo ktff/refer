@@ -16,7 +16,7 @@ impl<'a, R, K, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'
 
 impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
     /// None if doesn't exist.
-    pub fn get_dyn(self) -> Option<core::DynSlot<'a, T, R>> {
+    pub fn get_dyn(self) -> Option<core::DynSlot<'a, R, T>> {
         let Self { permit, key } = self;
         permit
             .get_slot_any(key.any())
@@ -28,7 +28,7 @@ impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'a, 
 impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized>
     SlotPermit<'a, R, core::Ref<'a>, T, C>
 {
-    pub fn get_dyn(self) -> core::DynSlot<'a, T, R> {
+    pub fn get_dyn(self) -> core::DynSlot<'a, R, T> {
         SlotPermit::new(self.permit, self.key.ptr())
             .get_dyn()
             .expect("Reference is invalid for given container.")
@@ -36,7 +36,7 @@ impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized>
 }
 
 impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
-    pub fn get(self) -> Option<core::Slot<'a, T, R>> {
+    pub fn get(self) -> Option<core::Slot<'a, R, T>> {
         let Self { permit, key } = self;
         permit
             .get_slot(key)
@@ -46,7 +46,7 @@ impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, Ptr, T, C
 }
 
 impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, core::Ref<'a>, T, C> {
-    pub fn get(self) -> core::Slot<'a, T, R> {
+    pub fn get(self) -> core::Slot<'a, R, T> {
         SlotPermit::new(self.permit, self.key.ptr())
             .get()
             .expect("Reference is invalid for given container.")
