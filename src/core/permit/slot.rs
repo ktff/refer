@@ -1,7 +1,6 @@
 use super::*;
 use crate::core::{
     container::RegionContainer, container::TypeContainer, AnyContainer, Container, Key, Ptr,
-    ReferError, Result,
 };
 
 pub struct SlotPermit<'a, R, K, T: core::DynItem + ?Sized, C: ?Sized> {
@@ -16,12 +15,11 @@ impl<'a, R, K, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'
 }
 
 impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
-    /// Err if doesn't exist.
-    pub fn get_dyn(self) -> Result<core::DynSlot<'a, T, R>> {
+    /// None if doesn't exist.
+    pub fn get_dyn(self) -> Option<core::DynSlot<'a, T, R>> {
         let Self { permit, key } = self;
         permit
             .get_slot_any(key.any())
-            .ok_or_else(|| ReferError::invalid_key(key, permit.container_path()))
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .and_then(|slot| unsafe { core::DynSlot::new(slot, permit.access()) })
     }
@@ -38,13 +36,12 @@ impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized>
 }
 
 impl<'a, R, T: core::Item, C: Container<T> + ?Sized> SlotPermit<'a, R, Ptr, T, C> {
-    pub fn get(self) -> Result<core::Slot<'a, T, R>> {
+    pub fn get(self) -> Option<core::Slot<'a, T, R>> {
         let Self { permit, key } = self;
         permit
             .get_slot(key)
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { core::Slot::new(slot, permit.access()) })
-            .ok_or_else(|| ReferError::invalid_key(key, permit.container_path()))
     }
 }
 

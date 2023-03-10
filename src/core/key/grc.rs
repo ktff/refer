@@ -11,7 +11,7 @@ pub struct Grc<T: DynItem + ?Sized = dyn AnyItem>(Key<Owned, T>);
 
 impl<T: DynItem + ?Sized> Grc<T> {
     /// Key should come from StandaloneItem.
-    pub(in super::super) fn new(key: Key<Owned, T>) -> Self {
+    pub(in crate::core) fn new(key: Key<Owned, T>) -> Self {
         Self(key)
     }
 

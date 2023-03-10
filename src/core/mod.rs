@@ -3,7 +3,6 @@
 #[macro_use]
 pub mod container;
 mod edge;
-mod error;
 mod locality;
 #[macro_use]
 mod item;
@@ -13,7 +12,6 @@ mod slot;
 
 pub use container::{AnyContainer, Container};
 pub use edge::*;
-pub use error::*;
 pub use item::*;
 pub use key::*;
 pub use locality::*;
@@ -23,7 +21,7 @@ pub use slot::*;
 
 // *************************** Useful aliases *************************** //
 
-pub type Result<T> = std::result::Result<T, ReferError>;
+// pub type Result<T> = std::result::Result<T, ReferError>;
 /*
 NOTES
 - Goal is to completely prevent memory errors, and to discourage logical errors.

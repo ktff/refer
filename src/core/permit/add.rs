@@ -71,14 +71,15 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
 
     /// Adds an item to the container & connects existing source edges from it.
     /// Assumes Grc was used for building those edges.
-    pub fn add<T: Item>(&mut self, locality: &impl LocalityPath, item: T) -> Result<Key<Ref<'a>, T>>
+    pub fn add<T: Item>(
+        &mut self,
+        locality: &impl LocalityPath,
+        item: T,
+    ) -> Result<Key<Ref<'a>, T>, T>
     where
         C: Container<T>,
     {
-        let key = self
-            .container
-            .fill_slot(locality, item)
-            .map_err(|_| ReferError::out_of_keys::<T>(locality))?;
+        let key = self.container.fill_slot(locality, item)?;
 
         // SAFETY: This permit has exclusive access to the container for 'a
         //         and it doesn't allow for removal of items. Hence, all references
@@ -114,7 +115,7 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
                         subject.key(), drain.key(),
                     )
                 };
-                drain.any_delete_ref(excess_key);
+                drain.release(Grc::new(excess_key));
             } else {
                 // We skip self references
             }

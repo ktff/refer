@@ -1,8 +1,8 @@
 use crate::core::{
     permit, AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Grc, Item, Key, Owned, PartialEdge,
-    Permit, Ptr, Ref, ReferError, Side, TypeInfo,
+    Permit, Ptr, Ref, Side,
 };
-
+use log::*;
 use std::{
     any::Any,
     marker::Unsize,
@@ -33,22 +33,24 @@ impl<'a, R> AnySlot<'a, R> {
 
 impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, T, R> {
     /// Key should correspond to the slot.
-    /// Err if item doesn't implement T.
+    /// None if item doesn't implement T.
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Result<Self, ReferError> {
-        let metadata = slot
-            .metadata::<T>()
-            .ok_or_else(|| ReferError::InvalidCastType {
-                expected: TypeInfo::of::<T>(),
-                found: slot.item().get().type_info(),
-                index: slot.locality().path().index(),
-            })?;
-
-        Ok(Self {
-            metadata,
-            slot,
-            access,
-        })
+    pub unsafe fn new(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Option<Self> {
+        if let Some(metadata) = slot.metadata::<T>() {
+            Some(Self {
+                metadata,
+                slot,
+                access,
+            })
+        } else {
+            warn!(
+                "Item at {:?}:{} is not {:?} which was assumed to be true.",
+                slot.locality().path(),
+                slot.item().get().type_info().name,
+                std::any::type_name::<T>()
+            );
+            None
+        }
     }
 
     pub fn key(&self) -> Key<Ref<'a>, T> {
@@ -228,12 +230,6 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut> {
         })
         .map(Key::assume)
         .map_err(Key::assume)
-    }
-
-    // TODO: rename
-    pub fn any_delete_ref(&mut self, this: Key<Owned>) {
-        assert_eq!(self.key(), this, "Provided key isn't of this slot");
-        self.any_localized(|item, locality| item.any_dec_owners(locality, this))
     }
 
     /// Caller should properly dispose of Grc once done with it.

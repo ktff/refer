@@ -96,7 +96,6 @@ impl<I: StandaloneItem> IsStandaloneItem for I {
     const IS_STANDALONE: bool = true;
 }
 
-// TODO: Auto include other traits, DrainItem, StandaloneItem, etc.
 /// Statically constructs ItemTraits with all of the listed traits, Self, and AnyItem.
 /// An example: `item_traits_method!(Node<T>: dyn Node);`
 #[macro_export]

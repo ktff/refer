@@ -1,9 +1,31 @@
 use super::{DrainItem, Item, StandaloneItem};
-use crate::core::{AnyItemLocality, Key, Owned, PartialEdge, Ref, Side, TypeInfo};
+use crate::core::{AnyItemLocality, Key, Owned, PartialEdge, Ref, Side};
 use std::{
     any::{Any, TypeId},
+    fmt::Display,
     marker::Unsize,
 };
+
+#[derive(Debug, Clone, Copy)]
+pub struct TypeInfo {
+    pub ty: TypeId,
+    pub name: &'static str,
+}
+
+impl TypeInfo {
+    pub fn of<T: ?Sized + 'static>() -> Self {
+        Self {
+            ty: TypeId::of::<T>(),
+            name: std::any::type_name::<T>(),
+        }
+    }
+}
+
+impl Display for TypeInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{:?}", self.name, self.ty)
+    }
+}
 
 /// Methods supported by any Item.
 pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
