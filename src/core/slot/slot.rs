@@ -1,5 +1,5 @@
 use crate::core::{
-    permit, AnyItem, AnySlot, DrainItem, DynItem, Grc, Item, ItemLocality, Key, Owned, PartialEdge,
+    permit, AnyItem, DrainItem, DynItem, DynSlot, Grc, Item, ItemLocality, Key, Owned, PartialEdge,
     Permit, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
@@ -23,9 +23,9 @@ impl<'a, T: Item, R> Slot<'a, R, T> {
         self.slot.locality()
     }
 
-    pub fn upcast(self) -> AnySlot<'a, R> {
+    pub fn upcast(self) -> DynSlot<'a, R> {
         // SAFETY: We have the same access to the slot.
-        unsafe { AnySlot::new_any(self.slot.any(), self.access) }
+        unsafe { DynSlot::new_any(self.slot.any(), self.access) }
     }
 
     pub fn downgrade<F>(self) -> Slot<'a, F, T>

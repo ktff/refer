@@ -105,39 +105,6 @@ impl<'a, R, T: core::Item, C: Container<T> + ?Sized> TypePermit<'a, T, R, C> {
     }
 }
 
-// impl<'a, T: core::Item, A: Into<Shell>, C: Container<T> + ?Sized> TypePermit<'a, T, Mut, C> {
-//     pub fn connect(&mut self, from: Key, to: Key<T>) -> core::Key<Refer,T> {
-//         self.borrow_mut()
-//             .slot(to)
-//             .get()
-//             .map_err(|error| {
-//                 error!("Failed to connect {:?} -> {:?}, error: {}", from, to, error);
-//                 error
-//             })
-//             .expect("Failed to connect")
-//             .shell_add(from);
-
-//         core::Ref::new(to)
-//     }
-
-//     pub fn disconnect(&mut self, from: Key, to: core::Key<Refer,T>) {
-//         self.borrow_mut()
-//             .slot(to.key())
-//             .get()
-//             .map_err(|error| {
-//                 error!(
-//                     "Failed to disconnect {:?} -> {:?}, error: {}",
-//                     from,
-//                     to.key(),
-//                     error
-//                 );
-//                 error
-//             })
-//             .expect("Failed to disconnect")
-//             .shell_remove(from)
-//     }
-// }
-
 impl<'a, T: ?Sized, C: ?Sized> TypePermit<'a, T, Mut, C> {
     pub fn borrow(&self) -> TypePermit<T, Ref, C> {
         TypePermit {

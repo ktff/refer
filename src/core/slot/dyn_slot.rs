@@ -11,15 +11,13 @@ use std::{
 
 use super::Slot;
 
-pub type AnySlot<'a, R> = DynSlot<'a, R, dyn AnyItem>;
-
-pub struct DynSlot<'a, R, T: DynItem + ?Sized = dyn AnyItem> {
+pub struct DynSlot<'a, R = permit::Ref, T: DynItem + ?Sized = dyn AnyItem> {
     metadata: T::Metadata,
     slot: AnyUnsafeSlot<'a>,
     access: Permit<R>,
 }
 
-impl<'a, R> AnySlot<'a, R> {
+impl<'a, R> DynSlot<'a, R> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
     pub unsafe fn new_any(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Self {
         let metadata = std::ptr::metadata(slot.item().get());
@@ -65,9 +63,9 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, R, T> {
         self.slot.locality()
     }
 
-    pub fn any(self) -> AnySlot<'a, R> {
+    pub fn any(self) -> DynSlot<'a, R> {
         // SAFETY: We have the same access to the slot.
-        unsafe { AnySlot::new_any(self.slot, self.access) }
+        unsafe { DynSlot::new_any(self.slot, self.access) }
     }
 
     pub fn upcast<U: DynItem + ?Sized>(self) -> DynSlot<'a, R, U>
