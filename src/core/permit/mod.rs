@@ -1,32 +1,14 @@
 pub mod access;
-mod add;
-mod any;
-mod path;
-mod remove;
-mod slot;
-mod slot_split;
-mod subject;
-mod ty;
-mod type_split;
+pub mod add;
+pub mod remove;
 
-pub use add::AddPermit;
-pub use any::AnyPermit;
-pub use path::PathPermit;
-pub use remove::RemovePermit;
-pub use slot::SlotPermit;
-pub use slot_split::SlotSplitPermit;
-pub use subject::SubjectPermit;
-pub use ty::TypePermit;
-pub use type_split::TypeSplitPermit;
+pub use access::{All, Keys, Not, Types};
 
-use crate::core;
 use std::marker::PhantomData;
 
 //? NOTE: Permit system is by no means complete, so it's fine to extend it.
 
 // TODO: Test permit system, test compile failures?
-
-// TODO: Unify *Acccess under Access<R: Restriction>? Restrictions could be: Type<T>, Path, PathKey<T>, Key<T>, etc.
 
 // Extension TODO: Like ExclusivePermit, SharedPermit could be constructed from ExclusivePermit for concurrent mutation.
 

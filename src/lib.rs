@@ -1,3 +1,4 @@
+#![allow(incomplete_features)]
 // Currently this is not implemented safely for *dyn Trait.
 #![feature(trait_upcasting)]
 #![feature(type_alias_impl_trait)]

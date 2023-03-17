@@ -1,7 +1,5 @@
 use std::ops::Not;
 
-use super::{DynItem, Key};
-
 /// Sides of edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Side {

@@ -1,6 +1,7 @@
 use crate::core::{
-    permit, AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Grc, Item, Key, Owned, PartialEdge,
-    Permit, Ptr, Ref, Side,
+    permit::{self, Permit},
+    AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Grc, Item, Key, Owned, PartialEdge, Ptr, Ref,
+    Side,
 };
 use log::*;
 use std::{

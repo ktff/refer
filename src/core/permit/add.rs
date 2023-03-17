@@ -1,4 +1,4 @@
-use crate::core::{container::RegionContainer, container::TypeContainer, *};
+use crate::core::{container::RegionContainer, container::TypeContainer, permit::Permit, *};
 use std::ops::{Deref, RangeBounds};
 
 //? NOTE: This Permit must not allow for remove operations to be called during it's lifetime,
@@ -26,13 +26,13 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
         }
     }
 
-    pub fn access(&self) -> AnyPermit<permit::Ref, C> {
+    pub fn access(&self) -> Access<C> {
         // SAFETY: We have at least read access for whole C.
-        unsafe { AnyPermit::unsafe_new(self.permit.borrow(), &self) }
+        unsafe { Access::unsafe_new(self.permit.borrow(), &self) }
     }
 
-    pub fn access_mut(&mut self) -> AnyPermit<permit::Mut, C> {
-        AnyPermit::new(self.container)
+    pub fn access_mut(&mut self) -> MutAccess<C> {
+        Access::new(self.container)
     }
 
     pub fn step<T: Item>(self) -> Option<AddPermit<'a, C::Sub>>
@@ -98,10 +98,10 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
     where
         C: Container<T>,
     {
-        let (subject, mut others) = self.access_mut().split_of(subject);
+        let (subject, mut others) = self.access_mut().key_split(subject);
         let subject = subject.get();
         for edge in subject.edges(Some(Side::Source)) {
-            if let Some(drain) = others.slot(edge.object) {
+            if let Some(drain) = others.borrow_mut().key_try(edge.object) {
                 // SAFETY: Subject,source,this exists at least for the duration of this function.
                 //         By adding it(Key) to the drain, anyone dropping the drain will know that
                 //         this subject needs to be notified. This ensures that edge in subject is

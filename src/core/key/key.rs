@@ -1,10 +1,8 @@
 use super::{Index, Path, RegionPath, INDEX_BASE_BITS};
-use log::*;
 use std::{
     any, fmt,
     hash::{Hash, Hasher},
     marker::{PhantomData, Unsize},
-    ptr::Pointee,
 };
 
 use crate::core::{AnyItem, DynItem, Item, LocalityPath, LocalityRegion};

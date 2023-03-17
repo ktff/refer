@@ -1,7 +1,6 @@
 use super::*;
 use crate::core::{
-    permit::{self, TypePermit},
-    AnyContainer, AnyItem, AnyPermit, Container, DynItem, KeyAccess, StandaloneItem,
+    AnyContainer, AnyItem, Container, DynItem, KeyAccess, MutAccess, MutTypeAccess, StandaloneItem,
 };
 use std::{marker::Unsize, ops::Deref};
 
@@ -27,7 +26,7 @@ impl<T: DynItem + ?Sized> Grc<T> {
     }
 
     /// Proper way of dropping this.
-    pub fn release_dyn<C: AnyContainer>(self, access: AnyPermit<permit::Mut, C>) {
+    pub fn release_dyn<C: AnyContainer>(self, access: MutAccess<C>) {
         // SAFETY: Key is valid until we release Key<Owned> in self.
         let key = unsafe { Key::<Ref>::new_ref(self.index()) };
         access.key(key).get_dyn().release(self.any());
@@ -46,7 +45,7 @@ impl<T: DynItem + ?Sized> Grc<T> {
 
 impl<T: StandaloneItem> Grc<T> {
     /// Proper way of dropping this.
-    pub fn release<C: Container<T>>(self, access: TypePermit<T, permit::Mut, C>) {
+    pub fn release<C: Container<T>>(self, access: MutTypeAccess<C, T>) {
         // SAFETY: Key is valid until we release Key<Owned> in self.
         let key = unsafe { Key::new_ref(self.index()) };
         key.get(access).release(self);

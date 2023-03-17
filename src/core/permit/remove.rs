@@ -1,4 +1,4 @@
-use crate::core::{container::RegionContainer, container::TypeContainer, *};
+use crate::core::{container::RegionContainer, container::TypeContainer, permit::Permit, *};
 use std::ops::{Deref, DerefMut, RangeBounds};
 
 /// Permit to remove items from a container.
@@ -24,13 +24,13 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
         }
     }
 
-    pub fn access(&self) -> AnyPermit<permit::Ref, C> {
+    pub fn access(&self) -> Access<C> {
         // SAFETY: We have at least read access for whole C.
-        unsafe { AnyPermit::unsafe_new(self.permit.borrow(), &self) }
+        unsafe { Access::unsafe_new(self.permit.borrow(), &self) }
     }
 
-    pub fn access_mut(&mut self) -> AnyPermit<permit::Mut, C> {
-        AnyPermit::new(self.container)
+    pub fn access_mut(&mut self) -> MutAccess<C> {
+        MutAccess::new(self.container)
     }
 
     pub fn step<T: Item>(self) -> Option<RemovePermit<'a, C::Sub>>
@@ -81,7 +81,7 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
     {
         // Standalone check
         if T::IS_STANDALONE {
-            if self.access().key(key).get()?.has_owners() {
+            if self.access().key(key).get_try()?.has_owners() {
                 return Some(false);
             }
         }
@@ -112,7 +112,7 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
         remove: &mut Vec<Key>,
     ) {
         for edge in edges {
-            if let Some(mut object) = self.access_mut().key(edge.object.ptr()).get_dyn() {
+            if let Some(mut object) = self.access_mut().key(edge.object.ptr()).get_dyn_try() {
                 let (object_key, rev_edge) = edge.reverse(subject);
                 match object.remove_edge(object_key, rev_edge) {
                     Ok(subject) => std::mem::forget(subject),

@@ -30,9 +30,9 @@ pub struct Not<T>(T);
 pub struct AccessPermit<
     'a,
     C: AnyContainer + ?Sized,
-    R: Into<permit::Ref> = permit::Ref,
-    T: TypePermit = All,
-    K: KeyPermit = All,
+    R: Into<permit::Ref>,
+    T: TypePermit,
+    K: KeyPermit,
 > {
     container: &'a C,
     permit: Permit<R>,
@@ -59,10 +59,10 @@ impl<'a, C: AnyContainer + ?Sized> AccessPermit<'a, C, Mut, All, All> {
 impl<'a, C: AnyContainer + ?Sized> AccessPermit<'a, C, permit::Ref, All, All> {
     /// SAFETY: Caller must ensure that it has the correct Ref access to C for the given 'a and that
     ///         all keys are valid for 'a.
-    pub unsafe fn unsafe_new(container: &'a C) -> Self {
+    pub unsafe fn unsafe_new(permit: Permit<permit::Ref>, container: &'a C) -> Self {
         Self {
             container: container,
-            permit: Permit::new(),
+            permit,
             type_state: Default::default(),
             key_state: Default::default(),
             _marker: PhantomData,

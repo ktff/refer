@@ -10,15 +10,20 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    permit::RemovePermit, AddPermit, AnyContainerLocality, AnyItemLocality, AnyPermit,
-    AnyUnsafeSlot, ContainerLocality, Item, ItemLocality, ItemTraits, Key, KeyPath, LocalityKey,
-    LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
+    Add, AnyContainerLocality, AnyUnsafeSlot, ContainerLocality, Item, ItemLocality, ItemTraits,
+    Key, KeyPath, LocalityKey, LocalityPath, MutAccess, Owned, PartialEdge, Path, Ptr, Ref,
+    RegionPath, Remove, UnsafeSlot,
 };
-use crate::core::permit;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
 };
+
+/*
+NOTES:
+- Goal is to completely prevent memory errors, and to discourage logical errors.
+- Containers are not to be Items since that creates non trivial recursions on type and logic levels.
+*/
 
 /// A family of containers.
 pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
@@ -108,24 +113,24 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
     /// Caller should properly dispose of the edges.
     fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>;
 
-    fn access_add(&mut self) -> AddPermit<'_, Self>
+    fn access_add(&mut self) -> Add<'_, Self>
     where
         Self: Sized,
     {
-        AddPermit::new(self)
+        Add::new(self)
     }
 
-    fn access_remove(&mut self) -> RemovePermit<'_, Self>
+    fn access_remove(&mut self) -> Remove<'_, Self>
     where
         Self: Sized,
     {
-        RemovePermit::new(self)
+        Remove::new(self)
     }
 
-    fn access_mut(&mut self) -> AnyPermit<permit::Mut, Self>
+    fn access_mut(&mut self) -> MutAccess<Self>
     where
         Self: Sized,
     {
-        AnyPermit::new(self)
+        MutAccess::new(self)
     }
 }
