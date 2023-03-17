@@ -153,13 +153,12 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, R, T> {
         self.edges(Some(Side::Drain)).map(|edge| edge.object)
     }
 
-    // TODO: This lifetime is best for mut, but for ref it's possible to extend to 'a.
     pub fn edges(
         &self,
         side: Option<Side>,
     ) -> impl Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_ {
         self.any_item()
-            .edges_any(self.locality(), side)
+            .any_edges(self.locality(), side)
             .into_iter()
             .flatten()
     }
@@ -212,7 +211,7 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
         &mut self,
         source: Key<Owned, F>,
     ) -> Result<Key<Owned>, Key<Owned, F>> {
-        self.any_localized(|item, locality| item.add_drain_edge_any(locality, source.any()))
+        self.any_localized(|item, locality| item.any_add_drain_edge(locality, source.any()))
             .map_err(|source| source.assume())
     }
 
@@ -225,7 +224,7 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
         edge: PartialEdge<Key<Ptr, F>>,
     ) -> Result<Key<Owned, F>, Key<Owned, T>> {
         self.any_localized(|item, locality| {
-            item.remove_edge_any(locality, this.any(), edge.map(|key| key.any()))
+            item.any_remove_edge(locality, this.any(), edge.map(|key| key.any()))
         })
         .map(Key::assume)
         .map_err(Key::assume)

@@ -122,11 +122,11 @@ macro_rules! leaf_container {
         }
 
         #[inline(always)]
-        fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot>{
+        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot>{
             self.get_slot(Key::new(key.index())).map(|slot| slot.upcast())
         }
 
-        fn get_locality_any(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnySlotLocality>{
+        fn any_get_locality(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnySlotLocality>{
             if ty == TypeId::of::<$t>() {
                 Some(self.locality.item_locality().upcast())
             } else {
@@ -161,7 +161,7 @@ macro_rules! leaf_container {
             set
         }
 
-        fn fill_slot_any(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<Key, String>{
+        fn any_fill_slot(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<Key, String>{
             match item.downcast::<$t>() {
                 Ok(item)=>{
                     if let Ok(index)=self.fill(Box::into_inner(item)){
@@ -176,7 +176,7 @@ macro_rules! leaf_container {
             }
         }
 
-        fn fill_locality_any(&mut self, _: &dyn LocalityPath,ty: TypeId) -> Option<LocalityKey>{
+        fn any_fill_locality(&mut self, _: &dyn LocalityPath,ty: TypeId) -> Option<LocalityKey>{
             if ty == TypeId::of::<$t>() {
                 Some(*self.locality().locality_key())
             } else {
@@ -185,7 +185,7 @@ macro_rules! leaf_container {
 
         }
 
-        fn unfill_slot_any(&mut self, key: Key){
+        fn unany_fill_slot(&mut self, key: Key){
             self.unfill_slot(Key::new(key.index()));
         }
     }

@@ -73,16 +73,16 @@ macro_rules! single_type_container {
     };
     (impl AnyContainer<$t:ty>) => {
         #[inline(always)]
-        fn get_slot_any(&self, key: $crate::core::Key) -> Option<$crate::core::AnyUnsafeSlot> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.get_slot_any(key)
+        fn any_get_slot(&self, key: $crate::core::Key) -> Option<$crate::core::AnyUnsafeSlot> {
+            $crate::core::container::TypeContainer::<$t>::get(self)?.any_get_slot(key)
         }
 
-        fn get_locality_any(
+        fn any_get_locality(
             &self,
             path: &dyn $crate::core::LocalityPath,
             ty: std::any::TypeId,
         ) -> Option<$crate::core::AnySlotLocality> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.get_locality_any(path, ty)
+            $crate::core::container::TypeContainer::<$t>::get(self)?.any_get_locality(path, ty)
         }
 
         fn first_key(&self, key: std::any::TypeId) -> Option<$crate::core::Key> {
@@ -103,13 +103,13 @@ macro_rules! single_type_container {
             set
         }
 
-        fn fill_slot_any(
+        fn any_fill_slot(
             &mut self,
             path: &dyn $crate::core::LocalityPath,
             item: Box<dyn std::any::Any>,
         ) -> std::result::Result<$crate::core::Key, String> {
             if let Some(sub) = $crate::core::container::TypeContainer::<$t>::get_mut(self) {
-                sub.fill_slot_any(path, item)
+                sub.any_fill_slot(path, item)
             } else {
                 Err(format!(
                     "Context not allocated {:?} on path {:?}",
@@ -119,17 +119,17 @@ macro_rules! single_type_container {
             }
         }
 
-        fn fill_locality_any(
+        fn any_fill_locality(
             &mut self,
             path: &dyn $crate::core::LocalityPath,
             ty: std::any::TypeId,
         ) -> Option<$crate::core::LocalityKey> {
-            $crate::core::container::TypeContainer::<$t>::fill(self).fill_locality_any(path, ty)
+            $crate::core::container::TypeContainer::<$t>::fill(self).any_fill_locality(path, ty)
         }
 
-        fn unfill_slot_any(&mut self, key: $crate::core::Key) {
+        fn unany_fill_slot(&mut self, key: $crate::core::Key) {
             if let Some(container) = $crate::core::container::TypeContainer::<$t>::get_mut(self) {
-                container.unfill_slot_any(key);
+                container.unany_fill_slot(key);
             }
         }
     };
@@ -199,12 +199,12 @@ macro_rules! multi_type_container {
         }
 
         #[inline(always)]
-        fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot> {
-            self.get_any(key)?.get_slot_any(key)
+        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot> {
+            self.get_any(key)?.any_get_slot(key)
         }
 
-        fn get_locality_any(&self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<AnySlotLocality> {
-            self.get_any_index(self.type_to_index(ty)?)?.get_locality_any(path,ty)
+        fn any_get_locality(&self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<AnySlotLocality> {
+            self.get_any_index(self.type_to_index(ty)?)?.any_get_locality(path,ty)
         }
 
         fn first_key(&self, key: std::any::TypeId) -> Option<Key> {
@@ -219,7 +219,7 @@ macro_rules! multi_type_container {
             self.get_any_index(self.type_to_index(key)?)?.last_key(key)
         }
 
-        fn fill_slot_any(
+        fn any_fill_slot(
             &mut self,
             path: &dyn LocalityPath,
             item: Box<dyn std::any::Any>,
@@ -230,7 +230,7 @@ macro_rules! multi_type_container {
             if let Some(index) = self.type_to_index(ty) {
                 self.get_mut_any_index(index)
                     .ok_or_else(|| format!("Context not allocated: {:?} in region: {:?}", path,region))?
-                    .fill_slot_any(path, item)
+                    .any_fill_slot(path, item)
             } else {
                 Err(format!(
                     "Illegal LocalityKey: {:?} in region: {:?}",
@@ -240,19 +240,19 @@ macro_rules! multi_type_container {
             }
         }
 
-        fn fill_locality_any(&mut self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<LocalityKey> {
+        fn any_fill_locality(&mut self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<LocalityKey> {
             if let Some(index) = self.type_to_index(ty) {
                 // Container exists
-                self.get_mut_any_index(index)?.fill_locality_any(path, ty)
+                self.get_mut_any_index(index)?.any_fill_locality(path, ty)
             } else {
                 // Container doesn't exist
                 None
             }
         }
 
-        fn unfill_slot_any(&mut self, key: Key) {
+        fn unany_fill_slot(&mut self, key: Key) {
             if let Some(container) = self.get_mut_any(key) {
-                container.unfill_slot_any(key);
+                container.unany_fill_slot(key);
             }
         }
     };

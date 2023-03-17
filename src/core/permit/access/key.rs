@@ -34,7 +34,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: DynItem + ?Sized>
             ..
         } = self;
         container
-            .get_slot_any(key.any())
+            .any_get_slot(key.any())
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .and_then(|slot| unsafe { DynSlot::new(slot, permit) })
     }

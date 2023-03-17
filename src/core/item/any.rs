@@ -33,7 +33,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
 
     fn type_info(self: *const Self) -> TypeInfo;
 
-    fn edges_any(
+    fn any_edges(
         &self,
         locality: AnyItemLocality<'_>,
         filter: Option<Side>,
@@ -43,7 +43,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     /// Err with provided source.
     /// Err if self isn't drain item so it wasn't added.
     #[must_use]
-    fn add_drain_edge_any(
+    fn any_add_drain_edge(
         &mut self,
         locality: AnyItemLocality<'_>,
         source: Key<Owned>,
@@ -52,14 +52,12 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
-    fn remove_edge_any(
+    fn any_remove_edge(
         &mut self,
         locality: AnyItemLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
     ) -> Result<Key<Owned>, Key<Owned>>;
-
-    // TODO: Use prefix any_ everywhere?
 
     #[must_use]
     fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Key<Owned>>;
@@ -87,7 +85,7 @@ impl<T: Item> AnyItem for T {
         TypeInfo::of::<T>()
     }
 
-    fn edges_any(
+    fn any_edges(
         &self,
         locality: AnyItemLocality<'_>,
         filter: Option<Side>,
@@ -100,7 +98,7 @@ impl<T: Item> AnyItem for T {
         }
     }
 
-    default fn add_drain_edge_any(
+    default fn any_add_drain_edge(
         &mut self,
         _: AnyItemLocality<'_>,
         source: Key<Owned>,
@@ -108,7 +106,7 @@ impl<T: Item> AnyItem for T {
         Err(source)
     }
 
-    fn remove_edge_any(
+    fn any_remove_edge(
         &mut self,
         locality: AnyItemLocality<'_>,
         this: Key<Owned>,
@@ -145,7 +143,7 @@ impl<T: Item> AnyItem for T {
 }
 
 default impl<T: DrainItem> AnyItem for T {
-    fn add_drain_edge_any(
+    fn any_add_drain_edge(
         &mut self,
         locality: AnyItemLocality<'_>,
         source: Key<Owned>,

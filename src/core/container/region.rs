@@ -91,17 +91,17 @@ macro_rules! region_container {
         }
 
         #[inline(always)]
-        fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot> {
+        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot> {
             let index = self.region().index_of(key);
-            self.get(index)?.get_slot_any(key)
+            self.get(index)?.any_get_slot(key)
         }
 
-        fn get_locality_any(
+        fn any_get_locality(
             &self,
             path: &dyn LocalityPath,
             ty: std::any::TypeId,
         ) -> Option<AnySlotLocality> {
-            self.locality(path)?.get_locality_any(path, ty)
+            self.locality(path)?.any_get_locality(path, ty)
         }
 
         fn first_key(&self, key: std::any::TypeId) -> Option<Key> {
@@ -127,13 +127,13 @@ macro_rules! region_container {
                 .find_map(|container| container.last_key(key))
         }
 
-        fn fill_slot_any(
+        fn any_fill_slot(
             &mut self,
             path: &dyn LocalityPath,
             item: Box<dyn std::any::Any>,
         ) -> std::result::Result<Key, String> {
             if let Some(sub) = self.fill(path) {
-                sub.fill_slot_any(path, item)
+                sub.any_fill_slot(path, item)
             } else {
                 Err(format!(
                     "Context not allocated {:?} on path {:?}",
@@ -143,18 +143,18 @@ macro_rules! region_container {
             }
         }
 
-        fn fill_locality_any(
+        fn any_fill_locality(
             &mut self,
             path: &dyn LocalityPath,
             ty: std::any::TypeId,
         ) -> Option<LocalityKey> {
-            self.fill(path)?.fill_locality_any(path, ty)
+            self.fill(path)?.any_fill_locality(path, ty)
         }
 
-        fn unfill_slot_any(&mut self, key: Key) {
+        fn unany_fill_slot(&mut self, key: Key) {
             let index = self.region().index_of(key);
             if let Some(container) = self.get_mut(index) {
-                container.unfill_slot_any(key);
+                container.unany_fill_slot(key);
             }
         }
     };

@@ -67,7 +67,7 @@ pub unsafe trait Container<T: Item>: AnyContainer {
     fn unfill_slot(&mut self, key: Key<Ptr, T>) -> Option<(T, ItemLocality<T>)>;
 }
 
-/// UNSAFE: Implementations MUST follow get_slot_any & next_key SAFETY contracts.
+/// UNSAFE: Implementations MUST follow any_get_slot & next_key SAFETY contracts.
 pub unsafe trait AnyContainer: Any + Sync + Send {
     /// Path of container shared for all items in the container.
     fn container_path(&self) -> Path;
@@ -89,17 +89,17 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
 
     /// Implementations should have #[inline(always)]
     /// SAFETY: Bijection between keys and slots MUST be enforced.
-    fn get_slot_any(&self, key: Key) -> Option<AnyUnsafeSlot>;
+    fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot>;
 
     /// None if there is no locality for given type under given key.
-    fn get_locality_any(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnyContainerLocality>;
+    fn any_get_locality(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnyContainerLocality>;
 
     /// Err if:
     /// - no more place in locality
     /// - type is unknown
     /// - locality is undefined
     /// - type mismatch
-    fn fill_slot_any(
+    fn any_fill_slot(
         &mut self,
         key: &dyn LocalityPath,
         item: Box<dyn Any>,
@@ -107,11 +107,18 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
 
     /// Fills some locality under given key, or enclosing locality, for given type.
     /// None if there is no locality for given type under given key.
-    fn fill_locality_any(&mut self, key: &dyn LocalityPath, ty: TypeId) -> Option<LocalityKey>;
+    fn any_fill_locality(&mut self, key: &dyn LocalityPath, ty: TypeId) -> Option<LocalityKey>;
 
     /// Panics if item is edgeless referenced.
     /// Caller should properly dispose of the edges.
     fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>;
+
+    fn access_mut(&mut self) -> MutAccess<Self>
+    where
+        Self: Sized,
+    {
+        MutAccess::new(self)
+    }
 
     fn access_add(&mut self) -> Add<'_, Self>
     where
@@ -125,12 +132,5 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
         Self: Sized,
     {
         Remove::new(self)
-    }
-
-    fn access_mut(&mut self) -> MutAccess<Self>
-    where
-        Self: Sized,
-    {
-        MutAccess::new(self)
     }
 }

@@ -246,7 +246,7 @@ mod tests {
         let item = 42;
         let key = container.exclusive().add(&SpaceId(item), item).unwrap();
 
-        container.exclusive().unfill_slot_any(key.any());
+        container.exclusive().unany_fill_slot(key.any());
         assert!(container.get_slot(key.into()).is_none());
     }
 }
