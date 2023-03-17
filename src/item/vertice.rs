@@ -3,6 +3,7 @@ use auto_enums::auto_enum;
 use std::ops::{Deref, DerefMut};
 
 /// T:E --> T
+/// *   --> T
 #[derive(Debug)]
 pub struct Vertice<T: Sync + Send + 'static, E: Sync + Send + 'static = ()> {
     inner: T,
@@ -46,8 +47,8 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Vertice<T, E> {
         data
     }
 
-    pub fn sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.sources.iter().map(|source| source.borrow())
+    pub fn sources(&self) -> &[Key<Owned>] {
+        &self.sources
     }
 
     pub fn drains(&self) -> &[(E, Key<Owned, Self>)] {
@@ -57,6 +58,12 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Vertice<T, E> {
     pub fn drains_mut(&mut self) -> impl Iterator<Item = (&mut E, Key<Ref<'_>, Self>)> + '_ {
         self.drains
             .iter_mut()
+            .map(|(data, drain)| (data, drain.borrow()))
+    }
+
+    pub fn get_drain_mut(&mut self, index: usize) -> Option<(&mut E, Key<Ref<'_>, Self>)> {
+        self.drains
+            .get_mut(index)
             .map(|(data, drain)| (data, drain.borrow()))
     }
 }
