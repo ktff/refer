@@ -13,7 +13,7 @@ impl<'a, C: AnyContainer + ?Sized> SubjectPermit<'a, C> {
     ) -> (SlotPermit<'a, Mut, K, T, C>, Self) {
         let key = subject.any().ptr();
         // SAFETY: We ensure in the rest of this struct that this key is not accessed again.
-        let slot = unsafe { permit.unsafe_split(|permit| permit.slot(subject)) };
+        let slot = unsafe { permit.unsafe_split(|permit| permit.key(subject)) };
         (
             slot,
             Self {
@@ -36,7 +36,7 @@ impl<'a, C: AnyContainer + ?Sized> SubjectPermit<'a, C> {
             None
         } else {
             // SAFETY: We just checked that the key is not splitted.
-            Some(self.permit.borrow_mut().slot(key))
+            Some(self.permit.borrow_mut().key(key))
         }
     }
 }

@@ -24,7 +24,7 @@ impl<'a, C: ?Sized> SlotSplitPermit<'a, C> {
     {
         if self.splitted.insert(key.any().ptr()) {
             // SAFETY: We just checked that the key is not splitted.
-            Some(unsafe { self.permit.unsafe_split(|permit| permit.slot(key)) })
+            Some(unsafe { self.permit.unsafe_split(|permit| permit.key(key)) })
         } else {
             None
         }

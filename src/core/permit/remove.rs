@@ -81,7 +81,7 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
     {
         // Standalone check
         if T::IS_STANDALONE {
-            if self.access().slot(key).get()?.has_owners() {
+            if self.access().key(key).get()?.has_owners() {
                 return Some(false);
             }
         }
@@ -112,7 +112,7 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
         remove: &mut Vec<Key>,
     ) {
         for edge in edges {
-            if let Some(mut object) = self.access_mut().slot(edge.object.ptr()).get_dyn() {
+            if let Some(mut object) = self.access_mut().key(edge.object.ptr()).get_dyn() {
                 let (object_key, rev_edge) = edge.reverse(subject);
                 match object.remove_edge(object_key, rev_edge) {
                     Ok(subject) => std::mem::forget(subject),

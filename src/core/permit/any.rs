@@ -51,11 +51,11 @@ impl<'a, R, C: AnyContainer + ?Sized> AnyPermit<'a, R, C> {
         TypePermit::new(self)
     }
 
-    pub fn slot<K, T: core::DynItem + ?Sized>(self, key: Key<K, T>) -> SlotPermit<'a, R, K, T, C>
+    pub fn key<K, T: core::DynItem + ?Sized>(self, key: Key<K, T>) -> SlotPermit<'a, R, K, T, C>
     where
         C: AnyContainer,
     {
-        self.ty().slot(key)
+        self.ty().key(key)
     }
 
     /// Iterates over valid slot permit of type in ascending order.
@@ -68,7 +68,7 @@ impl<'a, R, C: AnyContainer + ?Sized> AnyPermit<'a, R, C> {
         })
         .map(move |key| {
             // SAFETY: First-next iteration ensures that we don't access the same slot twice.
-            unsafe { self.unsafe_split(|permit| permit.slot(key.assume())) }
+            unsafe { self.unsafe_split(|permit| permit.key(key.assume())) }
         })
     }
 
@@ -83,7 +83,7 @@ impl<'a, R, C: AnyContainer + ?Sized> AnyPermit<'a, R, C> {
         })
         .map(move |key| {
             // SAFETY: First-next iteration ensures that we don't access the same slot twice.
-            unsafe { self.unsafe_split(|permit| permit.slot(key)) }
+            unsafe { self.unsafe_split(|permit| permit.key(key)) }
         })
     }
 
@@ -108,7 +108,7 @@ impl<'a, R, C: AnyContainer + ?Sized> AnyPermit<'a, R, C> {
             None
         } else {
             // SAFETY: We just checked that a != b.
-            Some(unsafe { (self.unsafe_split(|permit| permit.slot(a)), self.slot(b)) })
+            Some(unsafe { (self.unsafe_split(|permit| permit.key(a)), self.key(b)) })
         }
     }
 }

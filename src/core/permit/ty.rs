@@ -31,7 +31,7 @@ impl<'a, R, T: core::DynItem + ?Sized, C: AnyContainer + ?Sized> TypePermit<'a, 
         self.permit.access()
     }
 
-    pub fn slot<K>(self, key: Key<K, T>) -> SlotPermit<'a, R, K, T, C> {
+    pub fn key<K>(self, key: Key<K, T>) -> SlotPermit<'a, R, K, T, C> {
         SlotPermit::new(self, key)
     }
 }
@@ -97,8 +97,8 @@ impl<'a, R, T: core::Item, C: Container<T> + ?Sized> TypePermit<'a, T, R, C> {
             // SAFETY: We've checked that a != b so it's safe to split.
             Some(unsafe {
                 (
-                    self.permit.unsafe_split(|permit| permit.slot(a)),
-                    self.slot(b),
+                    self.permit.unsafe_split(|permit| permit.key(a)),
+                    self.key(b),
                 )
             })
         }

@@ -1,3 +1,4 @@
+pub mod access;
 mod add;
 mod any;
 mod path;
@@ -50,6 +51,7 @@ impl<R> Permit<R> {
         }
     }
 
+    // TODO: Restrict this
     pub fn access(&self) -> Self {
         Self {
             _marker: PhantomData,

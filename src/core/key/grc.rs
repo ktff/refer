@@ -30,7 +30,7 @@ impl<T: DynItem + ?Sized> Grc<T> {
     pub fn release_dyn<C: AnyContainer>(self, access: AnyPermit<permit::Mut, C>) {
         // SAFETY: Key is valid until we release Key<Owned> in self.
         let key = unsafe { Key::<Ref>::new_ref(self.index()) };
-        access.slot(key).get_dyn().release(self.any());
+        access.key(key).get_dyn().release(self.any());
     }
 
     /// Callers should make sure that the key is properly disposed of, else T will leak.
