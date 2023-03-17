@@ -9,8 +9,8 @@ use std::{marker::Unsize, ops::Deref};
 pub struct Grc<T: DynItem + ?Sized = dyn AnyItem>(Key<Owned, T>);
 
 impl<T: DynItem + ?Sized> Grc<T> {
-    /// Key should come from StandaloneItem.
-    pub(in crate::core) fn new(key: Key<Owned, T>) -> Self {
+    /// UNSAFE: Key should come from StandaloneItem, or equivalent.
+    pub unsafe fn new(key: Key<Owned, T>) -> Self {
         Self(key)
     }
 

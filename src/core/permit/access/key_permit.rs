@@ -29,26 +29,48 @@ impl Default for Keys {
 
 pub trait KeyPermit {
     type State: Clone;
+
+    fn allowed<K: Clone, T: DynItem + ?Sized>(state: &Self::State, key: Key<K, T>) -> bool;
 }
 
 impl KeyPermit for All {
     type State = ();
+
+    fn allowed<K: Clone, T: DynItem + ?Sized>(_: &Self::State, _: Key<K, T>) -> bool {
+        true
+    }
 }
 
 impl KeyPermit for Path {
     type State = Path;
+
+    fn allowed<K: Clone, T: DynItem + ?Sized>(state: &Self::State, key: Key<K, T>) -> bool {
+        state.contains(key.path())
+    }
 }
 
 impl<K: Clone, T: DynItem + ?Sized> KeyPermit for Key<K, T> {
     type State = Key<K, T>;
+
+    fn allowed<K2: Clone, T2: DynItem + ?Sized>(state: &Self::State, key: Key<K2, T2>) -> bool {
+        *state == key
+    }
 }
 
 impl KeyPermit for Keys {
     type State = Keys;
+
+    fn allowed<K: Clone, T: DynItem + ?Sized>(state: &Self::State, key: Key<K, T>) -> bool {
+        state.contains(key)
+    }
 }
 
 impl<T: KeyPermit> KeyPermit for Not<T> {
     type State = T::State;
+
+    fn allowed<K: Clone, T2: DynItem + ?Sized>(state: &Self::State, key: Key<K, T2>) -> bool {
+        !T::allowed(state, key)
+    }
 }
 
 pub trait PathPermit<C: AnyContainer + ?Sized>: KeyPermit + 'static {

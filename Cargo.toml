@@ -1,28 +1,30 @@
 [package]
-name = "refer"
-version = "0.2.0"
 authors = ["Kruno Tomola Fabro"]
-edition = "2021"
-publish = false
-description = "A foundational library for building graphs out of structs"
-keywords = ["graph", "container", "reference", "management"]
 categories = ["data-structures", "memory-management"]
-readme = "README.md"
+description = "A foundational library for building graphs out of structs"
+edition = "2021"
+keywords = ["graph", "container", "reference", "management"]
 license = "MIT"
+name = "refer"
+publish = false
+readme = "README.md"
 repository = "https://github.com/ktff/refer"
+version = "0.2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-log = "0.4.17"
+auto_enums = {version = "0.8", optional = true}
 getset = "0.1.2"
-modular-bitfield = { version = "0.11.2", optional = true }
+log = "0.4.17"
+modular-bitfield = {version = "0.11.2", optional = true}
 
 [dev-dependencies]
 rand = "*"
 
 [features]
-default = ["base_u64", "shard"]
-base_u64 = []
 base_u128 = []
+base_u64 = []
+default = ["base_u64", "shard", "items"]
+items = ["auto_enums"]
 shard = ["modular-bitfield"]

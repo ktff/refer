@@ -118,7 +118,8 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
                 let (object_key, rev_edge) = edge.reverse(subject);
                 match object.remove_edge(object_key, rev_edge) {
                     Ok(subject) => std::mem::forget(subject),
-                    Err(object_key) => {
+                    Err((present, object_key)) => {
+                        assert_eq!(present, Found::Yes);
                         remove.push(object_key.ptr());
                         std::mem::forget(object_key);
                     }

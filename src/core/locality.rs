@@ -1,3 +1,5 @@
+use crate::core::Found;
+
 use super::{
     permit, DrainItem, DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath,
     Owned, PartialEdge, Path, Ref, Slot, StandaloneItem,
@@ -71,6 +73,17 @@ impl<'a, K: LocalityPath + Copy, D: ?Sized, A: ?Sized> LocalityRef<'a, K, D, A> 
     }
 }
 
+impl<'a, T: DynItem + ?Sized, D: ?Sized, A: ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, D, A> {
+    /// UNSAFE: This isn't unsafe per se since safety checks will still be made, but they can panic if
+    /// caller allows for this key to outlive this T.
+    ///
+    /// Callers should also forget this Key<Owned> when they don't need to guarantee that T exists through it anymore.
+    #[must_use]
+    pub unsafe fn owned_key(&self) -> Key<Owned, T> {
+        Key::new_owned(self.path.index())
+    }
+}
+
 impl<'a, T: Item> ItemLocality<'a, T> {
     /// Adds drain edge to drain.
     /// UNSAFE: Caller must ensure to add returned key to this(source) Item edges as PartialEdge {object:key,side:Side::Source}.
@@ -79,8 +92,8 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         &self,
         drain: &mut Slot<permit::Mut, D>,
     ) -> Key<Owned, D> {
-        let source = Key::<Owned, T>::new_owned(self.path.index());
-        drain.add_drain_edge(source)
+        drain.localized(|item, locality| item.add_drain_edge(locality, self.owned_key()));
+        drain.locality().owned_key()
     }
 
     /// Adds drain edge to drain.
@@ -90,10 +103,11 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         &self,
         drain: &mut DynSlot<permit::Mut, D>,
     ) -> Option<Key<Owned, D>> {
-        let source = Key::<Owned, T>::new_owned(self.path.index());
         drain
-            .add_drain_edge(source)
-            .map(Key::assume)
+            .any_localized(|item, locality| {
+                item.any_add_drain_edge(locality, self.owned_key().any())
+            })
+            .map(|()| drain.locality().owned_key().assume())
             .map_err(std::mem::forget)
             .ok()
     }
@@ -126,7 +140,10 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         object
             .try_remove_edge(object_key, edge)
             .map(|subject_key| std::mem::forget(subject_key))
-            .map_err(|object_key| subject.object(object_key))
+            .map_err(|(present, object_key)| {
+                assert_eq!(present, Found::Yes);
+                subject.object(object_key)
+            })
     }
 
     /// Removes edge from object.
@@ -144,7 +161,10 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         object
             .remove_edge(object_key, edge)
             .map(|subject_key| std::mem::forget(subject_key))
-            .map_err(|object_key| subject.object(object_key))
+            .map_err(|(present, object_key)| {
+                assert_eq!(present, Found::Yes);
+                subject.object(object_key)
+            })
     }
 
     pub fn any(self) -> AnyItemLocality<'a> {

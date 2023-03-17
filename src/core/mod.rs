@@ -26,6 +26,10 @@ pub type Access<'a, C, R = permit::Ref, T = permit::All, K = permit::All> =
 pub type MutAccess<'a, C> = Access<'a, C, permit::Mut>;
 pub type TypeAccess<'a, C, T> = Access<'a, C, permit::Ref, T>;
 pub type MutTypeAccess<'a, C, T> = Access<'a, C, permit::Mut, T>;
+pub type ObjectAccess<'a, C, T> = Access<'a, C, permit::Mut, T, permit::Not<Key<Ptr, T>>>;
+
+pub type RefSlot<'a, T> = Slot<'a, permit::Ref, T>;
+pub type MutSlot<'a, T> = Slot<'a, permit::Mut, T>;
 
 //************************************* CONVENIENT ACCESS ************************************//
 

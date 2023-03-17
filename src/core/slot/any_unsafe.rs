@@ -1,7 +1,10 @@
 use crate::core::{AnyItem, AnyItemLocality, DynItem, Item};
 use getset::CopyGetters;
-use log::*;
-use std::{any::TypeId, cell::SyncUnsafeCell};
+use std::{
+    any::TypeId,
+    cell::SyncUnsafeCell,
+    ptr::{DynMetadata, Pointee},
+};
 
 use super::UnsafeSlot;
 
@@ -22,20 +25,7 @@ impl<'a> AnyUnsafeSlot<'a> {
     }
 
     pub fn metadata<T: DynItem + ?Sized>(&self) -> Option<T::Metadata> {
-        let metadata = self.item.get().trait_metadata(TypeId::of::<T>())?;
-
-        if let Some(&metadata) = metadata.downcast_ref::<T::Metadata>() {
-            Some(metadata)
-        } else {
-            error!(
-                "Item {:?} returned unexpected metadata for type {}. Expected: {}, got: {:?}",
-                self.item.get().type_info(),
-                std::any::type_name::<T>(),
-                std::any::type_name::<T::Metadata>(),
-                metadata.type_id(),
-            );
-            panic!("Metadata type mismatch");
-        }
+        PointeeMetadata::<T::Metadata>::any_metadata(self, TypeId::of::<T>())
     }
 
     pub fn downcast<T: Item>(self) -> Option<UnsafeSlot<'a, T>> {
@@ -72,5 +62,40 @@ impl<'a> std::ops::Deref for AnyUnsafeSlot<'a> {
 
     fn deref(&self) -> &Self::Target {
         &self.locality
+    }
+}
+
+trait PointeeMetadata<M> {
+    fn any_metadata(&self, type_id: TypeId) -> Option<M>;
+}
+
+impl<'a, M> PointeeMetadata<M> for AnyUnsafeSlot<'a> {
+    default fn any_metadata(&self, _: TypeId) -> Option<M> {
+        None
+    }
+}
+
+impl<'a, T: Pointee<Metadata = DynMetadata<T>> + DynItem + ?Sized> PointeeMetadata<DynMetadata<T>>
+    for AnyUnsafeSlot<'a>
+{
+    default fn any_metadata(&self, type_id: TypeId) -> Option<DynMetadata<T>> {
+        let metadata = self.item.get().trait_metadata(type_id)?;
+        metadata.downcast::<T>()
+    }
+}
+
+impl<'a> PointeeMetadata<DynMetadata<dyn AnyItem>> for AnyUnsafeSlot<'a> {
+    fn any_metadata(&self, _: TypeId) -> Option<DynMetadata<dyn AnyItem>> {
+        Some(std::ptr::metadata(self.item.get()))
+    }
+}
+
+impl<'a> PointeeMetadata<()> for AnyUnsafeSlot<'a> {
+    fn any_metadata(&self, type_id: TypeId) -> Option<()> {
+        if type_id == self.item_type_id() {
+            Some(())
+        } else {
+            None
+        }
     }
 }

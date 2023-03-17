@@ -45,7 +45,7 @@ pub struct Owned;
 #[repr(transparent)]
 pub struct Key<K = Ptr, T: DynItem + ?Sized = dyn AnyItem>(Index, PhantomData<(&'static T, K)>);
 
-impl<T: Item> Key<Owned, T> {
+impl<T: DynItem + ?Sized> Key<Owned, T> {
     /// UNSAFE: This isn't unsafe per se since safety checks will still be made, but they can panic if
     /// caller allows for this key to outlive Item on index.
     ///

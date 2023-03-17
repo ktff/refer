@@ -78,8 +78,10 @@
 // pub mod container;
 #[macro_use]
 pub mod core;
-// #[macro_use]
-// pub mod item;
+
+#[macro_use]
+#[cfg(feature = "items")]
+pub mod item;
 // // pub mod model;
 // pub mod shell;
 // Generic things

@@ -2,7 +2,7 @@
 // pub mod data;
 // pub mod edge;
 // pub mod tagged_edge;
-// pub mod vertice;
+pub mod vertice;
 
 // TODO: Versioned Item. Versioned<I:Item>{version: Version, state: State<I>, item: I}
 // TODO  enum State<I> { Active, Removed(Version), Replaced(Key<Versioned<I>>)}
@@ -50,53 +50,41 @@ macro_rules! impl_item {
         impl $crate::core::Item for $ty {
             type Alloc = std::alloc::Global;
             type LocalityData = ();
-            type Iter<'a> = std::iter::Empty<$crate::core::AnyRef>;
+            type Edges<'a> = std::iter::Empty<
+                $crate::core::PartialEdge<$crate::core::Key<$crate::core::Ref<'a>>>,
+            >;
+            const TRAITS: $crate::core::ItemTraits<$ty> = &[];
 
-            fn iter_references(&self, _: $crate::core::SlotLocality<'_, Self>) -> Self::Iter<'_> {
+            fn edges(
+                &self,
+                _: $crate::core::ItemLocality<'_, Self>,
+                _: Option<$crate::core::Side>,
+            ) -> Self::Edges<'_> {
                 std::iter::empty()
             }
 
-            fn remove_reference(
+            #[must_use]
+            fn try_remove_edge<T: $crate::core::DynItem + ?Sized>(
                 &mut self,
-                _: $crate::core::SlotLocality<'_, Self>,
-                _: $crate::core::AnyKey,
-            ) -> bool {
-                false
+                _: $crate::core::ItemLocality<'_, Self>,
+                this: $crate::core::Key<$crate::core::Owned, Self>,
+                _: $crate::core::PartialEdge<$crate::core::Key<$crate::core::Ptr, T>>,
+            ) -> Result<
+                $crate::core::Key<$crate::core::Owned, T>,
+                (
+                    $crate::core::Found,
+                    $crate::core::Key<$crate::core::Owned, Self>,
+                ),
+            > {
+                Err(($crate::core::Found::No, this))
             }
 
-            fn replace_reference(
-                &mut self,
-                _: $crate::core::SlotLocality<'_, Self>,
-                _: $crate::core::AnyKey,
-                _: $crate::core::AnyKey,
-            ) {
+            fn localized_drop(
+                self,
+                _: $crate::core::ItemLocality<'_, Self>,
+            ) -> Vec<$crate::core::PartialEdge<$crate::core::Key<$crate::core::Owned>>> {
+                Vec::new()
             }
-
-            fn duplicate_reference(
-                &mut self,
-                _: $crate::core::SlotLocality<'_, Self>,
-                _: $crate::core::AnyKey,
-                _: $crate::core::AnyKey,
-            ) -> Option<$crate::core::Path> {
-                None
-            }
-
-            fn duplicate(
-                &self,
-                _: $crate::core::SlotLocality<'_, Self>,
-                _: $crate::core::SlotLocality<'_, Self>,
-            ) -> Option<Self> {
-                Some(self.clone())
-            }
-
-            fn displace(
-                &mut self,
-                _: $crate::core::SlotLocality<'_, Self>,
-                _: Option<$crate::core::SlotLocality<'_, Self>>,
-            ) {
-            }
-
-            item_traits_method!($ty: dyn std::fmt::Debug);
         }
     };
 }

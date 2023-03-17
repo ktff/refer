@@ -110,14 +110,17 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
                 //         valid for it's lifetime.
                 let source = unsafe { Key::<_, T>::new_owned(subject.key().index()) };
                 let mut drain = drain.get_dyn();
-                let excess_key = match drain.add_drain_edge(source){
-                    Ok (key) => key,
+                let excess_key = match drain.any_localized(|item, locality| {
+                    item.any_add_drain_edge(locality, source.any())
+                }){
+                    // SAFETY: This is the other part of edge we just added.
+                    Ok (()) => unsafe{Grc::new(drain.locality().owned_key())},
                     Err(_) => panic!(
                         "Invalid item edge: subject {} -> object {}, object not drain, but owned reference of him exists.",
                         subject.key(), drain.key(),
                     )
                 };
-                drain.release(Grc::new(excess_key));
+                drain.release(excess_key);
             } else {
                 // We skip self references
             }

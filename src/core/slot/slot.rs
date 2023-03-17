@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyItem, DrainItem, DynItem, DynSlot, Grc, Item, ItemLocality, Key, Owned, PartialEdge, Ptr,
-    Ref, Side, StandaloneItem, UnsafeSlot,
+    AnyItem, DynItem, DynSlot, Found, Grc, Item, ItemLocality, Key, Owned, PartialEdge, Ptr, Ref,
+    Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -89,15 +89,6 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
         func(self.item_mut(), locality)
     }
 
-    /// Returns with key to self.
-    #[must_use]
-    pub fn add_drain_edge<F: DynItem + ?Sized>(&mut self, source: Key<Owned, F>) -> Key<Owned, T>
-    where
-        T: DrainItem,
-    {
-        self.localized(|item, locality| item.add_drain_edge(locality, source.any()))
-    }
-
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
@@ -105,7 +96,7 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
         &mut self,
         this: Key<Owned, T>,
         edge: PartialEdge<Key<Ptr, F>>,
-    ) -> Result<Key<Owned, F>, Key<Owned, T>> {
+    ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
         self.localized(|item, locality| item.try_remove_edge(locality, this, edge))
     }
 }
@@ -116,11 +107,11 @@ impl<'a, T: StandaloneItem> Slot<'a, permit::Mut, T> {
     /// - Using it to construct an Item that will be added to a container.
     /// - Calling release() on Grc.
     pub fn own(&mut self) -> Grc<T> {
-        self.localized(|item, locality| Grc::new(item.inc_owners(locality)))
+        self.localized(|item, locality| item.inc_owners(locality))
     }
 
     pub fn release(&mut self, grc: Grc<T>) {
-        self.localized(|item, locality| item.dec_owners(locality, grc.into_owned_key()))
+        self.localized(|item, locality| item.dec_owners(locality, grc))
     }
 
     #[must_use]

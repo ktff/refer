@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Grc, Item, Key, Owned, PartialEdge, Ptr, Ref,
-    Side,
+    AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Found, Grc, Item, Key, Owned, PartialEdge,
+    Ptr, Ref, Side,
 };
 use log::*;
 use std::{
@@ -203,18 +203,6 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
         func(self.any_item_mut(), locality)
     }
 
-    /// Ok with key to self.
-    /// Err with provided source.
-    /// Err if self isn't drain item so it wasn't added.
-    #[must_use]
-    pub fn add_drain_edge<F: DynItem + ?Sized>(
-        &mut self,
-        source: Key<Owned, F>,
-    ) -> Result<Key<Owned>, Key<Owned, F>> {
-        self.any_localized(|item, locality| item.any_add_drain_edge(locality, source.any()))
-            .map_err(|source| source.assume())
-    }
-
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
@@ -222,12 +210,12 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
         &mut self,
         this: Key<Owned, T>,
         edge: PartialEdge<Key<Ptr, F>>,
-    ) -> Result<Key<Owned, F>, Key<Owned, T>> {
+    ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
         self.any_localized(|item, locality| {
             item.any_remove_edge(locality, this.any(), edge.map(|key| key.any()))
         })
         .map(Key::assume)
-        .map_err(Key::assume)
+        .map_err(|(present, key)| (present, key.assume()))
     }
 
     /// Caller should properly dispose of Grc once done with it.
@@ -237,16 +225,11 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
     ///
     /// None if the item doesn't support ownership.
     pub fn own(&mut self) -> Option<Grc<T>> {
-        self.any_localized(|item, locality| {
-            item.any_inc_owners(locality)
-                .map(|key| Grc::new(key.assume()))
-        })
+        self.any_localized(|item, locality| item.any_inc_owners(locality).map(|grc| grc.assume()))
     }
 
     pub fn release(&mut self, grc: Grc<T>) {
-        self.any_localized(|item, locality| {
-            item.any_dec_owners(locality, grc.into_owned_key().any())
-        })
+        self.any_localized(|item, locality| item.any_dec_owners(locality, grc.any()))
     }
 }
 
