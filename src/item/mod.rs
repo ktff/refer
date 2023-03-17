@@ -1,4 +1,4 @@
-// pub mod attach;
+pub mod addon;
 pub mod data;
 // pub mod edge;
 // pub mod tagged_edge;

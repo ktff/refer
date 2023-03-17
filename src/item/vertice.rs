@@ -2,8 +2,8 @@ use crate::core::*;
 use auto_enums::auto_enum;
 use std::ops::{Deref, DerefMut};
 
-/// T:E --> T
-/// *   --> T
+/// T: *E--> T
+/// *    --> T
 #[derive(Debug)]
 pub struct Vertice<T: Sync + Send + 'static, E: Sync + Send + 'static = ()> {
     inner: T,

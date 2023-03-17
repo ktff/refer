@@ -17,6 +17,16 @@ pub enum Found {
     No,
 }
 
+impl Found {
+    pub fn found(found: bool) -> Self {
+        if found {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
+}
+
 /// Structure whose lifetime and edges can be managed by a container/model.
 pub trait Item: Sized + Any + Sync + Send {
     /// Allocator used by item.
