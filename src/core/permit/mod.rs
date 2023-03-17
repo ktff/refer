@@ -33,8 +33,10 @@ impl<R> Permit<R> {
         }
     }
 
-    // TODO: Restrict this
-    pub fn access(&self) -> Self {
+    /// UNSAFE: Caller must ensure one of:
+    /// - permits represent disjoint set of keys
+    /// - self is exclusively borrowed by the other
+    pub unsafe fn access(&self) -> Self {
         Self {
             _marker: PhantomData,
         }

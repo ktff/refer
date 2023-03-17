@@ -19,7 +19,8 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
 
     pub fn borrow_mut(&mut self) -> RemovePermit<'_, C> {
         RemovePermit {
-            permit: self.permit.access(),
+            // SAFETY: We borrowing exclusive access to self.
+            permit: unsafe { self.permit.access() },
             container: self.container,
         }
     }
@@ -66,7 +67,8 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
                 .iter_mut(range)?
                 .map(move |container| RemovePermit {
                     container,
-                    permit: permit.access(),
+                    // SAFETY: Access is split into disjoint containers.
+                    permit: unsafe { permit.access() },
                 }),
         )
     }

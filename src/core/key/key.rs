@@ -82,7 +82,6 @@ impl Key {
 }
 
 impl<P> Key<P> {
-    // TODO: Assume only on Ptr?
     /// Make assumption that this is Key for T.
     pub fn assume<T: DynItem + ?Sized>(self) -> Key<P, T> {
         Key(self.0, PhantomData)

@@ -331,7 +331,8 @@ impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> AccessPermit<'a,
     pub fn borrow_mut(&mut self) -> AccessPermit<'_, C, Mut, T, K> {
         AccessPermit {
             container: self.container,
-            permit: self.permit.access().into(),
+            // SAFETY: We are borrowing exclusive access to self.
+            permit: unsafe { self.permit.access() }.into(),
             type_state: self.type_state.clone(),
             key_state: self.key_state.clone(),
             _marker: PhantomData,
@@ -365,7 +366,7 @@ impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Clone
             container: self.container,
             type_state: self.type_state.clone(),
             key_state: self.key_state.clone(),
-            permit: self.permit.access(),
+            permit: self.permit.clone(),
             _marker: PhantomData,
         }
     }

@@ -21,7 +21,8 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
 
     pub fn borrow_mut(&mut self) -> AddPermit<'_, C> {
         AddPermit {
-            permit: self.permit.access(),
+            // SAFETY: We are borrowing exclusive access to self.
+            permit: unsafe { self.permit.access() },
             container: self.container,
         }
     }
@@ -65,7 +66,8 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
         let Self { container, permit } = self;
         Some(container.iter_mut(range)?.map(move |container| AddPermit {
             container,
-            permit: permit.access(),
+            // SAFETY: Access is split into disjoint containers.
+            permit: unsafe { permit.access() },
         }))
     }
 
