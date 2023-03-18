@@ -73,6 +73,11 @@ impl<T: Item> Key<Ptr, T> {
     pub fn new_ptr(index: Index) -> Self {
         Key(index, PhantomData)
     }
+
+    /// UNSAFE: Caller must guarantee that it T will be alive for 'a lifetime.
+    pub unsafe fn extend<'a>(self) -> Key<Ref<'a>, T> {
+        Key(self.0, PhantomData)
+    }
 }
 
 impl Key {

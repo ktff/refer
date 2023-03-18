@@ -5,7 +5,7 @@ use super::{
     Owned, PartialEdge, Path, Ref, Slot, StandaloneItem,
 };
 use getset::{CopyGetters, Getters};
-use std::any::Any;
+use std::{any::Any, num::NonZeroUsize};
 
 #[derive(Getters, Debug)]
 #[getset(get = "pub")]
@@ -38,6 +38,13 @@ impl<T: Item> Locality<T> {
 
     pub fn item_locality<'a>(&'a self, key: Key<Ref<'a>, T>) -> ItemLocality<'a, T> {
         ItemLocality::new(key, &self.data, &self.allocator)
+    }
+
+    pub fn index_locality<'a>(&'a self, index: NonZeroUsize) -> ItemLocality<'a, T> {
+        let key = self.locality_key().key_of::<T>(index);
+        // SAFETY: This is safe because locality does exist.
+        let key: Key<Ref<'a>, T> = unsafe { Key::new_ref(key.index()) };
+        self.item_locality(key)
     }
 
     pub fn container_locality(&self) -> ContainerLocality<'_, T> {

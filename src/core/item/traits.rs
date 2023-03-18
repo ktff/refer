@@ -58,6 +58,11 @@ impl<I: DynItem + ?Sized> ItemTrait<I> {
             None
         }
     }
+
+    pub fn erase_type(traits: ItemTraits<I>) -> ItemTraits {
+        // SAFETY: They have the same layout
+        unsafe { std::mem::transmute(traits) }
+    }
 }
 
 // Impl Copy & Clone

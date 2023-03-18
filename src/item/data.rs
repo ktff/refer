@@ -2,7 +2,7 @@ use crate::core::*;
 use auto_enums::auto_enum;
 use std::ops::{Deref, DerefMut};
 
-/// *   --> Data<T>
+/// Item --> Data<T>
 #[derive(Debug)]
 pub struct Data<T: Sync + Send + 'static> {
     inner: T,

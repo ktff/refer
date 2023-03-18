@@ -83,37 +83,39 @@ macro_rules! leaf_container {
         }
     };
     (impl Container<$t:ty>) => {
-        type SlotIter<'a> =  impl Iterator<Item = (Key<$t>, UnsafeSlot<'a, $t>)> + Send
+        type SlotIter<'a> =  impl Iterator<Item = UnsafeSlot<'a, $t>> + Send
             where Self:'a;
 
         #[inline(always)]
-        fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t>> {
+        fn get_slot(&self, key: Key<Ptr,$t>) -> Option<UnsafeSlot<$t>> {
             let index = self.locality().locality_key().index_of(key);
             self.get(index)
         }
 
-        fn get_locality(&self, _: &impl LocalityPath) -> Option<SlotLocality<$t>> {
-            Some(self.locality().item_locality())
+        fn get_locality(&self, _: &impl LocalityPath) -> Option<ContainerLocality<$t>> {
+            Some(self.locality().container_locality())
         }
 
         fn iter_slot(&self, path: KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
             let leaf_path=*self.locality().locality_key();
             let range =leaf_path.range_of(path.path())?;
-            Some(self.iter(range).map(move |(index,slot)|(leaf_path.key_of(index),slot)))
+            Some(self.iter(range))
         }
 
-        fn fill_slot(&mut self, _: &impl LocalityPath, item: $t) -> std::result::Result<Key<$t>, $t> {
-            self.fill(item).map(|index|self.locality().locality_key().key_of(index))
+        fn fill_slot(&mut self, _: &impl LocalityPath, item: $t) -> std::result::Result<Key<Ref,$t>, $t> {
+            // SAFETY: Item was just added to container.
+            self.fill(item).map(|index|unsafe{self.locality().locality_key().key_of(index).extend()})
         }
 
         fn fill_locality(&mut self, _: &impl LocalityPath) -> Option<LocalityKey> {
             Some(*self.locality().locality_key())
         }
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, SlotLocality<$t>)> {
+        fn unfill_slot(&mut self, key: Key<Ptr,$t>) -> Option<($t, ItemLocality<$t>)> {
             let index = self.locality().locality_key().index_of(key);
             self.unfill(index)
-                .map(move |item| (item, self.locality().item_locality()))
+                // SAFETY: Locality is alive for self.
+                .map(move |item| (item, self.locality().item_locality(unsafe{key.extend()})))
         }
     };
     (impl AnyContainer<$t:ty>) => {
@@ -123,33 +125,45 @@ macro_rules! leaf_container {
 
         #[inline(always)]
         fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot>{
-            self.get_slot(Key::new(key.index())).map(|slot| slot.upcast())
+            self.get_slot(key.assume()).map(|slot| slot.any())
         }
 
-        fn any_get_locality(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnySlotLocality>{
+        fn any_get_locality(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnyContainerLocality>{
             if ty == TypeId::of::<$t>() {
-                Some(self.locality.item_locality().upcast())
+                Some(self.locality().container_locality().any())
             } else {
                 None
             }
         }
 
-        fn first_key(&self, key: TypeId) -> Option<Key>{
+        fn first_key(&self, key: TypeId) -> Option<Key<Ref>>{
             if key == TypeId::of::<$t>() {
-                self.first().map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
+                self.first().map(|index| {
+                    let key=self.locality().locality_key().key_of::<$t>(index);
+                    // SAFETY: Key is valid for self.
+                    unsafe{key.extend()}.any()
+                })
             } else {
                 None
             }
         }
 
-        fn next_key(&self, _: TypeId, key: Key) -> Option<Key>{
+        fn next_key(&self, _: TypeId, key: Key) -> Option<Key<Ref>>{
             let index = self.locality().locality_key().index_of(key);
-            self.next(NonZeroUsize::new(index)?).map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
+            self.next(NonZeroUsize::new(index)?).map(|index| {
+                let key=self.locality().locality_key().key_of::<$t>(index);
+                // SAFETY: Key is valid for self.
+                unsafe{key.extend()}.any()
+            })
         }
 
-        fn last_key(&self, key: TypeId) -> Option<Key>{
+        fn last_key(&self, key: TypeId) -> Option<Key<Ref>>{
             if key == TypeId::of::<$t>() {
-                self.last().map(|index| self.locality().locality_key().key_of::<$t>(index).upcast())
+                self.last().map(|index| {
+                    let key=self.locality().locality_key().key_of::<$t>(index);
+                    // SAFETY: Key is valid for self.
+                    unsafe{key.extend()}.any()
+                })
             } else {
                 None
             }
@@ -157,15 +171,17 @@ macro_rules! leaf_container {
 
         fn types(&self) -> std::collections::HashMap<TypeId,ItemTraits>{
             let mut set = std::collections::HashMap::new();
-            set.insert(TypeId::of::<$t>(),<$t as Item>::traits());
+            set.insert(TypeId::of::<$t>(),ItemTrait::erase_type(<$t as Item>::TRAITS));
             set
         }
 
-        fn any_fill_slot(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<Key, String>{
+        fn any_fill_slot(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<Key<Ref>, String>{
             match item.downcast::<$t>() {
                 Ok(item)=>{
                     if let Ok(index)=self.fill(Box::into_inner(item)){
-                        Ok(self.locality().locality_key().key_of::<$t>(index).upcast())
+                        let key=self.locality().locality_key().key_of::<$t>(index);
+                        // SAFETY: Key is valid for self.
+                        Ok(unsafe{key.extend()}.any())
                     } else {
                         Err(format!("No more place in {:?}::{}", self.container_path(),std::any::type_name::<Self>()))
                     }
@@ -185,8 +201,10 @@ macro_rules! leaf_container {
 
         }
 
-        fn unany_fill_slot(&mut self, key: Key){
-            self.unfill_slot(Key::new(key.index()));
+        /// Panics if item is edgeless referenced.
+        fn localized_drop(&mut self, key: Key)-> Option<Vec<PartialEdge<Key<Owned>>>>{
+            let (item,locality)=self.unfill_slot(key.assume())?;
+            Some(item.localized_drop(locality))
         }
     }
 }

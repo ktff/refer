@@ -3,7 +3,7 @@ use auto_enums::auto_enum;
 use std::ops::{Deref, DerefMut};
 
 /// Vertice<T>: *E--> Vertice<T>
-/// *             --> Vertice<T>
+/// Item          --> Vertice<T>
 #[derive(Debug)]
 pub struct Vertice<T: Sync + Send + 'static, E: Sync + Send + 'static = ()> {
     inner: T,
