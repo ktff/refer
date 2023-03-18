@@ -2,7 +2,7 @@ use crate::core::*;
 use auto_enums::auto_enum;
 use std::ops::{Deref, DerefMut};
 
-/// T: n --> T
+/// Addon<T>: n --> D
 #[derive(Debug)]
 pub struct Addon<T: Sync + Send + 'static, const N: usize, D: DynItem + ?Sized> {
     inner: T,

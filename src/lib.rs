@@ -83,6 +83,5 @@ pub mod core;
 #[cfg(feature = "items")]
 pub mod item;
 // // pub mod model;
-// pub mod shell;
 // Generic things
 pub mod util;
