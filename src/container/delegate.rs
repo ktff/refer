@@ -24,12 +24,12 @@ macro_rules! delegate_container {
             }
         }
 
-        impl $crate::core::Container<$t> for $c{
+        unsafe impl $crate::core::Container<$t> for $c{
             $crate::single_type_container!(impl Container<$t>);
         }
 
 
-        impl $crate::core::AnyContainer for $c {
+        unsafe impl $crate::core::AnyContainer for $c {
             $crate::single_type_container!(impl AnyContainer<$t>);
 
             fn container_path(&self) -> Path {
@@ -56,13 +56,13 @@ macro_rules! delegate_container {
                 }
             }
 
-            impl $crate::core::Container<$t> for $c{
+            unsafe impl $crate::core::Container<$t> for $c{
                 $crate::multi_type_container!(impl Container<$t> prefer type);
             }
         )*
 
 
-        impl $crate::core::container::MultiTypeContainer for $c {
+        unsafe impl $crate::core::container::MultiTypeContainer for $c {
             #[inline(always)]
             fn region(&self) -> $crate::core::RegionPath{
                 self.$region
@@ -98,14 +98,14 @@ macro_rules! delegate_container {
             }
         }
 
-        impl $crate::core::AnyContainer for $c {
+        unsafe impl $crate::core::AnyContainer for $c {
             $crate::multi_type_container!(impl AnyContainer);
 
 
             fn types(&self) -> std::collections::HashMap<std::any::TypeId, $crate::core::ItemTraits> {
                 let mut set = std::collections::HashMap::new();
                 $(
-                    set.insert(std::any::TypeId::of::<$t>(),<$t as $crate::core::Item>::traits());
+                    set.insert(std::any::TypeId::of::<$t>(),ItemTrait::erase_type(<$t as $crate::core::Item>::TRAITS));
                 )*
                 set
             }
@@ -150,20 +150,20 @@ mod tests {
     fn allocate_multi_type_item() {
         let mut container = container();
 
-        let key_a = container.fill_slot(&(), 42).unwrap();
-        let key_b = container.fill_slot(&(), true).unwrap();
-        let key_c = container.fill_slot(&(), "Hello").unwrap();
+        let key_a = container.fill_slot(&(), 42).unwrap().ptr();
+        let key_b = container.fill_slot(&(), true).unwrap().ptr();
+        let key_c = container.fill_slot(&(), "Hello").unwrap().ptr();
 
         assert_eq!(
-            container.access_mut().slot(key_a).get().unwrap().item(),
+            container.access_mut().key(key_a).get_try().unwrap().item(),
             &42
         );
         assert_eq!(
-            container.access_mut().slot(key_b).get().unwrap().item(),
+            container.access_mut().key(key_b).get_try().unwrap().item(),
             &true
         );
         assert_eq!(
-            container.access_mut().slot(key_c).get().unwrap().item(),
+            container.access_mut().key(key_c).get_try().unwrap().item(),
             &"Hello"
         );
     }
@@ -172,15 +172,15 @@ mod tests {
     fn get_any() {
         let mut container = container();
 
-        let key_a = container.fill_slot(&(), 42).unwrap();
-        let key_b = container.fill_slot(&(), true).unwrap();
-        let key_c = container.fill_slot(&(), "Hello").unwrap();
+        let key_a = container.fill_slot(&(), 42).unwrap().ptr();
+        let key_b = container.fill_slot(&(), true).unwrap().ptr();
+        let key_c = container.fill_slot(&(), "Hello").unwrap().ptr();
 
         assert_eq!(
             (container
                 .access_mut()
-                .slot(key_a.any())
-                .get_dyn()
+                .key(key_a.any())
+                .get_dyn_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -189,8 +189,8 @@ mod tests {
         assert_eq!(
             (container
                 .access_mut()
-                .slot(key_b.any())
-                .get_dyn()
+                .key(key_b.any())
+                .get_dyn_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -199,8 +199,8 @@ mod tests {
         assert_eq!(
             (container
                 .access_mut()
-                .slot(key_c.any())
-                .get_dyn()
+                .key(key_c.any())
+                .get_dyn_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -227,13 +227,13 @@ mod tests {
         let mut container = single_container();
 
         let item = 42;
-        let key = container.fill_slot(&(), item).unwrap();
+        let key = container.fill_slot(&(), item).unwrap().ptr();
 
         assert_eq!(
-            container.access_mut().slot(key).get().unwrap().item(),
+            container.access_mut().key(key).get_try().unwrap().item(),
             &item
         );
-        let mut iter = container.access_mut().ty::<i32>().on_path().iter().unwrap();
+        let mut iter = container.access_mut().ty::<i32>().into_iter();
         assert_eq!(iter.next().unwrap().item(), &item);
         assert!(iter.next().is_none());
     }
@@ -243,28 +243,19 @@ mod tests {
         let mut container = single_container();
 
         let item = 42;
-        let key = container.fill_slot(&(), item).unwrap();
+        let key = container.fill_slot(&(), item).unwrap().ptr();
 
         assert_eq!(
-            container.access_mut().slot(key).get().unwrap().item(),
+            container.access_mut().key(key).get_try().unwrap().item(),
             &item
         );
 
         assert_eq!(
-            container.unfill_slot(key).map(|(item, _, _)| item),
+            container.unfill_slot(key.ptr()).map(|(item, _)| item),
             Some(item)
         );
 
-        assert!(container.access_mut().slot(key).get().is_err());
-        assert_eq!(
-            container
-                .access_mut()
-                .ty::<i32>()
-                .on_path()
-                .iter()
-                .unwrap()
-                .count(),
-            0
-        );
+        assert!(container.access_mut().key(key).get_try().is_none());
+        assert_eq!(container.access_mut().ty::<i32>().into_iter().count(), 0);
     }
 }

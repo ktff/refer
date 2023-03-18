@@ -42,7 +42,7 @@ macro_rules! single_type_container {
     (impl Container<$t:ty> ) => {
         type SlotIter<'a> = <<Self as $crate::core::container::TypeContainer<$t>>::Sub as $crate::core::container::Container<$t>>::SlotIter<'a>;
 
-        fn get_locality(&self, key: &impl $crate::core::LocalityPath) -> Option<$crate::core::SlotLocality<$t>> {
+        fn get_locality(&self, key: &impl $crate::core::LocalityPath) -> Option<$crate::core::ContainerLocality<$t>> {
             $crate::core::container::TypeContainer::<$t>::get(self)?.get_locality(key)
         }
 
@@ -54,7 +54,7 @@ macro_rules! single_type_container {
             &mut self,
             key: &impl $crate::core::LocalityPath,
             item: $t,
-        ) -> std::result::Result<$crate::core::Key<$t>, $t> {
+        ) -> std::result::Result<$crate::core::Key<Ref,$t>, $t> {
             $crate::core::container::TypeContainer::<$t>::fill(self).fill_slot(key, item)
         }
 
@@ -63,11 +63,11 @@ macro_rules! single_type_container {
         }
 
         #[inline(always)]
-        fn get_slot(&self, key: $crate::core::Key<$t>) -> Option<$crate::core::UnsafeSlot<$t>> {
+        fn get_slot(&self, key: $crate::core::Key<Ptr,$t>) -> Option<$crate::core::UnsafeSlot<$t>> {
             $crate::core::container::TypeContainer::<$t>::get(self)?.get_slot(key)
         }
 
-        fn unfill_slot(&mut self, key: $crate::core::Key<$t>) -> Option<($t, $crate::core::SlotLocality<$t>)> {
+        fn unfill_slot(&mut self, key: $crate::core::Key<Ptr,$t>) -> Option<($t, $crate::core::ItemLocality<$t>)> {
             $crate::core::container::TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
         }
     };
@@ -81,25 +81,25 @@ macro_rules! single_type_container {
             &self,
             path: &dyn $crate::core::LocalityPath,
             ty: std::any::TypeId,
-        ) -> Option<$crate::core::AnySlotLocality> {
+        ) -> Option<$crate::core::AnyContainerLocality> {
             $crate::core::container::TypeContainer::<$t>::get(self)?.any_get_locality(path, ty)
         }
 
-        fn first_key(&self, key: std::any::TypeId) -> Option<$crate::core::Key> {
+        fn first_key(&self, key: std::any::TypeId) -> Option<$crate::core::Key<Ref>> {
             $crate::core::container::TypeContainer::<$t>::get(self)?.first_key(key)
         }
 
-        fn next_key(&self, ty: std::any::TypeId, key: $crate::core::Key) -> Option<$crate::core::Key> {
+        fn next_key(&self, ty: std::any::TypeId, key: $crate::core::Key) -> Option<$crate::core::Key<Ref>> {
             $crate::core::container::TypeContainer::<$t>::get(self)?.next_key(ty, key)
         }
 
-        fn last_key(&self, key: std::any::TypeId) -> Option<$crate::core::Key> {
+        fn last_key(&self, key: std::any::TypeId) -> Option<$crate::core::Key<Ref>> {
             $crate::core::container::TypeContainer::<$t>::get(self)?.last_key(key)
         }
 
         fn types(&self) -> std::collections::HashMap<std::any::TypeId, $crate::core::ItemTraits> {
             let mut set = std::collections::HashMap::new();
-            set.insert(std::any::TypeId::of::<$t>(), <$t as Item>::traits());
+            set.insert(std::any::TypeId::of::<$t>(), $crate::core::ItemTrait::erase_type(<$t as Item>::TRAITS));
             set
         }
 
@@ -107,14 +107,13 @@ macro_rules! single_type_container {
             &mut self,
             path: &dyn $crate::core::LocalityPath,
             item: Box<dyn std::any::Any>,
-        ) -> std::result::Result<$crate::core::Key, String> {
+        ) -> std::result::Result<$crate::core::Key<Ref>, String> {
             if let Some(sub) = $crate::core::container::TypeContainer::<$t>::get_mut(self) {
                 sub.any_fill_slot(path, item)
             } else {
                 Err(format!(
-                    "Context not allocated {:?} on path {:?}",
+                    "Context not allocated {:?}",
                     path,
-                    self.container_path()
                 ))
             }
         }
@@ -127,10 +126,8 @@ macro_rules! single_type_container {
             $crate::core::container::TypeContainer::<$t>::fill(self).any_fill_locality(path, ty)
         }
 
-        fn unany_fill_slot(&mut self, key: $crate::core::Key) {
-            if let Some(container) = $crate::core::container::TypeContainer::<$t>::get_mut(self) {
-                container.unany_fill_slot(key);
-            }
+        fn localized_drop(&mut self, key: $crate::core::Key)-> Option<Vec<PartialEdge<Key<Owned>>>> {
+            $crate::core::container::TypeContainer::<$t>::get_mut(self)?.localized_drop(key)
         }
     };
 }
@@ -140,7 +137,7 @@ macro_rules! multi_type_container {
     (impl base Container<$t:ty> ) => {
         type SlotIter<'a> = <<Self as TypeContainer<$t>>::Sub as Container<$t>>::SlotIter<'a>;
 
-        fn get_locality(&self, key: &impl LocalityPath) -> Option<SlotLocality<$t>> {
+        fn get_locality(&self, key: &impl LocalityPath) -> Option<ContainerLocality<$t>> {
             TypeContainer::<$t>::get(self)?.get_locality(key)
         }
 
@@ -152,7 +149,7 @@ macro_rules! multi_type_container {
             &mut self,
             key: &impl LocalityPath,
             item: $t,
-        ) -> std::result::Result<Key<$t>, $t> {
+        ) -> std::result::Result<Key<Ref,$t>, $t> {
             TypeContainer::<$t>::fill(self).fill_slot(key, item)
         }
 
@@ -165,12 +162,12 @@ macro_rules! multi_type_container {
         $crate::multi_type_container!(impl base Container<$t>);
 
         #[inline(always)]
-        fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t>> {
+        fn get_slot(&self, key: Key<Ptr,$t>) -> Option<UnsafeSlot<$t>> {
             TypeContainer::<$t>::get(self)?.get_slot(key)
         }
 
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, SlotLocality<$t>)> {
+        fn unfill_slot(&mut self, key: Key<Ptr,$t>) -> Option<($t, ItemLocality<$t>)> {
             TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
         }
     };
@@ -203,19 +200,19 @@ macro_rules! multi_type_container {
             self.get_any(key)?.any_get_slot(key)
         }
 
-        fn any_get_locality(&self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<AnySlotLocality> {
+        fn any_get_locality(&self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<AnyContainerLocality> {
             self.get_any_index(self.type_to_index(ty)?)?.any_get_locality(path,ty)
         }
 
-        fn first_key(&self, key: std::any::TypeId) -> Option<Key> {
+        fn first_key(&self, key: std::any::TypeId) -> Option<Key<Ref>> {
             self.get_any_index(self.type_to_index(key)?)?.first_key(key)
         }
 
-        fn next_key(&self, ty: std::any::TypeId, key: Key) -> Option<Key> {
+        fn next_key(&self, ty: std::any::TypeId, key: Key) -> Option<Key<Ref>> {
             self.get_any(key)?.next_key(ty,key)
         }
 
-        fn last_key(&self, key: std::any::TypeId) -> Option<Key> {
+        fn last_key(&self, key: std::any::TypeId) -> Option<Key<Ref>> {
             self.get_any_index(self.type_to_index(key)?)?.last_key(key)
         }
 
@@ -223,7 +220,7 @@ macro_rules! multi_type_container {
             &mut self,
             path: &dyn LocalityPath,
             item: Box<dyn std::any::Any>,
-        ) -> std::result::Result<Key, String> {
+        ) -> std::result::Result<Key<Ref>, String> {
             let borrow: &dyn std::any::Any=&*item;
             let ty=borrow.type_id();
             let region=self.region();
@@ -250,10 +247,8 @@ macro_rules! multi_type_container {
             }
         }
 
-        fn unany_fill_slot(&mut self, key: Key) {
-            if let Some(container) = self.get_mut_any(key) {
-                container.unany_fill_slot(key);
-            }
+        fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>{
+            self.get_mut_any(key)?.localized_drop(key)
         }
     };
 }
