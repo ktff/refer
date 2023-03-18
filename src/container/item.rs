@@ -3,7 +3,6 @@ use crate::core::{
     *,
 };
 use crate::leaf_container;
-use crate::shell::vec_shell::VecShell;
 use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
 use std::{any::TypeId, cell::SyncUnsafeCell};
@@ -27,12 +26,12 @@ where
 }
 
 /// A collection of 1 item.
-pub struct ItemContainer<T: Item, S: Shell<T = T> = VecShell<T>> {
+pub struct ItemContainer<T: Item> {
     locality: Locality<T>,
-    slot: Option<(SyncUnsafeCell<T>, SyncUnsafeCell<S>)>,
+    slot: Option<SyncUnsafeCell<T>>,
 }
 
-impl<T: Item, S: Shell<T = T>> ItemContainer<T, S> {
+impl<T: Item> ItemContainer<T> {
     pub fn new(locality: Locality<T>) -> Self {
         Self {
             locality,
@@ -41,11 +40,8 @@ impl<T: Item, S: Shell<T = T>> ItemContainer<T, S> {
     }
 }
 
-impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
-    /// Shell of item.
-    type Shell = S;
-
-    type Iter<'a>= impl Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, Self::Shell>)> + Send
+unsafe impl<T: Item> LeafContainer<T> for ItemContainer<T> {
+    type Iter<'a>= impl Iterator<Item = UnsafeSlot<'a, T>> + Send
    where
        Self: 'a;
 
@@ -67,23 +63,18 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
     }
 
     #[inline(always)]
-    fn get(&self, index: usize) -> Option<UnsafeSlot<T, Self::Shell>> {
+    fn get(&self, index: usize) -> Option<UnsafeSlot<T>> {
         self.slot
             .as_ref()
             .filter(|_| index == 1)
-            .map(|(item, shell)| UnsafeSlot::new(self.locality.slot_locality(), item, shell))
+            .map(|item| UnsafeSlot::new(self.locality.index_locality(ONE), item))
     }
 
     fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_> {
         self.slot
             .as_ref()
             .filter(|_| range.contains(&1))
-            .map(|(item, shell)| {
-                (
-                    ONE,
-                    UnsafeSlot::new(self.locality.slot_locality(), item, shell),
-                )
-            })
+            .map(|item| UnsafeSlot::new(self.locality.index_locality(ONE), item))
             .into_iter()
     }
 
@@ -91,34 +82,29 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for ItemContainer<T, S> {
         if self.slot.is_some() {
             Err(item)
         } else {
-            self.slot = Some((
-                SyncUnsafeCell::new(item),
-                SyncUnsafeCell::new(S::new_in(self.locality.allocator())),
-            ));
+            self.slot = Some(SyncUnsafeCell::new(item));
             Ok(ONE)
         }
     }
 
-    fn unfill(&mut self, index: usize) -> Option<(T, Self::Shell)> {
+    fn unfill(&mut self, index: usize) -> Option<T> {
         if index == 1 {
-            self.slot
-                .take()
-                .map(|(item, shell)| (item.into_inner(), shell.into_inner()))
+            self.slot.take().map(|item| item.into_inner())
         } else {
             None
         }
     }
 }
 
-impl<T: Item, S: Shell<T = T>> Container<T> for ItemContainer<T, S> {
+unsafe impl<T: Item> Container<T> for ItemContainer<T> {
     leaf_container!(impl Container<T>);
 }
 
-impl<T: Item, S: Shell<T = T>> AnyContainer for ItemContainer<T, S> {
+unsafe impl<T: Item> AnyContainer for ItemContainer<T> {
     leaf_container!(impl AnyContainer<T>);
 }
 
-impl<T: Item, S: Shell<T = T>> Drop for ItemContainer<T, S> {
+impl<T: Item> Drop for ItemContainer<T> {
     leaf_container!(impl Drop<T>);
 }
 
@@ -151,8 +137,10 @@ mod tests {
         );
         assert!(container
             .iter(..)
-            .map(|(index, slot)| (index, unsafe { *slot.item().get() }))
-            .eq(Some((key, item))));
+            .map(|slot| (slot.locality().path().index().get(), unsafe {
+                *slot.item().get()
+            }))
+            .eq(Some((key.get() as u64, item))));
     }
 
     #[test]
@@ -167,10 +155,7 @@ mod tests {
             item
         );
 
-        assert_eq!(
-            container.unfill(key.get()).map(|(item, _)| item),
-            Some(item)
-        );
+        assert_eq!(container.unfill(key.get()), Some(item));
 
         assert!(container.get(key.get()).is_none());
         assert_eq!(container.iter(..).count(), 0);
