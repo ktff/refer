@@ -82,6 +82,7 @@ pub mod core;
 #[macro_use]
 #[cfg(feature = "items")]
 pub mod item;
-// // pub mod model;
+#[cfg(feature = "models")]
+pub mod model;
 // Generic things
 pub mod util;

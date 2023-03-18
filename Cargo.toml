@@ -25,6 +25,7 @@ rand = "*"
 [features]
 base_u128 = []
 base_u64 = []
-default = ["base_u64", "shard", "items"]
+default = ["base_u64", "shard", "items", "models"]
 items = ["auto_enums"]
+models = []
 shard = ["modular-bitfield"]
