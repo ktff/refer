@@ -66,7 +66,8 @@ impl<F: ContainerFamily<T>, T: Item> TypeContainer<T> for AllContainer<F> {
                 let path = self.region.path_of(index);
                 self.mappings
                     .push(Box::new(self.family.new_container(path)) as Box<dyn AnyContainer>);
-                self.traits.insert(TypeId::of::<T>(), T::traits());
+                self.traits
+                    .insert(TypeId::of::<T>(), ItemTrait::erase_type(T::TRAITS));
 
                 *entry.insert(index)
             }
@@ -78,7 +79,7 @@ impl<F: ContainerFamily<T>, T: Item> TypeContainer<T> for AllContainer<F> {
     }
 }
 
-impl<F: Send + Sync + 'static> MultiTypeContainer for AllContainer<F> {
+unsafe impl<F: Send + Sync + 'static> MultiTypeContainer for AllContainer<F> {
     #[inline(always)]
     fn region(&self) -> RegionPath {
         self.region
@@ -98,11 +99,11 @@ impl<F: Send + Sync + 'static> MultiTypeContainer for AllContainer<F> {
     }
 }
 
-impl<F: ContainerFamily<T>, T: Item> Container<T> for AllContainer<F> {
+unsafe impl<F: ContainerFamily<T>, T: Item> Container<T> for AllContainer<F> {
     multi_type_container!(impl Container<T> prefer index);
 }
 
-impl<F: Send + Sync + 'static> AnyContainer for AllContainer<F> {
+unsafe impl<F: Send + Sync + 'static> AnyContainer for AllContainer<F> {
     multi_type_container!(impl AnyContainer);
 
     fn types(&self) -> HashMap<TypeId, ItemTraits> {
@@ -129,20 +130,20 @@ mod tests {
     fn allocate_multi_type_item() {
         let mut container = container();
 
-        let key_a = container.fill_slot(&(), 42).unwrap();
-        let key_b = container.fill_slot(&(), true).unwrap();
-        let key_c = container.fill_slot(&(), "Hello").unwrap();
+        let key_a = container.fill_slot(&(), 42).unwrap().ptr();
+        let key_b = container.fill_slot(&(), true).unwrap().ptr();
+        let key_c = container.fill_slot(&(), "Hello").unwrap().ptr();
 
         assert_eq!(
-            container.access_mut().slot(key_a).get().unwrap().item(),
+            container.access_mut().key(key_a).get_try().unwrap().item(),
             &42
         );
         assert_eq!(
-            container.access_mut().slot(key_b).get().unwrap().item(),
+            container.access_mut().key(key_b).get_try().unwrap().item(),
             &true
         );
         assert_eq!(
-            container.access_mut().slot(key_c).get().unwrap().item(),
+            container.access_mut().key(key_c).get_try().unwrap().item(),
             &"Hello"
         );
     }
@@ -151,15 +152,15 @@ mod tests {
     fn get_any() {
         let mut container = container();
 
-        let key_a = container.fill_slot(&(), 42u32).unwrap();
-        let key_b = container.fill_slot(&(), true).unwrap();
-        let key_c = container.fill_slot(&(), "Hello").unwrap();
+        let key_a = container.fill_slot(&(), 42u32).unwrap().ptr();
+        let key_b = container.fill_slot(&(), true).unwrap().ptr();
+        let key_c = container.fill_slot(&(), "Hello").unwrap().ptr();
 
         assert_eq!(
             (container
                 .access_mut()
-                .slot(key_a.any())
-                .get_dyn()
+                .key(key_a.any())
+                .get_dyn_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -168,8 +169,8 @@ mod tests {
         assert_eq!(
             (container
                 .access_mut()
-                .slot(key_b.any())
-                .get_dyn()
+                .key(key_b.any())
+                .get_dyn_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -178,8 +179,8 @@ mod tests {
         assert_eq!(
             (container
                 .access_mut()
-                .slot(key_c.any())
-                .get_dyn()
+                .key(key_c.any())
+                .get_dyn_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),

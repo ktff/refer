@@ -175,7 +175,7 @@ macro_rules! multi_type_container {
         $crate::multi_type_container!(impl base Container<$t>);
 
         #[inline(always)]
-        fn get_slot(&self, key: Key<$t>) -> Option<UnsafeSlot<$t>> {
+        fn get_slot(&self, key: Key<Ptr,$t>) -> Option<UnsafeSlot<$t>> {
             (self.get_any(key.any())? as &dyn std::any::Any)
                 .downcast_ref::<<Self as TypeContainer<$t>>::Sub>()
                 .expect("Should be correct type")
@@ -183,7 +183,7 @@ macro_rules! multi_type_container {
         }
 
 
-        fn unfill_slot(&mut self, key: Key<$t>) -> Option<($t, SlotLocality<$t>)> {
+        fn unfill_slot(&mut self, key: Key<Ptr,$t>) -> Option<($t, ItemLocality<$t>)> {
             (self.get_mut_any(key.any())? as &mut dyn std::any::Any)
                 .downcast_mut::<<Self as TypeContainer<$t>>::Sub>()
                 .expect("Should be correct type")
