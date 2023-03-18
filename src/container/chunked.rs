@@ -67,7 +67,7 @@ impl<C: AnyContainer> VecChunkedContainer<C> {
     }
 }
 
-impl<C: AnyContainer> RegionContainer for VecChunkedContainer<C> {
+unsafe impl<C: AnyContainer> RegionContainer for VecChunkedContainer<C> {
     type Sub = C;
 
     type Iter<'a> = Iter<'a,C>
@@ -135,11 +135,11 @@ impl<C: AnyContainer> RegionContainer for VecChunkedContainer<C> {
     }
 }
 
-impl<C: Container<T>, T: Item> Container<T> for VecChunkedContainer<C> {
+unsafe impl<C: Container<T>, T: Item> Container<T> for VecChunkedContainer<C> {
     region_container!(impl Container<T>);
 }
 
-impl<C: AnyContainer> AnyContainer for VecChunkedContainer<C> {
+unsafe impl<C: AnyContainer> AnyContainer for VecChunkedContainer<C> {
     region_container!(impl AnyContainer);
 
     /// All types in the container.
@@ -186,13 +186,14 @@ mod tests {
     fn add_items() {
         let n = 20;
         let mut container = container();
+        let mut access = container.access_add();
 
         let keys = (0..n)
-            .map(|i| container.exclusive().add(&SpaceId(i), i).unwrap())
+            .map(|i| access.add(&SpaceId(i), i).unwrap())
             .collect::<Vec<_>>();
 
         for (i, key) in keys.iter().enumerate() {
-            assert_eq!(container.access_mut().slot(*key).get().unwrap().item(), &i);
+            assert_eq!(access.access().key(*key).get().item(), &i);
         }
     }
 
@@ -200,21 +201,20 @@ mod tests {
     fn iter() {
         let n = 20;
         let mut container = container();
+        let mut access = container.access_add();
 
         let mut keys = (0..n)
-            .map(|i| (container.exclusive().add(&SpaceId(i), i).unwrap(), i))
+            .map(|i| (access.add(&SpaceId(i), i).unwrap(), i))
             .collect::<Vec<_>>();
 
         keys.sort();
 
         assert_eq!(
             keys,
-            container
-                .access_mut()
+            access
+                .access()
                 .ty()
-                .on_path()
-                .iter()
-                .unwrap()
+                .into_iter()
                 .map(|slot| (slot.key(), *slot.item()))
                 .collect::<Vec<_>>()
         );
@@ -223,18 +223,13 @@ mod tests {
     #[test]
     fn get_any() {
         let mut container = container();
+        let mut access = container.access_add();
 
         let item = 42;
-        let key = container.exclusive().add(&SpaceId(item), item).unwrap();
+        let key = access.add(&SpaceId(item), item).unwrap();
 
         assert_eq!(
-            (container
-                .access_mut()
-                .slot(key.any())
-                .get_dyn()
-                .unwrap()
-                .item() as &dyn Any)
-                .downcast_ref::<usize>(),
+            (access.access().key(key.any()).get_dyn().item() as &dyn Any).downcast_ref::<usize>(),
             Some(&item)
         );
     }
@@ -244,9 +239,13 @@ mod tests {
         let mut container = container();
 
         let item = 42;
-        let key = container.exclusive().add(&SpaceId(item), item).unwrap();
+        let key = container
+            .access_add()
+            .add(&SpaceId(item), item)
+            .unwrap()
+            .ptr();
 
-        container.exclusive().unany_fill_slot(key.any());
-        assert!(container.get_slot(key.into()).is_none());
+        container.access_remove().localized_drop(key.any().ptr());
+        assert!(container.get_slot(key.ptr()).is_none());
     }
 }

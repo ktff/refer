@@ -1,5 +1,5 @@
 // pub mod all;
-// pub mod chunked;
+pub mod chunked;
 pub mod item;
 // #[macro_use]
 // pub mod delegate;
