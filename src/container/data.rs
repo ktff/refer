@@ -28,6 +28,10 @@ impl<D: Any, C: Send + Sync> ContainerData<D, C> {
     pub fn inner_data(&self) -> &D {
         &self.data
     }
+
+    pub fn inner_data_mut(&mut self) -> &mut D {
+        &mut self.data
+    }
 }
 
 impl<D: Any + Send + Sync, C: Allocator<T>, T: 'static> Allocator<T> for ContainerData<D, C> {
