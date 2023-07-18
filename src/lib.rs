@@ -1,20 +1,19 @@
-#![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 #![feature(const_option)]
 #![feature(negative_impls)]
 // Currently this is not implemented safely for *dyn Trait.
 #![feature(trait_upcasting)]
 #![feature(allocator_api)]
-#![feature(generic_const_exprs)]
 #![feature(int_roundings)]
 #![feature(maybe_uninit_uninit_array)]
 #![feature(new_uninit)]
 #![feature(ptr_metadata)]
 #![feature(maybe_uninit_slice)]
-#![feature(nonnull_slice_from_raw_parts)]
 #![feature(layout_for_ptr)]
 #![feature(sync_unsafe_cell)]
 #![feature(ptr_as_uninit)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(generic_const_exprs)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs
