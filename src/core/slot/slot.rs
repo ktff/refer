@@ -1,194 +1,144 @@
 use crate::core::{
-    permit, AnyKey, AnyShell, AnySlot, Item, Key, Path, Permit, Shell, SlotLocality, UnsafeSlot,
+    permit::{self, Permit},
+    AnyItem, DynItem, DynSlot, Found, Grc, Item, ItemLocality, Key, Owned, PartialEdge, Ptr, Ref,
+    Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
-pub struct Slot<'a, T: Item, S: Shell<T = T>, R, A> {
-    key: Key<T>,
-    slot: UnsafeSlot<'a, T, S>,
-    access: Permit<R, A>,
+pub struct Slot<'a, R, T: Item> {
+    slot: UnsafeSlot<'a, T>,
+    access: Permit<R>,
 }
 
-impl<'a, T: Item, S: Shell<T = T>, R, A> Slot<'a, T, S, R, A> {
+impl<'a, T: Item, R> Slot<'a, R, T> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(key: Key<T>, slot: UnsafeSlot<'a, T, S>, access: Permit<R, A>) -> Self {
-        debug_assert!(slot.prefix().contains_key(key));
-        Self { key, slot, access }
+    pub unsafe fn new(slot: UnsafeSlot<'a, T>, access: Permit<R>) -> Self {
+        Self { slot, access }
     }
 
-    pub fn key(&self) -> Key<T> {
-        self.key
+    pub fn key(&self) -> Key<Ref<'a>, T> {
+        self.locality().path()
     }
 
-    pub fn locality(&self) -> SlotLocality<'a, T> {
+    pub fn locality(&self) -> ItemLocality<'a, T> {
         self.slot.locality()
     }
 
-    pub fn upcast(self) -> AnySlot<'a, R, A> {
+    pub fn upcast(self) -> DynSlot<'a, R> {
         // SAFETY: We have the same access to the slot.
-        unsafe { AnySlot::new_any(self.key.upcast(), self.slot.upcast(), self.access) }
+        unsafe { DynSlot::new_any(self.slot.any(), self.access) }
     }
 
-    pub fn downgrade<F, B>(self) -> Slot<'a, T, S, F, B>
+    pub fn downgrade<F>(self) -> Slot<'a, F, T>
     where
-        Permit<R, A>: Into<Permit<F, B>>,
+        Permit<R>: Into<Permit<F>>,
     {
         Slot {
-            key: self.key,
             slot: self.slot,
             access: self.access.into(),
         }
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>, A: Into<permit::Item>>
-    Slot<'a, T, S, R, A>
-{
+impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, R, T> {
     pub fn item(&self) -> &T {
         // SAFETY: We have at least read access to the item. R
         unsafe { &*self.slot.item().get() }
     }
 
-    pub fn iter_references(&self) -> T::Iter<'_> {
-        self.item().iter_references(self.locality())
+    pub fn drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(crate::core::Side::Source))
+            .map(|edge| edge.object)
     }
 
-    /// Can panic if locality isn't for this type.
-    pub fn duplicate(&self, to: SlotLocality<T>) -> Option<T> {
-        let locality = self.locality();
-        self.item().duplicate(locality, to)
+    pub fn sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(crate::core::Side::Drain))
+            .map(|edge| edge.object)
+    }
+
+    /// Edges where self is side.
+    pub fn edges(&self, side: Option<Side>) -> T::Edges<'_> {
+        self.item().edges(self.locality(), side)
+    }
+
+    pub fn has_owners(&self) -> bool {
+        self.item().any_has_owner(self.locality().any())
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Item>> Slot<'a, T, S, permit::Ref, A> {
+impl<'a, T: Item> Slot<'a, permit::Ref, T> {
     pub fn to_item(&self) -> &'a T {
         // SAFETY: We have read access to the item for lifetime of 'a.
         unsafe { &*self.slot.item().get() }
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Item>> Slot<'a, T, S, permit::Mut, A> {
+impl<'a, T: Item> Slot<'a, permit::Mut, T> {
+    pub fn borrow(&self) -> Slot<permit::Ref, T> {
+        // SAFETY: We have mut access to the item.
+        unsafe { Slot::new(self.slot, self.access.borrow()) }
+    }
+
     pub fn item_mut(&mut self) -> &mut T {
         // SAFETY: We have mut access to the item.
         unsafe { &mut *self.slot.item().get() }
     }
 
-    pub fn replace_reference(&mut self, other: AnyKey, to: AnyKey) {
+    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, ItemLocality<T>) -> R) -> R {
         let locality = self.locality();
-        self.item_mut().replace_reference(locality, other, to);
+        func(self.item_mut(), locality)
     }
 
-    pub fn displace_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let locality = self.locality();
-        self.item_mut().displace_reference(locality, other, to)
-    }
-
-    pub fn duplicate_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let locality = self.locality();
-        self.item_mut().duplicate_reference(locality, other, to)
-    }
-
-    pub fn displace(&mut self) {
-        let locality = self.locality();
-        self.item_mut().displace(locality, None)
+    /// Ok success.
+    /// Err if can't remove it.
+    #[must_use]
+    pub fn try_remove_edge<F: DynItem + ?Sized>(
+        &mut self,
+        this: Key<Owned, T>,
+        edge: PartialEdge<Key<Ptr, F>>,
+    ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
+        self.localized(|item, locality| item.try_remove_edge(locality, this, edge))
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>, A: Into<permit::Shell>>
-    Slot<'a, T, S, R, A>
-{
-    pub fn shell(&self) -> &S {
-        // SAFETY: We have at least read access to the shell. R
-        unsafe { &*self.slot.shell().get() }
+impl<'a, T: StandaloneItem> Slot<'a, permit::Mut, T> {
+    /// Caller should properly dispose of Grc once done with it.
+    /// Proper disposal is:
+    /// - Using it to construct an Item that will be added to a container.
+    /// - Calling release() on Grc.
+    pub fn own(&mut self) -> Grc<T> {
+        self.localized(|item, locality| item.inc_owners(locality))
+    }
+
+    pub fn release(&mut self, grc: Grc<T>) {
+        self.localized(|item, locality| item.dec_owners(locality, grc))
+    }
+
+    #[must_use]
+    pub fn remove_edge<F: DynItem + ?Sized>(
+        &mut self,
+        this: Key<Owned, T>,
+        edge: PartialEdge<Key<Ptr, F>>,
+    ) -> Key<Owned, F> {
+        self.localized(|item, locality| item.remove_edge(locality, this, edge))
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Shell>> Slot<'a, T, S, permit::Ref, A> {
-    pub fn to_shell(&self) -> &'a S {
-        // SAFETY: We have read access to the shell for 'a lifetime.
-        unsafe { &*self.slot.shell().get() }
-    }
-}
+impl<'a, T: Item, R> Copy for Slot<'a, R, T> where Permit<R>: Copy {}
 
-impl<'a, T: Item, S: Shell<T = T>, A: Into<permit::Shell>> Slot<'a, T, S, permit::Mut, A> {
-    pub fn shell_mut(&mut self) -> &mut S {
-        // SAFETY: We have mut access to the shell.
-        unsafe { &mut *self.slot.shell().get() }
-    }
-
-    pub fn shell_add(&mut self, from: AnyKey) {
-        let alloc = self.slot.allocator();
-        self.shell_mut().add(from, alloc);
-    }
-
-    pub fn shell_add_many(&mut self, from: AnyKey, count: usize) {
-        let locality = self.locality();
-        self.shell_mut()
-            .add_many_any(from, count, locality.upcast());
-    }
-
-    pub fn shell_replace(&mut self, from: AnyKey, to: AnyKey) {
-        let alloc = self.slot.allocator();
-        self.shell_mut().replace(from, to, alloc);
-    }
-
-    pub fn shell_remove(&mut self, from: AnyKey) {
-        self.shell_mut().remove(from);
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>> Slot<'a, T, S, permit::Mut, permit::Slot> {
-    pub fn split(&mut self) -> (&mut T, &mut S) {
-        // SAFETY: We have mut access to the item and shell.
-        unsafe { (&mut *self.slot.item().get(), &mut *self.slot.shell().get()) }
-    }
-
-    pub fn split_slot(
-        self,
-    ) -> (
-        Slot<'a, T, S, permit::Mut, permit::Item>,
-        Slot<'a, T, S, permit::Mut, permit::Shell>,
-    ) {
-        let (item_access, shell_access) = self.access.split();
-
-        (
-            Slot {
-                key: self.key,
-                slot: self.slot,
-                access: item_access,
-            },
-            Slot {
-                key: self.key,
-                slot: self.slot,
-                access: shell_access,
-            },
-        )
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>, A> Slot<'a, T, S, permit::Mut, A> {
-    pub fn borrow(&self) -> Slot<T, S, permit::Ref, A> {
-        // SAFETY: We have mut access to the item.
-        unsafe { Slot::new(self.key, self.slot, self.access.borrow()) }
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>, R, A> Copy for Slot<'a, T, S, R, A> where Permit<R, A>: Copy {}
-
-impl<'a, T: Item, S: Shell<T = T>, R, A> Clone for Slot<'a, T, S, R, A>
+impl<'a, T: Item, R> Clone for Slot<'a, R, T>
 where
-    Permit<R, A>: Clone,
+    Permit<R>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
-            key: self.key,
             slot: self.slot,
             access: self.access.clone(),
         }
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>> Deref for Slot<'a, T, S, R, permit::Item> {
+impl<'a, T: Item, R: Into<permit::Ref>> Deref for Slot<'a, R, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -196,38 +146,8 @@ impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>> Deref for Slot<'a, T, S
     }
 }
 
-impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Item> {
+impl<'a, T: Item> DerefMut for Slot<'a, permit::Mut, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>> Deref for Slot<'a, T, S, R, permit::Slot> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.item()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Slot> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.item_mut()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>, R: Into<permit::Ref>> Deref
-    for Slot<'a, T, S, R, permit::Shell>
-{
-    type Target = S;
-
-    fn deref(&self) -> &Self::Target {
-        self.shell()
-    }
-}
-
-impl<'a, T: Item, S: Shell<T = T>> DerefMut for Slot<'a, T, S, permit::Mut, permit::Shell> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.shell_mut()
     }
 }

@@ -1,36 +1,28 @@
 use crate::core::{
-    permit, AnyItem, AnyKey, AnyRef, AnyShell, AnySlotLocality, AnyUnsafeSlot, DynItem, Item, Key,
-    Path, Permit, ReferError, Shell, TypeInfo,
+    permit::{self, Permit},
+    AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Found, Grc, Item, Key, Owned, PartialEdge,
+    Ptr, Ref, Side,
 };
-
+use log::*;
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     marker::Unsize,
     ops::{Deref, DerefMut},
 };
 
-pub type AnySlot<'a, R, A> = DynSlot<'a, dyn AnyItem, R, A>;
+use super::Slot;
 
-pub struct DynSlot<'a, T: DynItem + ?Sized, R, A> {
-    key: Key<T>,
+pub struct DynSlot<'a, R = permit::Ref, T: DynItem + ?Sized = dyn AnyItem> {
     metadata: T::Metadata,
     slot: AnyUnsafeSlot<'a>,
-    access: Permit<R, A>,
+    access: Permit<R>,
 }
 
-impl<'a, R, A> AnySlot<'a, R, A> {
-    /// Key should correspond to the slot.
+impl<'a, R> DynSlot<'a, R> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new_any(
-        key: Key<dyn AnyItem>,
-        slot: AnyUnsafeSlot<'a>,
-        access: Permit<R, A>,
-    ) -> Self {
-        debug_assert!(slot.prefix().contains_index(key.index()));
+    pub unsafe fn new_any(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Self {
         let metadata = std::ptr::metadata(slot.item().get());
-
         Self {
-            key,
             metadata,
             slot,
             access,
@@ -38,46 +30,46 @@ impl<'a, R, A> AnySlot<'a, R, A> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
+impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, R, T> {
     /// Key should correspond to the slot.
-    /// Err if item doesn't implement T.
+    /// None if item doesn't implement T.
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new(
-        key: Key<T>,
-        slot: AnyUnsafeSlot<'a>,
-        access: Permit<R, A>,
-    ) -> Result<Self, ReferError> {
-        debug_assert!(slot.prefix().contains_index(key.index()));
-        let metadata = slot
-            .metadata::<T>()
-            .ok_or_else(|| ReferError::InvalidCastType {
-                expected: TypeInfo::of::<T>(),
-                found: slot.item().get().type_info(),
-                index: key.index(),
-                container: slot.prefix(),
-            })?;
-
-        Ok(Self {
-            key,
-            metadata,
-            slot,
-            access,
-        })
+    pub unsafe fn new(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Option<Self> {
+        if let Some(metadata) = slot.metadata::<T>() {
+            Some(Self {
+                metadata,
+                slot,
+                access,
+            })
+        } else {
+            warn!(
+                "Item at {:?}:{} is not {:?} which was assumed to be true.",
+                slot.locality().path(),
+                slot.item().get().type_info().name,
+                std::any::type_name::<T>()
+            );
+            None
+        }
     }
 
-    pub fn key(&self) -> Key<T> {
-        self.key
+    pub fn key(&self) -> Key<Ref<'a>, T> {
+        self.locality().path().assume()
     }
 
     pub fn item_type_id(&self) -> std::any::TypeId {
         self.slot.item_type_id()
     }
 
-    pub fn locality(&self) -> AnySlotLocality<'a> {
+    pub fn locality(&self) -> AnyItemLocality<'a> {
         self.slot.locality()
     }
 
-    pub fn upcast<U: DynItem + ?Sized>(self) -> DynSlot<'a, U, R, A>
+    pub fn any(self) -> DynSlot<'a, R> {
+        // SAFETY: We have the same access to the slot.
+        unsafe { DynSlot::new_any(self.slot, self.access) }
+    }
+
+    pub fn upcast<U: DynItem + ?Sized>(self) -> DynSlot<'a, R, U>
     where
         T: Unsize<U>,
     {
@@ -88,17 +80,15 @@ impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
         };
 
         DynSlot {
-            key: self.key.upcast(),
             metadata,
             slot: self.slot,
             access: self.access,
         }
     }
 
-    pub fn sidecast<U: DynItem + ?Sized>(self) -> Result<DynSlot<'a, U, R, A>, Self> {
+    pub fn sidecast<U: DynItem + ?Sized>(self) -> Result<DynSlot<'a, R, U>, Self> {
         if let Some(metadata) = self.slot.metadata::<U>() {
             Ok(DynSlot {
-                key: self.key().any().assume(),
                 metadata,
                 slot: self.slot,
                 access: self.access,
@@ -108,25 +98,20 @@ impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
         }
     }
 
-    pub fn downcast<U: Item>(self) -> Result<DynSlot<'a, U, R, A>, Self> {
-        if TypeId::of::<U>() == self.item_type_id() {
-            Ok(DynSlot {
-                key: Key::new(self.key.index()),
-                metadata: (),
-                slot: self.slot,
-                access: self.access,
-            })
+    pub fn downcast<U: Item>(self) -> Result<Slot<'a, R, U>, Self> {
+        if let Some(slot) = self.slot.downcast() {
+            // SAFETY: We have the same access to the slot.
+            Ok(unsafe { Slot::new(slot, self.access) })
         } else {
             Err(self)
         }
     }
 
-    pub fn downgrade<F, B>(self) -> DynSlot<'a, T, F, B>
+    pub fn downgrade<F>(self) -> DynSlot<'a, F, T>
     where
-        Permit<R, A>: Into<Permit<F, B>>,
+        Permit<R>: Into<Permit<F>>,
     {
         DynSlot {
-            key: self.key,
             metadata: self.metadata,
             slot: self.slot,
             access: self.access.into(),
@@ -134,7 +119,7 @@ impl<'a, T: DynItem + ?Sized, R, A> DynSlot<'a, T, R, A> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>, A: Into<permit::Item>> DynSlot<'a, T, R, A> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, R, T> {
     pub fn any_item(&self) -> &dyn AnyItem {
         unsafe {
             let ptr = self.slot.item().get();
@@ -160,18 +145,26 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>, A: Into<permit::Item>> DynSl
         (self.any_item() as &dyn Any).downcast_ref::<U>()
     }
 
-    pub fn iter_references_any(&self) -> Option<Box<dyn Iterator<Item = AnyRef> + '_>> {
-        self.any_item().iter_references_any(self.locality())
+    pub fn drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(Side::Source)).map(|edge| edge.object)
     }
 
-    /// Can panic if locality isn't for this type.
-    pub fn duplicate(&self, to: AnySlotLocality) -> Option<Box<dyn AnyItem>> {
-        let locality = self.locality();
-        self.any_item().duplicate_any(locality, to)
+    pub fn sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.edges(Some(Side::Drain)).map(|edge| edge.object)
+    }
+
+    pub fn edges(
+        &self,
+        side: Option<Side>,
+    ) -> impl Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_ {
+        self.any_item()
+            .any_edges(self.locality(), side)
+            .into_iter()
+            .flatten()
     }
 }
 
-impl<'a, T: DynItem + ?Sized, A: Into<permit::Item>> DynSlot<'a, T, permit::Mut, A> {
+impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
     pub fn any_item_mut(&mut self) -> &mut dyn AnyItem {
         unsafe {
             let ptr = self.slot.item().get();
@@ -197,121 +190,57 @@ impl<'a, T: DynItem + ?Sized, A: Into<permit::Item>> DynSlot<'a, T, permit::Mut,
         (self.any_item_mut() as &mut dyn Any).downcast_mut::<U>()
     }
 
-    pub fn remove_reference(&mut self, other: AnyKey) -> bool {
+    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, AnyItemLocality) -> R) -> R {
         let locality = self.locality();
-        self.any_item_mut().remove_reference_any(locality, other)
+        func(self.item_mut(), locality)
     }
 
-    pub fn replace_reference(&mut self, other: AnyKey, to: AnyKey) {
+    pub fn any_localized<R>(
+        &mut self,
+        func: impl FnOnce(&mut dyn AnyItem, AnyItemLocality) -> R,
+    ) -> R {
         let locality = self.locality();
-        self.any_item_mut()
-            .replace_reference_any(locality, other, to);
+        func(self.any_item_mut(), locality)
     }
 
-    pub fn displace_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let locality = self.locality();
-        self.any_item_mut()
-            .displace_reference_any(locality, other, to)
+    /// Ok success.
+    /// Err if can't remove it.
+    #[must_use]
+    pub fn remove_edge<F: DynItem + ?Sized>(
+        &mut self,
+        this: Key<Owned, T>,
+        edge: PartialEdge<Key<Ptr, F>>,
+    ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
+        self.any_localized(|item, locality| {
+            item.any_remove_edge(locality, this.any(), edge.map(|key| key.any()))
+        })
+        .map(Key::assume)
+        .map_err(|(present, key)| (present, key.assume()))
     }
 
-    pub fn duplicate_reference(&mut self, other: AnyKey, to: AnyKey) -> Option<Path> {
-        let locality = self.locality();
-        self.any_item_mut()
-            .duplicate_reference_any(locality, other, to)
+    /// Caller should properly dispose of Grc once done with it.
+    /// Proper disposal is:
+    /// - Using it to construct an Item that will be added to a container.
+    /// - Calling release() on Grc.
+    ///
+    /// None if the item doesn't support ownership.
+    pub fn own(&mut self) -> Option<Grc<T>> {
+        self.any_localized(|item, locality| item.any_inc_owners(locality).map(|grc| grc.assume()))
     }
 
-    pub fn displace(&mut self) {
-        let locality = self.locality();
-        self.any_item_mut().displace_any(locality, None);
+    pub fn release(&mut self, grc: Grc<T>) {
+        self.any_localized(|item, locality| item.any_dec_owners(locality, grc.any()))
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>, A: Into<permit::Shell>> DynSlot<'a, T, R, A> {
-    pub fn shell(&self) -> &dyn AnyShell {
-        // SAFETY: We have at least read access to the shell. R
-        unsafe { &*self.slot.shell().get() }
-    }
+impl<'a, T: DynItem + ?Sized, R> Copy for DynSlot<'a, R, T> where Permit<R>: Copy {}
 
-    pub fn shell_downcast<S: Shell>(&self) -> Option<&S> {
-        (self.shell() as &dyn Any).downcast_ref::<S>()
-    }
-}
-
-impl<'a, T: DynItem + ?Sized, A: Into<permit::Shell>> DynSlot<'a, T, permit::Mut, A> {
-    pub fn shell_mut(&mut self) -> &mut dyn AnyShell {
-        // SAFETY: We have mut access to the shell.
-        unsafe { &mut *self.slot.shell().get() }
-    }
-
-    pub fn shell_mut_downcast<S: Shell>(&mut self) -> Option<&mut S> {
-        (self.shell_mut() as &mut dyn Any).downcast_mut::<S>()
-    }
-
-    pub fn shell_add(&mut self, from: AnyKey) {
-        let locality = self.locality();
-        self.shell_mut().add_any(from, locality);
-    }
-
-    pub fn shell_add_many(&mut self, from: AnyKey, count: usize) {
-        let locality = self.locality();
-        self.shell_mut().add_many_any(from, count, locality);
-    }
-
-    pub fn shell_replace(&mut self, from: AnyKey, to: AnyKey) {
-        let locality = self.locality();
-        self.shell_mut().replace_any(from, to, locality);
-    }
-
-    pub fn shell_remove(&mut self, from: AnyKey) {
-        self.shell_mut().remove_any(from);
-    }
-
-    pub fn shell_clear(&mut self) {
-        let locality = self.locality();
-        self.shell_mut().clear_any(locality);
-    }
-}
-
-impl<'a, T: DynItem + ?Sized> DynSlot<'a, T, permit::Mut, permit::Slot> {
-    pub fn split(&mut self) -> (&mut dyn AnyItem, &mut dyn AnyShell) {
-        // SAFETY: We have mut access to the item and shell.
-        unsafe { (&mut *self.slot.item().get(), &mut *self.slot.shell().get()) }
-    }
-
-    pub fn split_slot(
-        self,
-    ) -> (
-        DynSlot<'a, T, permit::Mut, permit::Item>,
-        DynSlot<'a, T, permit::Mut, permit::Shell>,
-    ) {
-        let (item_access, shell_access) = self.access.split();
-
-        (
-            DynSlot {
-                key: self.key,
-                metadata: self.metadata,
-                slot: self.slot,
-                access: item_access,
-            },
-            DynSlot {
-                key: self.key,
-                metadata: self.metadata,
-                slot: self.slot,
-                access: shell_access,
-            },
-        )
-    }
-}
-
-impl<'a, T: DynItem + ?Sized, R, A> Copy for DynSlot<'a, T, R, A> where Permit<R, A>: Copy {}
-
-impl<'a, T: DynItem + ?Sized, R, A> Clone for DynSlot<'a, T, R, A>
+impl<'a, T: DynItem + ?Sized, R> Clone for DynSlot<'a, R, T>
 where
-    Permit<R, A>: Clone,
+    Permit<R>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
-            key: self.key,
             metadata: self.metadata,
             slot: self.slot,
             access: self.access.clone(),
@@ -319,7 +248,7 @@ where
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R, permit::Item> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, R, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -327,36 +256,8 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R, 
     }
 }
 
-impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::Item> {
+impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, permit::Mut, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
-    }
-}
-
-impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R, permit::Slot> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        self.item()
-    }
-}
-
-impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::Slot> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.item_mut()
-    }
-}
-
-impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for DynSlot<'a, T, R, permit::Shell> {
-    type Target = dyn AnyShell;
-
-    fn deref(&self) -> &Self::Target {
-        self.shell()
-    }
-}
-
-impl<'a, T: DynItem + ?Sized> DerefMut for DynSlot<'a, T, permit::Mut, permit::Shell> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.shell_mut()
     }
 }

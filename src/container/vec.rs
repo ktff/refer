@@ -4,7 +4,6 @@ use crate::{
         *,
     },
     leaf_container,
-    shell::vec_shell::VecShell,
 };
 use std::{
     any::TypeId,
@@ -31,14 +30,14 @@ where
 
 /// A simple vec container of items of the same type.
 /// Allocates by pushing to a vec, if there is no previously freed slot.
-pub struct VecContainer<T: Item, S: Shell<T = T> = VecShell<T>> {
+pub struct VecContainer<T: Item> {
     locality: Locality<T>,
-    slots: Vec<Slot<T, S>, T::Alloc>,
+    slots: Vec<Slot<T>, T::Alloc>,
     free_head: Option<NonZeroUsize>,
     count: usize,
 }
 
-impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
+impl<T: Item> VecContainer<T> {
     pub fn new(locality: Locality<T>) -> Self {
         let mut slots = Vec::new_in(locality.allocator().clone());
         slots.push(Slot::None(None));
@@ -61,7 +60,7 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
 
     /// Memory used directly by this container.
     pub fn used_memory(&self) -> usize {
-        self.slots.capacity() * std::mem::size_of::<Slot<T, S>>()
+        self.slots.capacity() * std::mem::size_of::<Slot<T>>()
     }
 
     pub fn shrink_to_fit(&mut self) {
@@ -75,7 +74,7 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
             .enumerate()
             .filter_map(|(i, slot)| match slot {
                 Slot::None(_) => None,
-                Slot::Some(_, _) => Some(start.saturating_add(i)),
+                Slot::Some(_) => Some(start.saturating_add(i)),
             })
             .next()
     }
@@ -84,7 +83,7 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
         &'a self,
         start: Bound<usize>,
         end: Bound<usize>,
-    ) -> impl Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, S>)> + Send {
+    ) -> impl Iterator<Item = UnsafeSlot<'a, T>> + Send {
         let mut start = match start {
             Bound::Included(i) => i,
             Bound::Excluded(i) => i.saturating_add(1),
@@ -105,10 +104,12 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
             .iter()
             .enumerate()
             .filter_map(move |(i, slot)| {
-                if let Slot::Some(ref item, ref shell) = slot {
-                    Some((
-                        NonZeroUsize::new(start + i).expect("Zero index was allocated"),
-                        UnsafeSlot::new(self.locality.slot_locality(), item, shell),
+                if let Slot::Some(ref item) = slot {
+                    Some(UnsafeSlot::new(
+                        self.locality.index_locality(
+                            NonZeroUsize::new(start + i).expect("Zero index was allocated"),
+                        ),
+                        item,
                     ))
                 } else {
                     None
@@ -117,10 +118,8 @@ impl<T: Item, S: Shell<T = T>> VecContainer<T, S> {
     }
 }
 
-impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
-    type Shell = S;
-
-    type Iter<'a>= impl Iterator<Item = (NonZeroUsize, UnsafeSlot<'a, T, Self::Shell>)> + Send
+unsafe impl<T: Item> LeafContainer<T> for VecContainer<T> {
+    type Iter<'a>= impl Iterator<Item = UnsafeSlot<'a, T>> + Send
     where
         Self: 'a;
 
@@ -144,16 +143,21 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
             .rev()
             .find_map(|(i, slot)| match slot {
                 Slot::None(_) => None,
-                Slot::Some(_, _) => Some(i),
+                Slot::Some(_) => Some(i),
             })
             .and_then(NonZeroUsize::new)
     }
 
     #[inline(always)]
-    fn get(&self, index: usize) -> Option<UnsafeSlot<T, Self::Shell>> {
+    fn get(&self, index: usize) -> Option<UnsafeSlot<T>> {
         self.slots.get(index).and_then(|slot| {
-            if let Slot::Some(item, shell) = slot {
-                Some(UnsafeSlot::new(self.locality.slot_locality(), item, shell))
+            if let Slot::Some(item) = slot {
+                Some(UnsafeSlot::new(
+                    self.locality.index_locality(
+                        NonZeroUsize::new(index).expect("Zero index was allocated"),
+                    ),
+                    item,
+                ))
             } else {
                 None
             }
@@ -168,10 +172,7 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
         if let Some(index) = self.free_head.take() {
             match std::mem::replace(
                 &mut self.slots[index.get()],
-                Slot::Some(
-                    SyncUnsafeCell::new(item),
-                    SyncUnsafeCell::new(S::new_in(self.locality.allocator())),
-                ),
+                Slot::Some(SyncUnsafeCell::new(item)),
             ) {
                 Slot::None(next) => {
                     self.count += 1;
@@ -183,10 +184,7 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
         } else {
             let index = NonZeroUsize::new(self.slots.len()).expect("Zero index");
             if self.locality.locality_key().contains(index) {
-                self.slots.push(Slot::Some(
-                    SyncUnsafeCell::new(item),
-                    SyncUnsafeCell::new(S::new_in(self.locality.allocator())),
-                ));
+                self.slots.push(Slot::Some(SyncUnsafeCell::new(item)));
                 self.count += 1;
                 Ok(index)
             } else {
@@ -197,14 +195,14 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
     }
 
     /// Removes from container.
-    fn unfill(&mut self, index: usize) -> Option<(T, Self::Shell)> {
+    fn unfill(&mut self, index: usize) -> Option<T> {
         self.slots.get_mut(index).and_then(|slot| {
             match std::mem::replace(slot, Slot::None(self.free_head)) {
-                Slot::Some(item, shell) => {
+                Slot::Some(item) => {
                     self.count -= 1;
                     self.free_head =
                         Some(NonZeroUsize::new(index).expect("Zero index was allocated"));
-                    Some((item.into_inner(), shell.into_inner()))
+                    Some(item.into_inner())
                 }
                 other => {
                     *slot = other;
@@ -215,15 +213,15 @@ impl<T: Item, S: Shell<T = T>> LeafContainer<T> for VecContainer<T, S> {
     }
 }
 
-impl<T: Item, S: Shell<T = T>> Container<T> for VecContainer<T, S> {
+unsafe impl<T: Item> Container<T> for VecContainer<T> {
     leaf_container!(impl Container<T>);
 }
 
-impl<T: Item, S: Shell<T = T>> AnyContainer for VecContainer<T, S> {
+unsafe impl<T: Item> AnyContainer for VecContainer<T> {
     leaf_container!(impl AnyContainer<T>);
 }
 
-impl<T: Item, S: Shell<T = T>> Drop for VecContainer<T, S> {
+impl<T: Item> Drop for VecContainer<T> {
     leaf_container!(impl Drop<T>);
 }
 
@@ -239,9 +237,9 @@ where
     }
 }
 
-enum Slot<T, S> {
+enum Slot<T> {
     None(Option<NonZeroUsize>),
-    Some(SyncUnsafeCell<T>, SyncUnsafeCell<S>),
+    Some(SyncUnsafeCell<T>),
 }
 
 #[cfg(all(test, feature = "base_u64"))]
@@ -276,7 +274,7 @@ mod tests {
             unsafe { *container.get(index.get()).unwrap().item().get() },
             item
         );
-        assert_eq!(container.unfill(index.get()).unwrap().0, item);
+        assert_eq!(container.unfill(index.get()).unwrap(), item);
         assert!(container.get(index.get()).is_none());
     }
 
@@ -286,7 +284,7 @@ mod tests {
         let mut container = VecContainer::default();
 
         let mut indices = (0..n)
-            .map(|i| (container.fill(i).unwrap(), i))
+            .map(|i| (container.fill(i).unwrap().get() as u64, i))
             .collect::<Vec<_>>();
 
         indices.sort();
@@ -295,7 +293,9 @@ mod tests {
             indices,
             container
                 .iter(..)
-                .map(|(key, slot)| (key, unsafe { *slot.item().get() }))
+                .map(|slot| (slot.locality().path().index().get(), unsafe {
+                    *slot.item().get()
+                }))
                 .collect::<Vec<_>>()
         );
     }

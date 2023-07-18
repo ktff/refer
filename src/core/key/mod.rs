@@ -1,10 +1,12 @@
+mod grc;
 mod key;
 mod key_path;
 mod locality_key;
 mod locality_path;
 mod path;
 
-pub use key::{AnyKey, Key};
+pub use grc::Grc;
+pub use key::{Key, Owned, Ptr, Ref};
 pub use key_path::*;
 pub use locality_key::*;
 pub use locality_path::*;

@@ -10,13 +10,20 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    AnyKey, AnySlotLocality, AnyUnsafeSlot, ExclusivePermit, Item, ItemTraits, Key, KeyPath,
-    LocalityKey, LocalityPath, MutAnySlots, Path, RegionPath, Shell, SlotLocality, UnsafeSlot,
+    Add, AnyContainerLocality, AnyUnsafeSlot, ContainerLocality, Item, ItemLocality, ItemTraits,
+    Key, KeyPath, LocalityKey, LocalityPath, MutAccess, Owned, PartialEdge, Path, Ptr, Ref,
+    RegionPath, Remove, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
 };
+
+/*
+NOTES:
+- Goal is to completely prevent memory errors, and to discourage logical errors.
+- Containers are not to be Items since that creates non trivial recursions on type and logic levels.
+*/
 
 /// A family of containers.
 pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
@@ -26,92 +33,104 @@ pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
 }
 
 /// It's responsibility is to:
-/// - allocate/contain/deallocate items and shells, not to manage access to them or to call their methods.
+/// - allocate/contain/deallocate items, not to manage access to them or to call their methods.
 /// - expose internal containers as & and &mut.
 /// - clear it self up during drop.
 ///
+/// TODO: Eliminate this sentence.
 /// May panic if argument keys don't correspond to this container.
-pub trait Container<T: Item>: AnyContainer {
-    /// Shell of item.
-    type Shell: Shell<T = T>;
-
-    type SlotIter<'a>: Iterator<Item = (Key<T>, UnsafeSlot<'a, T, Self::Shell>)> + Send
+///
+/// UNSAFE: Implementations MUST follow get_slot & iter_slot SAFETY contracts.
+pub unsafe trait Container<T: Item>: AnyContainer {
+    type SlotIter<'a>: Iterator<Item = UnsafeSlot<'a, T>> + Send
     where
         Self: 'a;
 
     /// Implementations should have #[inline(always)]
-    /// Bijection between keys and slots MUST be enforced.
-    fn get_slot(&self, key: Key<T>) -> Option<UnsafeSlot<T, Self::Shell>>;
+    /// SAFETY: Bijection between keys and slots MUST be enforced.
+    fn get_slot(&self, key: Key<Ptr, T>) -> Option<UnsafeSlot<T>>;
 
-    fn get_locality(&self, key: &impl LocalityPath) -> Option<SlotLocality<T>>;
+    fn get_locality(&self, key: &impl LocalityPath) -> Option<ContainerLocality<T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
-    /// Iterator MUST NOT return the same slot more than once.
+    /// SAFETY: Iterator MUST NOT return the same slot more than once.
     fn iter_slot(&self, path: KeyPath<T>) -> Option<Self::SlotIter<'_>>;
 
     /// None if there is no more place in locality.
-    fn fill_slot(&mut self, key: &impl LocalityPath, item: T) -> Result<Key<T>, T>;
+    fn fill_slot(&mut self, key: &impl LocalityPath, item: T) -> Result<Key<Ref, T>, T>;
 
     /// Fills locality
     /// None if there is no locality for T under given key.
     fn fill_locality(&mut self, key: &impl LocalityPath) -> Option<LocalityKey>;
 
     /// Removes from container.
-    fn unfill_slot(&mut self, key: Key<T>) -> Option<(T, Self::Shell, SlotLocality<T>)>;
+    fn unfill_slot(&mut self, key: Key<Ptr, T>) -> Option<(T, ItemLocality<T>)>;
 }
 
-pub trait AnyContainer: Any + Sync + Send {
+/// UNSAFE: Implementations MUST follow any_get_slot & next_key SAFETY contracts.
+pub unsafe trait AnyContainer: Any + Sync + Send {
     /// Path of container shared for all items in the container.
     fn container_path(&self) -> Path;
 
     /// Returns first key for given type
-    fn first_key(&self, key: TypeId) -> Option<AnyKey>;
+    fn first_key(&self, key: TypeId) -> Option<Key<Ref>>;
 
     /// Returns following key after given in ascending order
     /// for the type at the key.
-    fn next_key(&self, ty: TypeId, key: AnyKey) -> Option<AnyKey>;
+    ///
+    /// SAFETY: MUST have bijection over input_key and output_key and input_key != output_key.
+    fn next_key(&self, ty: TypeId, key: Key) -> Option<Key<Ref>>;
 
     /// Returns last key for given type
-    fn last_key(&self, key: TypeId) -> Option<AnyKey>;
+    fn last_key(&self, key: TypeId) -> Option<Key<Ref>>;
 
     /// All types in the container.
     fn types(&self) -> HashMap<TypeId, ItemTraits>;
 
     /// Implementations should have #[inline(always)]
-    /// Bijection between keys and slots MUST be enforced.
-    fn get_slot_any(&self, key: AnyKey) -> Option<AnyUnsafeSlot>;
+    /// SAFETY: Bijection between keys and slots MUST be enforced.
+    fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot>;
 
     /// None if there is no locality for given type under given key.
-    fn get_locality_any(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnySlotLocality>;
+    fn any_get_locality(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnyContainerLocality>;
 
     /// Err if:
     /// - no more place in locality
     /// - type is unknown
     /// - locality is undefined
     /// - type mismatch
-    fn fill_slot_any(
+    fn any_fill_slot(
         &mut self,
         key: &dyn LocalityPath,
         item: Box<dyn Any>,
-    ) -> Result<AnyKey, String>;
+    ) -> Result<Key<Ref>, String>;
 
     /// Fills some locality under given key, or enclosing locality, for given type.
     /// None if there is no locality for given type under given key.
-    fn fill_locality_any(&mut self, key: &dyn LocalityPath, ty: TypeId) -> Option<LocalityKey>;
+    fn any_fill_locality(&mut self, key: &dyn LocalityPath, ty: TypeId) -> Option<LocalityKey>;
 
-    fn unfill_slot_any(&mut self, key: AnyKey);
+    /// Panics if item is edgeless referenced.
+    /// Caller should properly dispose of the edges.
+    fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>;
 
-    fn exclusive(&mut self) -> ExclusivePermit<'_, Self>
+    fn access_mut(&mut self) -> MutAccess<Self>
     where
         Self: Sized,
     {
-        ExclusivePermit::new(self)
+        MutAccess::new(self)
     }
 
-    fn access_mut(&mut self) -> MutAnySlots<Self>
+    fn access_add(&mut self) -> Add<'_, Self>
     where
         Self: Sized,
     {
-        MutAnySlots::new(self)
+        Add::new(self)
+    }
+
+    fn access_remove(&mut self) -> Remove<'_, Self>
+    where
+        Self: Sized,
+    {
+        Remove::new(self)
     }
 }

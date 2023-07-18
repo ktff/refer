@@ -65,7 +65,7 @@ use std::{
 //
 
 // TODO: All reallocation in here are unsafe since they can't be guaranteed to be
-//       called on the same allocator as the current allocation.
+// TODO  called on the same allocator as the current allocation.
 
 /// Inline allocator for small Copy elements.
 ///

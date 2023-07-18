@@ -1,3 +1,4 @@
+#![allow(incomplete_features)]
 // Currently this is not implemented safely for *dyn Trait.
 #![feature(trait_upcasting)]
 #![feature(type_alias_impl_trait)]
@@ -13,6 +14,7 @@
 #![feature(box_into_inner)]
 #![feature(unsize)]
 #![feature(const_type_id)]
+#![feature(specialization)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs
@@ -76,9 +78,11 @@
 pub mod container;
 #[macro_use]
 pub mod core;
+
 #[macro_use]
+#[cfg(feature = "items")]
 pub mod item;
-// pub mod model;
-pub mod shell;
+#[cfg(feature = "models")]
+pub mod model;
 // Generic things
 pub mod util;
