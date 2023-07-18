@@ -5,13 +5,13 @@
 #![feature(allocator_api)]
 #![feature(ptr_metadata)]
 #![feature(maybe_uninit_slice)]
-#![feature(nonnull_slice_from_raw_parts)]
 #![feature(layout_for_ptr)]
 #![feature(sync_unsafe_cell)]
 #![feature(ptr_as_uninit)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(arbitrary_self_types)]
 #![feature(box_into_inner)]
 #![feature(unsize)]
-#![feature(arbitrary_self_types)]
 #![feature(const_type_id)]
 
 //! # Goal
