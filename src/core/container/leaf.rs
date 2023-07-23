@@ -30,6 +30,9 @@ pub unsafe trait LeafContainer<T: Item> {
     /// SAFETY: Bijection between index and slot MUST be enforced.
     fn get(&self, index: usize) -> Option<UnsafeSlot<T>>;
 
+    /// Implementations should have #[inline(always)]
+    fn contains(&self, index: usize) -> bool;
+
     /// Iterates in ascending order for indices in range.
     /// SAFETY: Iterator MUST NOT return the same slot more than once.
     fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_>;
@@ -116,6 +119,12 @@ macro_rules! leaf_container {
             self.unfill(index)
                 // SAFETY: Locality is alive for self.
                 .map(move |item| (item, self.locality().item_locality(unsafe{key.extend()})))
+        }
+
+        #[inline(always)]
+        fn contains_slot(&self, key: Key<Ptr, T>) -> bool{
+            let index = self.locality().locality_key().index_of(key);
+            self.contains(index)
         }
     };
     (impl AnyContainer<$t:ty>) => {

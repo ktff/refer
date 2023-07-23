@@ -70,6 +70,11 @@ macro_rules! single_type_container {
         fn unfill_slot(&mut self, key: $crate::core::Key<Ptr,$t>) -> Option<($t, $crate::core::ItemLocality<$t>)> {
             $crate::core::container::TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
         }
+
+        #[inline(always)]
+        fn contains_slot(&self, key: Key<Ptr, $t>) -> bool{
+            $crate::core::container::TypeContainer::<$t>::get(self).filter(|sub|sub.contains_slot(key)).is_some()
+        }
     };
     (impl AnyContainer<$t:ty>) => {
         #[inline(always)]
@@ -170,6 +175,11 @@ macro_rules! multi_type_container {
         fn unfill_slot(&mut self, key: Key<Ptr,$t>) -> Option<($t, ItemLocality<$t>)> {
             TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
         }
+
+        #[inline(always)]
+        fn contains_slot(&self, key: Key<Ptr, $t>) -> bool{
+            TypeContainer::<$t>::get(self).filter(|sub|sub.contains_slot(key)).is_some()
+        }
     };
     (impl Container<$t:ty> prefer index) => {
         $crate::multi_type_container!(impl base Container<$t>);
@@ -188,6 +198,14 @@ macro_rules! multi_type_container {
                 .downcast_mut::<<Self as TypeContainer<$t>>::Sub>()
                 .expect("Should be correct type")
                 .unfill_slot(key)
+        }
+
+        #[inline(always)]
+        fn contains_slot(&self, key: Key<Ptr, $t>) -> bool{
+            self.get_any(key.any()).filter(|sub|(*sub as &dyn std::any::Any)
+                .downcast_ref::<<Self as TypeContainer<$t>>::Sub>()
+                .expect("Should be correct type").contains_slot(key)
+            ).is_some()
         }
     };
     (impl AnyContainer) => {

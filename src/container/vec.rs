@@ -164,6 +164,14 @@ unsafe impl<T: Item> LeafContainer<T> for VecContainer<T> {
         })
     }
 
+    #[inline(always)]
+    fn contains(&self, index: usize) -> bool {
+        self.slots
+            .get(index)
+            .filter(|slot| matches!(slot, Slot::Some(_)))
+            .is_some()
+    }
+
     fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_> {
         self.iter_slice(range.start_bound().cloned(), range.end_bound().cloned())
     }

@@ -4,7 +4,7 @@ mod traits;
 pub use any::*;
 pub use traits::*;
 
-use super::{Grc, ItemLocality, Key, Owned, PartialEdge, Ptr, Ref, Side};
+use super::{Grc, ItemLocality, Key, MultiOwned, Owned, PartialEdge, Ptr, Ref, Side};
 use std::{alloc::Allocator, any::Any, ptr::Pointee};
 
 /// Marker trait for dyn compliant traits of items.

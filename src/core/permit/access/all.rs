@@ -83,4 +83,8 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>> AccessPermit<'a, C, R, 
             Some(self.key_transition(|_| key))
         }
     }
+
+    pub fn keys_split(self) -> AccessPermit<'a, C, R, All, Keys> {
+        self.key_transition(|key| Keys::new([key]))
+    }
 }

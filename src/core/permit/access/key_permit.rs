@@ -4,6 +4,10 @@ use super::*;
 pub struct Keys(HashSet<Key>);
 
 impl Keys {
+    pub fn new(iter: impl IntoIterator<Item = Key>) -> Self {
+        Self(iter.into_iter().collect())
+    }
+
     pub fn insert<K, T: DynItem + ?Sized>(&mut self, key: Key<K, T>) {
         self.0.insert(key.any().ptr());
     }

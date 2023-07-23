@@ -5,7 +5,7 @@ use std::{
     marker::{PhantomData, Unsize},
 };
 
-use crate::core::{AnyItem, DynItem, Item, LocalityPath, LocalityRegion};
+use crate::core::{AnyItem, Container, DynItem, Item, LocalityPath, LocalityRegion};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -90,6 +90,33 @@ impl<P> Key<P> {
     /// Make assumption that this is Key for T.
     pub fn assume<T: DynItem + ?Sized>(self) -> Key<P, T> {
         Key(self.0, PhantomData)
+    }
+}
+
+impl Key<Owned> {
+    /// Checked downcast to T
+    pub fn downcast<T: Item>(self, container: &impl Container<T>) -> Option<Key<Owned, T>> {
+        Some(self.assume()).filter(|key| container.contains_slot(key.ptr()))
+    }
+}
+
+impl<'a> Key<Ref<'a>> {
+    /// Checked downcast to T
+    pub fn downcast<T: Item>(self, container: &impl Container<T>) -> Option<Key<Ref<'a>, T>> {
+        Some(self.assume()).filter(|key| container.contains_slot(key.ptr()))
+    }
+}
+
+impl Key<Ptr> {
+    /// Checked downcast to T
+    pub fn downcast<'a, T: Item>(
+        self,
+        container: &'a impl Container<T>,
+    ) -> Option<Key<Ref<'a>, T>> {
+        Some(self.assume())
+            .filter(|key| container.contains_slot(key.ptr()))
+            // SAFETY: container contains slot and it will do so for at least 'a.
+            .map(|key| unsafe { key.extend() })
     }
 }
 

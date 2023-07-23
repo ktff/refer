@@ -84,6 +84,12 @@ macro_rules! region_container {
             let index = self.region().index_of(key);
             self.get_mut(index)?.unfill_slot(key)
         }
+
+        #[inline(always)]
+        fn contains_slot(&self, key: Key<Ptr, T>) -> bool{
+            let index = self.region().index_of(key);
+            self.get(index).filter(|sub|sub.contains_slot(key)).is_some()
+        }
     };
     (impl AnyContainer) => {
         fn container_path(&self) -> Path {

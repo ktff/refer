@@ -237,6 +237,11 @@ impl LeafPath {
         Key::new_ptr(index)
     }
 
+    #[inline(always)]
+    pub fn contains_key<T: Pointee + AnyItem + ?Sized>(&self, key: Key<Ptr, T>) -> bool {
+        (key.index().get() ^ self.path) >> self.remaining_len.get() == 0
+    }
+
     /// May panic/return out of path index if key isn't of this path.
     #[inline(always)]
     pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<Ptr, T>) -> usize {

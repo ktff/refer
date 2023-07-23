@@ -287,6 +287,15 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>>
     }
 }
 
+impl<'a, 'b: 'a, T: Item, C: Container<T>> KeyAccess<'a, C, permit::Ref, &'a Add<'b, C>>
+    for Key<Owned, T>
+{
+    type T = T;
+    fn get(&self, access: &'a Add<'b, C>) -> Slot<'a, permit::Ref, Self::T> {
+        access.access().key(self.borrow()).get()
+    }
+}
+
 /// Enables key.get(permit) access when known Item is guaranteed to exist.
 pub trait DynKeyAccess<'a, C, R, A> {
     type T: DynItem + ?Sized;

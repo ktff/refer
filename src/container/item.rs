@@ -70,6 +70,11 @@ unsafe impl<T: Item> LeafContainer<T> for ItemContainer<T> {
             .map(|item| UnsafeSlot::new(self.locality.index_locality(ONE), item))
     }
 
+    #[inline(always)]
+    fn contains(&self, index: usize) -> bool {
+        self.slot.as_ref().filter(|_| index == 1).is_some()
+    }
+
     fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_> {
         self.slot
             .as_ref()

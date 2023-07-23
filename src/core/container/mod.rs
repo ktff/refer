@@ -38,7 +38,7 @@ pub trait ContainerFamily<T: Item>: Send + Sync + 'static {
 /// - clear it self up during drop.
 ///
 /// TODO: Eliminate this sentence.
-/// May panic if argument keys don't correspond to this container.
+/// May panic if argument keys don't correspond to this container, in other words if key is not valid for this container.
 ///
 /// UNSAFE: Implementations MUST follow get_slot & iter_slot SAFETY contracts.
 pub unsafe trait Container<T: Item>: AnyContainer {
@@ -65,6 +65,10 @@ pub unsafe trait Container<T: Item>: AnyContainer {
 
     /// Removes from container.
     fn unfill_slot(&mut self, key: Key<Ptr, T>) -> Option<(T, ItemLocality<T>)>;
+
+    /// True if slot for this key exists.
+    /// Valid to ask for any key.
+    fn contains_slot(&self, key: Key<Ptr, T>) -> bool;
 }
 
 /// UNSAFE: Implementations MUST follow any_get_slot & next_key SAFETY contracts.
