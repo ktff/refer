@@ -3,7 +3,7 @@ mod key;
 mod key_path;
 mod locality_key;
 mod locality_path;
-mod owned;
+mod multi;
 mod path;
 
 pub use grc::Grc;
@@ -11,7 +11,7 @@ pub use key::{Key, Owned, Ptr, Ref};
 pub use key_path::*;
 pub use locality_key::*;
 pub use locality_path::*;
-pub use owned::MultiOwned;
+pub use multi::MultiOwned;
 pub use path::{LeafPath, Path, RegionPath};
 
 // NOTE: Base must be greater than usize

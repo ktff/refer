@@ -119,60 +119,74 @@ impl<'a, T: Item> ItemLocality<'a, T> {
             .ok()
     }
 
-    /// Removes edge from object.
+    // /// Removes edge from object.
+    // /// Edge should have come from this Item edges.
+    // /// Panics if edge is not in object.
+    // pub fn remove_edge<D: StandaloneItem>(
+    //     &self,
+    //     edge: PartialEdge<Key<Owned, D>>,
+    //     object: &mut Slot<permit::Mut, D>,
+    // ) {
+    //     let (object_key, edge) = edge.reverse(self.path().ptr());
+    //     let subject_key = object.remove_edge(object_key, edge);
+    //     std::mem::forget(subject_key);
+    // }
+
+    /// Removes this from drain.
     /// Edge should have come from this Item edges.
-    /// Panics if edge is not in object.
-    pub fn remove_edge<D: StandaloneItem>(
+    /// Panics if edge is not in drain.
+    pub fn remove_from_drain<D: DrainItem>(
         &self,
-        edge: PartialEdge<Key<Owned, D>>,
-        object: &mut Slot<permit::Mut, D>,
+        drain_key: Key<Owned, D>,
+        drain: &mut Slot<permit::Mut, D>,
     ) {
-        let (object_key, edge) = edge.reverse(self.path().ptr());
-        let subject_key = object.remove_edge(object_key, edge);
-        std::mem::forget(subject_key);
+        let this_key = drain
+            .try_remove_drain_edge(drain_key, self.path().ptr())
+            .expect("Method invariant broken");
+        std::mem::forget(this_key);
     }
 
-    /// Removes edge from object.
-    /// Edge should have come from this Item edges.
-    /// Err if object can't remove it.
-    /// Panics if edge is not in object.
-    #[must_use]
-    pub fn try_remove_edge<D: Item>(
-        &self,
-        edge: PartialEdge<Key<Owned, D>>,
-        object: &mut Slot<permit::Mut, D>,
-    ) -> Result<(), PartialEdge<Key<Owned, D>>> {
-        let subject = edge.subject;
-        let (object_key, edge) = edge.reverse(self.path().ptr());
-        object
-            .try_remove_edge(object_key, edge)
-            .map(|subject_key| std::mem::forget(subject_key))
-            .map_err(|(present, object_key)| {
-                assert_eq!(present, Found::Yes);
-                subject.object(object_key)
-            })
-    }
+    // /// Removes edge from object.
+    // /// Edge should have come from this Item edges.
+    // /// Err if object can't remove it.
+    // /// Panics if edge is not in object.
+    // #[must_use]
+    // pub fn try_remove_edge<D: Item>(
+    //     &self,
+    //     edge: PartialEdge<Key<Owned, D>>,
+    //     object: &mut Slot<permit::Mut, D>,
+    // ) -> Result<(), PartialEdge<Key<Owned, D>>> {
+    //     let subject = edge.subject;
+    //     let (object_key, edge) = edge.reverse(self.path().ptr());
+    //     object
+    //         .try_remove_edge(object_key, edge)
+    //         .map(|subject_key| std::mem::forget(subject_key))
+    //         .map_err(|(present, object_key)| {
+    //             assert_eq!(present, Found::Yes);
+    //             subject.object(object_key)
+    //         })
+    // }
 
-    /// Removes edge from object.
-    /// Edge should have come from this Item edges.
-    /// Err if object can't remove it.
-    /// Panics if edge is not in object.
-    #[must_use]
-    pub fn try_remove_dyn_edge<D: DynItem + ?Sized>(
-        &self,
-        edge: PartialEdge<Key<Owned, D>>,
-        object: &mut DynSlot<permit::Mut, D>,
-    ) -> Result<(), PartialEdge<Key<Owned, D>>> {
-        let subject = edge.subject;
-        let (object_key, edge) = edge.reverse(self.path().ptr());
-        object
-            .remove_edge(object_key, edge)
-            .map(|subject_key| std::mem::forget(subject_key))
-            .map_err(|(present, object_key)| {
-                assert_eq!(present, Found::Yes);
-                subject.object(object_key)
-            })
-    }
+    // /// Removes edge from object.
+    // /// Edge should have come from this Item edges.
+    // /// Err if object can't remove it.
+    // /// Panics if edge is not in object.
+    // #[must_use]
+    // pub fn try_remove_dyn_edge<D: DynItem + ?Sized>(
+    //     &self,
+    //     edge: PartialEdge<Key<Owned, D>>,
+    //     object: &mut DynSlot<permit::Mut, D>,
+    // ) -> Result<(), PartialEdge<Key<Owned, D>>> {
+    //     let subject = edge.subject;
+    //     let (object_key, edge) = edge.reverse(self.path().ptr());
+    //     object
+    //         .remove_edge(object_key, edge)
+    //         .map(|subject_key| std::mem::forget(subject_key))
+    //         .map_err(|(present, object_key)| {
+    //             assert_eq!(present, Found::Yes);
+    //             subject.object(object_key)
+    //         })
+    // }
 
     pub fn any(self) -> AnyItemLocality<'a> {
         AnyItemLocality {

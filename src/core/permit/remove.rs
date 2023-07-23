@@ -113,11 +113,34 @@ impl<'a, C: AnyContainer + ?Sized> RemovePermit<'a, C> {
         edges: Vec<PartialEdge<Key<Owned>>>,
         remove: &mut Vec<Key>,
     ) {
+        let mut extra = Vec::<(_, MultiOwned)>::new();
         for edge in edges {
-            if let Some(mut object) = self.access_mut().key(edge.object.ptr()).get_dyn_try() {
+            // Remove from extra
+            if let Ok(i) = extra.binary_search_by_key(&edge.ptr(), |(edge, _)| *edge) {
+                if let Some(key) = extra[i].1.take() {
+                    std::mem::forget(key);
+                } else {
+                    let (_, rem) = extra.remove(i);
+                    std::mem::forget(rem);
+                }
+            }
+            // Remove from object
+            else if let Some(mut object) = self.access_mut().key(edge.object.ptr()).get_dyn_try()
+            {
+                let edge_ptr = edge.ptr();
                 let (object_key, rev_edge) = edge.reverse(subject);
-                match object.remove_edge(object_key, rev_edge) {
-                    Ok(subject) => std::mem::forget(subject),
+                match object.remove_edges(object_key, rev_edge) {
+                    Ok(subject) => {
+                        let (subject, rem) = subject.sub();
+                        // Add extra removed to extra
+                        rem.map(|rem| {
+                            match extra.binary_search_by_key(&edge_ptr, |(edge, _)| *edge) {
+                                Ok(i) => extra[i].1.append(rem),
+                                Err(i) => extra.insert(i, (edge_ptr, rem)),
+                            }
+                        });
+                        std::mem::forget(subject);
+                    }
                     Err((present, object_key)) => {
                         assert_eq!(present, Found::Yes);
                         remove.push(object_key.ptr());

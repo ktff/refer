@@ -15,6 +15,7 @@
 #![feature(unsize)]
 #![feature(const_type_id)]
 #![feature(specialization)]
+#![feature(drain_filter)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs

@@ -40,9 +40,7 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Vertice<T, E> {
             .key_try(drain.borrow())
             .expect("Should have access to everything but source")
             .get();
-        source
-            .locality()
-            .remove_edge(Side::Source.object(drain), &mut object);
+        source.locality().remove_from_drain(drain, &mut object);
 
         data
     }
@@ -91,37 +89,51 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
         match side {
             Some(Side::Source) => sources,
             Some(Side::Drain) => drains,
+            Some(Side::Bi) => std::iter::empty(),
             None => drains.chain(sources),
         }
     }
 
-    /// Should remove edge and return object ref.
+    /// Should remove applicable (source,drain,bi) edges and return object refs.
     /// Ok success.
     /// Err if can't remove it, which may cause for this item to be removed.
     #[must_use]
-    fn try_remove_edge<D: DynItem + ?Sized>(
+    fn try_remove_edges<D: DynItem + ?Sized>(
         &mut self,
         _: ItemLocality<'_, Self>,
         this: Key<Owned, Self>,
         PartialEdge { subject, object }: PartialEdge<Key<Ptr, D>>,
-    ) -> Result<Key<Owned, D>, (Found, Key<Owned, Self>)> {
+    ) -> Result<MultiOwned<D>, (Found, Key<Owned, Self>)> {
         match subject {
-            // Find first occurrence of object in sources and remove it
-            Side::Drain => {
-                if let Some(index) = self.sources.iter().position(|source| *source == object) {
-                    Ok(self.sources.remove(index).assume())
-                } else {
-                    Err((Found::No, this))
-                }
-            }
-            // Find first occurrence of object in drains and remove it
-            Side::Source => {
-                if let Some(index) = self.drains.iter().position(|(_, drain)| *drain == object) {
-                    Ok(self.drains.remove(index).1.any().assume())
-                } else {
-                    Err((Found::No, this))
-                }
-            }
+            // Find all occurrence of object in sources and remove them
+            Side::Drain => self
+                .sources
+                .drain_filter(|source| *source == object)
+                .fold(None, |owned: Option<MultiOwned>, key| {
+                    if let Some(mut owned) = owned {
+                        owned.add(key);
+                        Some(owned)
+                    } else {
+                        Some(key.into())
+                    }
+                })
+                .map(|owned| owned.assume())
+                .ok_or((Found::No, this)),
+            // Find all occurrence of object in drains and remove them
+            Side::Source => self
+                .drains
+                .drain_filter(|(_, drain)| *drain == object)
+                .fold(None, |owned: Option<MultiOwned>, key| {
+                    if let Some(mut owned) = owned {
+                        owned.add(key.1.any());
+                        Some(owned)
+                    } else {
+                        Some(key.1.any().into())
+                    }
+                })
+                .map(|owned| owned.assume())
+                .ok_or((Found::No, this)),
+            Side::Bi => Err((Found::No, this)),
         }
     }
 
@@ -149,6 +161,24 @@ unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Ve
         source: Key<Owned, D>,
     ) {
         self.sources.push(source.any());
+    }
+
+    /// Removes drain edge and returns object ref.
+    /// Ok success.
+    /// Err if doesn't exist.
+    #[must_use]
+    fn try_remove_drain_edge<D: DynItem + ?Sized>(
+        &mut self,
+        _: ItemLocality<'_, Self>,
+        this: Key<Owned, Self>,
+        source: Key<Ptr, D>,
+    ) -> Result<Key<Owned, D>, Key<Owned, Self>> {
+        // Find first occurrence of source in sources and remove it
+        if let Some(index) = self.sources.iter().position(|s| *s == source.any()) {
+            Ok(self.sources.remove(index).assume())
+        } else {
+            Err(this)
+        }
     }
 }
 

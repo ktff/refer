@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyItem, DynItem, DynSlot, Found, Grc, Item, ItemLocality, Key, Owned, PartialEdge, Ptr, Ref,
-    Side, StandaloneItem, UnsafeSlot,
+    AnyItem, DrainItem, DynItem, DynSlot, Found, Grc, Item, ItemLocality, Key, Owned, PartialEdge,
+    Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -89,15 +89,25 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
         func(self.item_mut(), locality)
     }
 
-    /// Ok success.
-    /// Err if can't remove it.
-    #[must_use]
-    pub fn try_remove_edge<F: DynItem + ?Sized>(
+    // /// Ok success.
+    // /// Err if can't remove it.
+    // #[must_use]
+    // pub fn try_remove_edge<F: DynItem + ?Sized>(
+    //     &mut self,
+    //     this: Key<Owned, T>,
+    //     edge: PartialEdge<Key<Ptr, F>>,
+    // ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
+    //     self.localized(|item, locality| item.try_remove_edge(locality, this, edge))
+    // }
+}
+
+impl<'a, T: DrainItem> Slot<'a, permit::Mut, T> {
+    pub fn try_remove_drain_edge<F: DynItem + ?Sized>(
         &mut self,
         this: Key<Owned, T>,
-        edge: PartialEdge<Key<Ptr, F>>,
-    ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
-        self.localized(|item, locality| item.try_remove_edge(locality, this, edge))
+        other: Key<Ptr, F>,
+    ) -> Result<Key<Owned, F>, Key<Owned, T>> {
+        self.localized(|item, locality| item.try_remove_drain_edge(locality, this, other))
     }
 }
 
@@ -114,14 +124,14 @@ impl<'a, T: StandaloneItem> Slot<'a, permit::Mut, T> {
         self.localized(|item, locality| item.dec_owners(locality, grc))
     }
 
-    #[must_use]
-    pub fn remove_edge<F: DynItem + ?Sized>(
-        &mut self,
-        this: Key<Owned, T>,
-        edge: PartialEdge<Key<Ptr, F>>,
-    ) -> Key<Owned, F> {
-        self.localized(|item, locality| item.remove_edge(locality, this, edge))
-    }
+    // #[must_use]
+    // pub fn remove_edge<F: DynItem + ?Sized>(
+    //     &mut self,
+    //     this: Key<Owned, T>,
+    //     edge: PartialEdge<Key<Ptr, F>>,
+    // ) -> Key<Owned, F> {
+    //     self.localized(|item, locality| item.remove_edge(locality, this, edge))
+    // }
 }
 
 impl<'a, T: Item, R> Copy for Slot<'a, R, T> where Permit<R>: Copy {}

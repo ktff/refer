@@ -1,11 +1,11 @@
-pub mod addon;
-pub mod data;
+// pub mod addon;
+// pub mod data;
 pub mod vertice;
 
-pub use addon::Addon;
-pub use data::Data;
+// pub use addon::Addon;
+// pub use data::Data;
 pub use vertice::Vertice;
-pub type Edge<D, T = ()> = Addon<T, 2, D>;
+// pub type Edge<D, T = ()> = Addon<T, 2, D>;
 
 // ***************************************** Default impl ********************************************* //
 
@@ -30,13 +30,13 @@ macro_rules! impl_edgeless_item {
             }
 
             #[must_use]
-            fn try_remove_edge<T: $crate::core::DynItem + ?Sized>(
+            fn try_remove_edges<T: $crate::core::DynItem + ?Sized>(
                 &mut self,
                 _: $crate::core::ItemLocality<'_, Self>,
                 this: $crate::core::Key<$crate::core::Owned, Self>,
                 _: $crate::core::PartialEdge<$crate::core::Key<$crate::core::Ptr, T>>,
             ) -> Result<
-                $crate::core::Key<$crate::core::Owned, T>,
+                $crate::core::MultiOwned<T>,
                 (
                     $crate::core::Found,
                     $crate::core::Key<$crate::core::Owned, Self>,

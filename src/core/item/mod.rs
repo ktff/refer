@@ -45,16 +45,27 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Must have stable iteration order.
     fn edges(&self, locality: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
 
-    /// Should remove edge and return object ref.
+    // /// Should remove edge and return object ref.
+    // /// Ok success.
+    // /// Err if can't remove it, which may cause for this item to be removed.
+    // #[must_use]
+    // fn try_remove_edge<T: DynItem + ?Sized>(
+    //     &mut self,
+    //     locality: ItemLocality<'_, Self>,
+    //     this: Key<Owned, Self>,
+    //     edge: PartialEdge<Key<Ptr, T>>,
+    // ) -> Result<Key<Owned, T>, (Found, Key<Owned, Self>)>;
+
+    /// Should remove applicable (source,drain,bi) edges and return object refs.
     /// Ok success.
     /// Err if can't remove it, which may cause for this item to be removed.
     #[must_use]
-    fn try_remove_edge<T: DynItem + ?Sized>(
+    fn try_remove_edges<T: DynItem + ?Sized>(
         &mut self,
         locality: ItemLocality<'_, Self>,
         this: Key<Owned, Self>,
         edge: PartialEdge<Key<Ptr, T>>,
-    ) -> Result<Key<Owned, T>, (Found, Key<Owned, Self>)>;
+    ) -> Result<MultiOwned<T>, (Found, Key<Owned, Self>)>;
 
     /// Caller should properly dispose of the edges.
     fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<PartialEdge<Key<Owned>>>;
@@ -70,6 +81,37 @@ pub unsafe trait DrainItem: Item {
         locality: ItemLocality<'_, Self>,
         source: Key<Owned, T>,
     );
+
+    /// Removes drain edge and returns object ref.
+    /// Ok success.
+    /// Err if doesn't exist.
+    #[must_use]
+    fn try_remove_drain_edge<T: DynItem + ?Sized>(
+        &mut self,
+        locality: ItemLocality<'_, Self>,
+        this: Key<Owned, Self>,
+        source: Key<Ptr, T>,
+    ) -> Result<Key<Owned, T>, Key<Owned, Self>>;
+}
+
+/// Item which can be have bi edges.
+/// UNSAFE: Implementations MUST follow add_bi_edge SAFETY contract.
+pub unsafe trait BiItem<D, T: DynItem + ?Sized>: Item {
+    /// SAFETY: add_bi_edge MUST ensure to add PartialEdge{object: other,side: Side::Bi} to edges of self.
+    /// Callers should create the resulting Key<Owned,Self>.
+    fn add_bi_edge(&mut self, locality: ItemLocality<'_, Self>, data: D, other: Key<Owned, T>);
+
+    /// Removes bi edge and returns object ref.
+    /// Ok success.
+    /// Err if doesn't exist.
+    #[must_use]
+    fn try_remove_bi_edge(
+        &mut self,
+        locality: ItemLocality<'_, Self>,
+        this: Key<Owned, Self>,
+        data: D,
+        other: Key<Ptr, T>,
+    ) -> Result<Key<Owned, T>, Key<Owned, Self>>;
 }
 
 /// Item that doesn't depend on any edge so it can have Key<Owned> without edges.
@@ -82,20 +124,6 @@ pub trait StandaloneItem: DrainItem {
 
     /// True if there is counted Owned somewhere.
     fn has_owner(&self, locality: ItemLocality<'_, Self>) -> bool;
-
-    /// Must remove edge and return object ref.
-    /// This also means try_remove_edge will always return Some.
-    /// Panics if edge is not found.
-    #[must_use]
-    fn remove_edge<T: DynItem + ?Sized>(
-        &mut self,
-        locality: ItemLocality<'_, Self>,
-        this: Key<Owned, Self>,
-        edge: PartialEdge<Key<Ptr, T>>,
-    ) -> Key<Owned, T> {
-        self.try_remove_edge(locality, this, edge)
-            .expect("Method invariant broken")
-    }
 }
 
 pub trait IsStandaloneItem: Item {

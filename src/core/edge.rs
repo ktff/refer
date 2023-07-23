@@ -1,12 +1,16 @@
 use std::ops::Not;
 
+use super::{DynItem, Key, Ptr};
+
 /// Sides of edge.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
 pub enum Side {
     /// Edge source where edge data can be inlined.
     Source,
     /// Edge drain
     Drain,
+    /// Bi directional.
+    Bi,
 }
 
 impl Side {
@@ -25,6 +29,7 @@ impl Not for Side {
         match self {
             Side::Source => Side::Drain,
             Side::Drain => Side::Source,
+            Side::Bi => Side::Bi,
         }
     }
 }
@@ -38,7 +43,7 @@ pub struct Edge<S, D> {
 }
 
 /// Edge where one side is described with T while other by it's side type.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct PartialEdge<T> {
     pub subject: Side,
     pub object: T,
@@ -61,5 +66,14 @@ impl<T> PartialEdge<T> {
                 object,
             },
         )
+    }
+}
+
+impl<P, T: DynItem + ?Sized> PartialEdge<Key<P, T>> {
+    pub fn ptr(&self) -> PartialEdge<Key<Ptr, T>> {
+        PartialEdge {
+            subject: self.subject,
+            object: self.object.ptr(),
+        }
     }
 }

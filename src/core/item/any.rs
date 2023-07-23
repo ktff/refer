@@ -1,5 +1,5 @@
 use super::{DrainItem, Found, Item, ItemTrait, StandaloneItem};
-use crate::core::{AnyItemLocality, Grc, Key, Owned, PartialEdge, Ref, Side};
+use crate::core::{AnyItemLocality, Grc, Key, MultiOwned, Owned, PartialEdge, Ref, Side};
 use std::{
     any::{Any, TypeId},
     fmt::Display,
@@ -52,12 +52,12 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
-    fn any_remove_edge(
+    fn any_remove_edges(
         &mut self,
         locality: AnyItemLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
-    ) -> Result<Key<Owned>, (Found, Key<Owned>)>;
+    ) -> Result<MultiOwned, (Found, Key<Owned>)>;
 
     #[must_use]
     fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Grc>;
@@ -104,13 +104,13 @@ impl<T: Item> AnyItem for T {
         Err(source)
     }
 
-    fn any_remove_edge(
+    fn any_remove_edges(
         &mut self,
         locality: AnyItemLocality<'_>,
         this: Key<Owned>,
         edge: PartialEdge<Key>,
-    ) -> Result<Key<Owned>, (Found, Key<Owned>)> {
-        self.try_remove_edge(
+    ) -> Result<MultiOwned, (Found, Key<Owned>)> {
+        self.try_remove_edges(
             locality.downcast().expect("Unexpected item type"),
             this.assume(),
             edge,

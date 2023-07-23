@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Found, Grc, Item, Key, Owned, PartialEdge,
-    Ptr, Ref, Side,
+    AnyItem, AnyItemLocality, AnyUnsafeSlot, DynItem, Found, Grc, Item, Key, MultiOwned, Owned,
+    PartialEdge, Ptr, Ref, Side,
 };
 use log::*;
 use std::{
@@ -206,15 +206,15 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
-    pub fn remove_edge<F: DynItem + ?Sized>(
+    pub fn remove_edges<F: DynItem + ?Sized>(
         &mut self,
         this: Key<Owned, T>,
         edge: PartialEdge<Key<Ptr, F>>,
-    ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
+    ) -> Result<MultiOwned<F>, (Found, Key<Owned, T>)> {
         self.any_localized(|item, locality| {
-            item.any_remove_edge(locality, this.any(), edge.map(|key| key.any()))
+            item.any_remove_edges(locality, this.any(), edge.map(|key| key.any()))
         })
-        .map(Key::assume)
+        .map(MultiOwned::assume)
         .map_err(|(present, key)| (present, key.assume()))
     }
 
