@@ -121,6 +121,10 @@ impl Key<Ptr> {
 }
 
 impl<P, T: DynItem + ?Sized> Key<P, T> {
+    pub(super) unsafe fn new(index: Index) -> Self {
+        Self(index, PhantomData)
+    }
+
     pub fn path(&self) -> Path {
         Path::new_top(self.0.get(), INDEX_BASE_BITS.get())
     }
@@ -219,7 +223,7 @@ impl<P: KeySign, T: DynItem + ?Sized> fmt::Display for Key<P, T> {
     }
 }
 
-trait KeySign {
+pub(super) trait KeySign {
     fn sign() -> &'static str;
 }
 

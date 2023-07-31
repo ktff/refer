@@ -3,6 +3,7 @@ mod key;
 mod key_path;
 mod locality_key;
 mod locality_path;
+mod mini;
 mod multi;
 mod path;
 
@@ -13,6 +14,7 @@ pub use locality_key::*;
 pub use locality_path::*;
 pub use multi::MultiOwned;
 pub use path::{LeafPath, Path, RegionPath};
+pub use mini::U32Key;
 
 // NOTE: Base must be greater than usize
 pub use base::*;
