@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyItem, DrainItem, DynItem, DynSlot, Found, Grc, Item, ItemLocality, Key, Owned, PartialEdge,
-    Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
+    AnyItem, BiItem, DrainItem, DynItem, DynSlot, Found, Grc, Item, ItemLocality, Key, Owned,
+    PartialEdge, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 
@@ -87,6 +87,21 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
     pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, ItemLocality<T>) -> R) -> R {
         let locality = self.locality();
         func(self.item_mut(), locality)
+    }
+
+    pub fn add_bi_edge<D, R, F: BiItem<R, T>>(
+        &mut self,
+        data: D,
+        other: &mut Slot<permit::Mut, F>,
+        other_data: R,
+    ) where
+        T: BiItem<D, F>,
+    {
+        // SAFETY: We are creating these keys in pair and adding them to their respective items.
+        let (this_key, other_key) =
+            unsafe { (self.locality().owned_key(), other.locality().owned_key()) };
+        self.localized(|item, locality| item.add_bi_edge(locality, data, other_key));
+        other.localized(|item, locality| item.add_bi_edge(locality, other_data, this_key));
     }
 
     // /// Ok success.
