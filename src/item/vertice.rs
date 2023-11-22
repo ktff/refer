@@ -36,11 +36,13 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Vertice<T, E> {
         drains: ObjectAccess<impl Container<Self>, Self>,
     ) -> E {
         let (data, drain) = source.drains.remove(edge);
-        let mut object = drains
-            .key_try(drain.borrow())
-            .expect("Should have access to everything but source")
-            .get();
-        source.locality().remove_from_drain(drain, &mut object);
+        source.locality().remove_from_drain(
+            &mut drains
+                .key_try(drain.borrow())
+                .expect("Should have access to everything but source")
+                .get(),
+            drain,
+        );
 
         data
     }

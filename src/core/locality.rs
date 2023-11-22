@@ -147,8 +147,8 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     /// Panics if edge is not in drain.
     pub fn remove_from_drain<D: DrainItem>(
         &self,
-        drain_key: Key<Owned, D>,
         drain: &mut Slot<permit::Mut, D>,
+        drain_key: Key<Owned, D>,
     ) {
         drain
             .try_remove_drain_edge(drain_key, self.path().ptr())
@@ -159,11 +159,11 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     /// Panics if edge is not in other.
     pub fn remove_bi_edge<R, D: BiItem<R, T>>(
         &self,
-        owned: Key<Owned, D>,
         data: R,
         other: &mut Slot<permit::Mut, D>,
+        other_key: Key<Owned, D>,
     ) {
-        std::mem::forget(owned);
+        std::mem::forget(other_key);
         let owned = other
             .localized(|item, locality| item.try_remove_bi_edge(locality, data, self.path().ptr()));
         assert!(owned.is_some(), "BI edge should be present in both items");
