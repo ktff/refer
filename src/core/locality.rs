@@ -1,6 +1,6 @@
 use super::{
-    permit, DrainItem, DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath,
-    Owned, Path, Ref, Slot,
+    permit, BiItem, DrainItem, DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey,
+    LocalityPath, Owned, Path, Ref, Slot,
 };
 use getset::{CopyGetters, Getters};
 use std::{any::Any, num::NonZeroUsize};
@@ -115,6 +115,18 @@ impl<'a, T: Item> ItemLocality<'a, T> {
             .map(|()| drain.locality().owned_key().assume())
             .map_err(std::mem::forget)
             .ok()
+    }
+
+    /// Adds bi edge to other.
+    /// UNSAFE: Caller must ensure to add returned key to this Item edges as PartialEdge {object:key,side:Side::Bi}.
+    #[must_use]
+    pub unsafe fn add_bi<O, D: BiItem<O, T>>(
+        &self,
+        data: O,
+        drain: &mut Slot<permit::Mut, D>,
+    ) -> Key<Owned, D> {
+        drain.localized(|item, locality| item.add_bi_edge(locality, data, self.owned_key()));
+        drain.locality().owned_key()
     }
 
     // /// Removes edge from object.
