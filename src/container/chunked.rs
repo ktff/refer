@@ -8,9 +8,9 @@ use std::{
     ops::{Bound, Range, RangeBounds},
 };
 
-type Iter<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a C> + Send + 'a;
+pub type Iter<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a C> + Send + 'a;
 
-type IterMut<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a mut C> + Send + 'a;
+pub type IterMut<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a mut C> + Send + 'a;
 
 /// A container that chunks items into separate containers according to items locality key.
 pub struct VecChunkedContainer<C: AnyContainer> {

@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyItem, BiItem, DrainItem, DynItem, DynSlot, Found, Grc, Item, ItemLocality, Key, Owned,
-    PartialEdge, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
+    AnyItem, BiItem, DrainItem, DynItem, DynSlot, Grc, Item, ItemLocality, Key, Owned, Ptr, Ref,
+    Side, StandaloneItem, UnsafeSlot,
 };
 use std::ops::{Deref, DerefMut};
 

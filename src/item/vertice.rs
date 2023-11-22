@@ -108,7 +108,7 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
             // Find all occurrence of object in sources and remove them
             Side::Drain => self
                 .sources
-                .drain_filter(|source| *source == object)
+                .extract_if(|source| *source == object)
                 .fold(None, |owned: Option<MultiOwned>, key| {
                     if let Some(mut owned) = owned {
                         owned.add(key);
@@ -122,7 +122,7 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
             // Find all occurrence of object in drains and remove them
             Side::Source => self
                 .drains
-                .drain_filter(|(_, drain)| *drain == object)
+                .extract_if(|(_, drain)| *drain == object)
                 .fold(None, |owned: Option<MultiOwned>, key| {
                     if let Some(mut owned) = owned {
                         owned.add(key.1.any());

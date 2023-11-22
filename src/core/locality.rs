@@ -1,8 +1,6 @@
-use crate::core::Found;
-
 use super::{
     permit, DrainItem, DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath,
-    Owned, PartialEdge, Path, Ref, Slot, StandaloneItem,
+    Owned, Path, Ref, Slot,
 };
 use getset::{CopyGetters, Getters};
 use std::{any::Any, num::NonZeroUsize};
