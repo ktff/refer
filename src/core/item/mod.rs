@@ -63,9 +63,8 @@ pub trait Item: Sized + Any + Sync + Send {
     fn try_remove_edges<T: DynItem + ?Sized>(
         &mut self,
         locality: ItemLocality<'_, Self>,
-        this: Key<Owned, Self>,
         edge: PartialEdge<Key<Ptr, T>>,
-    ) -> Result<MultiOwned<T>, (Found, Key<Owned, Self>)>;
+    ) -> Result<MultiOwned<T>, Found>;
 
     /// Caller should properly dispose of the edges.
     fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<PartialEdge<Key<Owned>>>;
@@ -89,9 +88,8 @@ pub unsafe trait DrainItem: Item {
     fn try_remove_drain_edge<T: DynItem + ?Sized>(
         &mut self,
         locality: ItemLocality<'_, Self>,
-        this: Key<Owned, Self>,
         source: Key<Ptr, T>,
-    ) -> Result<Key<Owned, T>, Key<Owned, Self>>;
+    ) -> Option<Key<Owned, T>>;
 }
 
 /// Item which can be have bi edges.
@@ -108,10 +106,9 @@ pub unsafe trait BiItem<D, T: DynItem + ?Sized>: Item {
     fn try_remove_bi_edge(
         &mut self,
         locality: ItemLocality<'_, Self>,
-        this: Key<Owned, Self>,
         data: D,
         other: Key<Ptr, T>,
-    ) -> Result<Key<Owned, T>, Key<Owned, Self>>;
+    ) -> Option<Key<Owned, T>>;
 }
 
 /// Item that doesn't depend on any edge so it can have Key<Owned> without edges.

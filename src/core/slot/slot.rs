@@ -104,6 +104,30 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
         other.localized(|item, locality| item.add_bi_edge(locality, other_data, this_key));
     }
 
+    pub fn try_remove_bi_edge<D, R, F: BiItem<R, T>>(
+        &mut self,
+        data: D,
+        other_data: R,
+        other: &mut Slot<permit::Mut, F>,
+    ) -> bool
+    where
+        T: BiItem<D, F>,
+    {
+        let owned = self
+            .localized(|item, locality| item.try_remove_bi_edge(locality, data, other.key().ptr()));
+        if owned.is_some() {
+            std::mem::forget(owned);
+            let owned = other.localized(|item, locality| {
+                item.try_remove_bi_edge(locality, other_data, self.key().ptr())
+            });
+            assert!(owned.is_some(), "BI edge should be present in both items");
+            std::mem::forget(owned);
+            true
+        } else {
+            false
+        }
+    }
+
     // /// Ok success.
     // /// Err if can't remove it.
     // #[must_use]
@@ -121,8 +145,16 @@ impl<'a, T: DrainItem> Slot<'a, permit::Mut, T> {
         &mut self,
         this: Key<Owned, T>,
         other: Key<Ptr, F>,
-    ) -> Result<Key<Owned, F>, Key<Owned, T>> {
-        self.localized(|item, locality| item.try_remove_drain_edge(locality, this, other))
+    ) -> Result<(), Key<Owned, T>> {
+        if let Some(other) =
+            self.localized(|item, locality| item.try_remove_drain_edge(locality, other))
+        {
+            std::mem::forget(other);
+            std::mem::forget(this);
+            Ok(())
+        } else {
+            Err(this)
+        }
     }
 }
 

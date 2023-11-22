@@ -101,9 +101,8 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
     fn try_remove_edges<D: DynItem + ?Sized>(
         &mut self,
         _: ItemLocality<'_, Self>,
-        this: Key<Owned, Self>,
         PartialEdge { subject, object }: PartialEdge<Key<Ptr, D>>,
-    ) -> Result<MultiOwned<D>, (Found, Key<Owned, Self>)> {
+    ) -> Result<MultiOwned<D>, Found> {
         match subject {
             // Find all occurrence of object in sources and remove them
             Side::Drain => self
@@ -118,7 +117,7 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
                     }
                 })
                 .map(|owned| owned.assume())
-                .ok_or((Found::No, this)),
+                .ok_or(Found::No),
             // Find all occurrence of object in drains and remove them
             Side::Source => self
                 .drains
@@ -132,8 +131,8 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
                     }
                 })
                 .map(|owned| owned.assume())
-                .ok_or((Found::No, this)),
-            Side::Bi => Err((Found::No, this)),
+                .ok_or(Found::No),
+            Side::Bi => Err(Found::No),
         }
     }
 
@@ -170,15 +169,11 @@ unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Ve
     fn try_remove_drain_edge<D: DynItem + ?Sized>(
         &mut self,
         _: ItemLocality<'_, Self>,
-        this: Key<Owned, Self>,
         source: Key<Ptr, D>,
-    ) -> Result<Key<Owned, D>, Key<Owned, Self>> {
+    ) -> Option<Key<Owned, D>> {
         // Find first occurrence of source in sources and remove it
-        if let Some(index) = self.sources.iter().position(|s| *s == source.any()) {
-            Ok(self.sources.remove(index).assume())
-        } else {
-            Err(this)
-        }
+        let index = self.sources.iter().position(|s| *s == source.any())?;
+        Some(self.sources.remove(index).assume())
     }
 }
 

@@ -211,11 +211,18 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
         this: Key<Owned, T>,
         edge: PartialEdge<Key<Ptr, F>>,
     ) -> Result<MultiOwned<F>, (Found, Key<Owned, T>)> {
-        self.any_localized(|item, locality| {
-            item.any_remove_edges(locality, this.any(), edge.map(|key| key.any()))
-        })
-        .map(MultiOwned::assume)
-        .map_err(|(present, key)| (present, key.assume()))
+        match self
+            .any_localized(|item, locality| {
+                item.any_remove_edges(locality, edge.map(|key| key.any()))
+            })
+            .map(MultiOwned::assume)
+        {
+            Ok(owned) => {
+                std::mem::forget(this);
+                Ok(owned)
+            }
+            Err(present) => Err((present, this)),
+        }
     }
 
     /// Caller should properly dispose of Grc once done with it.

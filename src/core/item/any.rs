@@ -55,9 +55,8 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     fn any_remove_edges(
         &mut self,
         locality: AnyItemLocality<'_>,
-        this: Key<Owned>,
         edge: PartialEdge<Key>,
-    ) -> Result<MultiOwned, (Found, Key<Owned>)>;
+    ) -> Result<MultiOwned, Found>;
 
     #[must_use]
     fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Grc>;
@@ -107,15 +106,9 @@ impl<T: Item> AnyItem for T {
     fn any_remove_edges(
         &mut self,
         locality: AnyItemLocality<'_>,
-        this: Key<Owned>,
         edge: PartialEdge<Key>,
-    ) -> Result<MultiOwned, (Found, Key<Owned>)> {
-        self.try_remove_edges(
-            locality.downcast().expect("Unexpected item type"),
-            this.assume(),
-            edge,
-        )
-        .map_err(|(present, key)| (present, key.any()))
+    ) -> Result<MultiOwned, Found> {
+        self.try_remove_edges(locality.downcast().expect("Unexpected item type"), edge)
     }
 
     default fn any_inc_owners(&mut self, _: AnyItemLocality<'_>) -> Option<Grc> {

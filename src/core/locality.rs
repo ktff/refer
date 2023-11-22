@@ -150,10 +150,9 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         drain_key: Key<Owned, D>,
         drain: &mut Slot<permit::Mut, D>,
     ) {
-        let this_key = drain
+        drain
             .try_remove_drain_edge(drain_key, self.path().ptr())
             .expect("Method invariant broken");
-        std::mem::forget(this_key);
     }
 
     // /// Removes edge from object.

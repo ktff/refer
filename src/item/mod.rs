@@ -33,16 +33,9 @@ macro_rules! impl_edgeless_item {
             fn try_remove_edges<T: $crate::core::DynItem + ?Sized>(
                 &mut self,
                 _: $crate::core::ItemLocality<'_, Self>,
-                this: $crate::core::Key<$crate::core::Owned, Self>,
                 _: $crate::core::PartialEdge<$crate::core::Key<$crate::core::Ptr, T>>,
-            ) -> Result<
-                $crate::core::MultiOwned<T>,
-                (
-                    $crate::core::Found,
-                    $crate::core::Key<$crate::core::Owned, Self>,
-                ),
-            > {
-                Err(($crate::core::Found::No, this))
+            ) -> Result<$crate::core::MultiOwned<T>, $crate::core::Found> {
+                Err($crate::core::Found::No)
             }
 
             fn localized_drop(
