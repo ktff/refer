@@ -158,7 +158,7 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> DynSlot<'a, R, T> {
         side: Option<Side>,
     ) -> impl Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_ {
         self.any_item()
-            .any_edges(self.locality(), side)
+            .any_iter_edges(self.locality(), side)
             .into_iter()
             .flatten()
     }

@@ -102,7 +102,7 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
     {
         let (subject, mut others) = self.access_mut().key_split(subject);
         let subject = subject.get();
-        for edge in subject.edges(Some(Side::Source)) {
+        for edge in subject.iter_edges(Some(Side::Source)) {
             if let Some(drain) = others.borrow_mut().key_try(edge.object) {
                 // SAFETY: Subject,source,this exists at least for the duration of this function.
                 //         By adding it(Key) to the drain, anyone dropping the drain will know that

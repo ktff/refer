@@ -76,7 +76,7 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
     const TRAITS: ItemTraits<Self> = &[];
 
     #[auto_enum(Iterator)]
-    fn edges(&self, _: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_> {
+    fn iter_edges(&self, _: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_> {
         let drains = self
             .drains
             .iter()

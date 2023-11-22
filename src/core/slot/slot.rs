@@ -46,19 +46,19 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, R, T> {
         unsafe { &*self.slot.item().get() }
     }
 
-    pub fn drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.edges(Some(crate::core::Side::Source))
+    pub fn iter_drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.iter_edges(Some(crate::core::Side::Source))
             .map(|edge| edge.object)
     }
 
-    pub fn sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.edges(Some(crate::core::Side::Drain))
+    pub fn iter_sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
+        self.iter_edges(Some(crate::core::Side::Drain))
             .map(|edge| edge.object)
     }
 
     /// Edges where self is side.
-    pub fn edges(&self, side: Option<Side>) -> T::Edges<'_> {
-        self.item().edges(self.locality(), side)
+    pub fn iter_edges(&self, side: Option<Side>) -> T::Edges<'_> {
+        self.item().iter_edges(self.locality(), side)
     }
 
     pub fn has_owners(&self) -> bool {
@@ -92,8 +92,8 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
     pub fn add_bi_edge<D, R, F: BiItem<R, T>>(
         &mut self,
         data: D,
-        other: &mut Slot<permit::Mut, F>,
         other_data: R,
+        other: &mut Slot<permit::Mut, F>,
     ) where
         T: BiItem<D, F>,
     {

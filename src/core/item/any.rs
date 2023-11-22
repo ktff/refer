@@ -33,7 +33,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
 
     fn type_info(self: *const Self) -> TypeInfo;
 
-    fn any_edges(
+    fn any_iter_edges(
         &self,
         locality: AnyItemLocality<'_>,
         filter: Option<Side>,
@@ -83,12 +83,12 @@ impl<T: Item> AnyItem for T {
         TypeInfo::of::<T>()
     }
 
-    fn any_edges(
+    fn any_iter_edges(
         &self,
         locality: AnyItemLocality<'_>,
         filter: Option<Side>,
     ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>> {
-        let edges = self.edges(locality.downcast().expect("Unexpected item type"), filter);
+        let edges = self.iter_edges(locality.downcast().expect("Unexpected item type"), filter);
         if let (0, Some(0)) = edges.size_hint() {
             None
         } else {

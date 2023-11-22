@@ -21,7 +21,7 @@ macro_rules! impl_edgeless_item {
             >;
             const TRAITS: $crate::core::ItemTraits<$ty> = &[];
 
-            fn edges(
+            fn iter_edges(
                 &self,
                 _: $crate::core::ItemLocality<'_, Self>,
                 _: Option<$crate::core::Side>,

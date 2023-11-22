@@ -43,7 +43,7 @@ pub trait Item: Sized + Any + Sync + Send {
     /// Edges where self is side.
     ///
     /// Must have stable iteration order.
-    fn edges(&self, locality: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
+    fn iter_edges(&self, locality: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
 
     // /// Should remove edge and return object ref.
     // /// Ok success.
