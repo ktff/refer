@@ -142,8 +142,8 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     //     std::mem::forget(subject_key);
     // }
 
-    /// Removes this from drain.
-    /// Edge should have come from this Item edges.
+    /// Removes self from drain.
+    /// Edge should have come from self Item edges.
     /// Panics if edge is not in drain.
     pub fn remove_from_drain<D: DrainItem>(
         &self,
@@ -153,6 +153,21 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         drain
             .try_remove_drain_edge(drain_key, self.path().ptr())
             .expect("Method invariant broken");
+    }
+
+    /// Removes self from other.
+    /// Panics if edge is not in other.
+    pub fn remove_bi_edge<R, D: BiItem<R, T>>(
+        &self,
+        owned: Key<Owned, D>,
+        data: R,
+        other: &mut Slot<permit::Mut, D>,
+    ) {
+        std::mem::forget(owned);
+        let owned = other
+            .localized(|item, locality| item.try_remove_bi_edge(locality, data, self.path().ptr()));
+        assert!(owned.is_some(), "BI edge should be present in both items");
+        std::mem::forget(owned);
     }
 
     // /// Removes edge from object.
