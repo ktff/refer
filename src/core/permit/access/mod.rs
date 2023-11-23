@@ -57,6 +57,19 @@ impl<'a, C: AnyContainer + ?Sized> AccessPermit<'a, C, Mut, All, All> {
 }
 
 impl<'a, C: AnyContainer + ?Sized> AccessPermit<'a, C, permit::Ref, All, All> {
+    pub fn new_ref(container: &'a mut C) -> Self {
+        // SAFETY: We have exclusive access to the container so any Permit is valid.
+        unsafe {
+            Self {
+                container: container,
+                permit: Permit::new(),
+                type_state: Default::default(),
+                key_state: Default::default(),
+                _marker: PhantomData,
+            }
+        }
+    }
+
     /// SAFETY: Caller must ensure that it has the correct Ref access to C for the given 'a and that
     ///         all keys are valid for 'a.
     pub unsafe fn unsafe_new(permit: Permit<permit::Ref>, container: &'a C) -> Self {

@@ -10,9 +10,9 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    Add, AnyContainerLocality, AnyUnsafeSlot, ContainerLocality, Item, ItemLocality, ItemTraits,
-    Key, KeyPath, LocalityKey, LocalityPath, MutAccess, Owned, PartialEdge, Path, Ptr, Ref,
-    RegionPath, Remove, UnsafeSlot,
+    Access, Add, AnyContainerLocality, AnyUnsafeSlot, ContainerLocality, Item, ItemLocality,
+    ItemTraits, Key, KeyPath, LocalityKey, LocalityPath, MutAccess, Owned, PartialEdge, Path, Ptr,
+    Ref, RegionPath, Remove, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
@@ -116,6 +116,13 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
     /// Panics if item is edgeless referenced.
     /// Caller should properly dispose of the edges.
     fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>;
+
+    fn access(&mut self) -> Access<Self>
+    where
+        Self: Sized,
+    {
+        Access::new_ref(self)
+    }
 
     fn access_mut(&mut self) -> MutAccess<Self>
     where
