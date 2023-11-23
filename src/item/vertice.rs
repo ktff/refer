@@ -183,14 +183,14 @@ unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Ve
 impl<T: Sync + Send + 'static, E: Sync + Send + 'static> StandaloneItem for Vertice<T, E> {
     #[must_use]
     fn inc_owners(&mut self, locality: ItemLocality<'_, Self>) -> Grc<Self> {
-        self.owners.checked_add(1).expect("Grc overflow");
+        self.owners = self.owners.checked_add(1).expect("Grc overflow");
         // SAFETY: We've just incremented counter.
         unsafe { Grc::new(locality.owned_key()) }
     }
 
     fn dec_owners(&mut self, locality: ItemLocality<'_, Self>, this: Grc<Self>) {
         assert_eq!(locality.path(), *this);
-        self.owners.checked_sub(1).expect("Grc underflow");
+        self.owners = self.owners.checked_sub(1).expect("Grc underflow");
         std::mem::forget(this.into_owned_key());
     }
 
