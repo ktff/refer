@@ -50,6 +50,10 @@ impl<T: StandaloneItem> Grc<T> {
         let key = unsafe { Key::new_ref(self.index()) };
         key.get(access).release(self);
     }
+
+    pub fn replace<C: Container<T>>(&mut self, with: Key<Ref, T>, mut access: MutTypeAccess<C, T>) {
+        std::mem::replace(self, with.get(access.borrow_mut()).own()).release(access);
+    }
 }
 
 impl Grc {
