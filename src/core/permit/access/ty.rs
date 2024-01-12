@@ -15,6 +15,17 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'
     {
         self.key_transition(|()| key)
     }
+
+    pub fn iter(self) -> impl Iterator<Item = Slot<'a, R, T>> {
+        let container = self.container;
+        std::iter::successors(container.first_key(TypeId::of::<T>()), move |&key| {
+            container.next_key(TypeId::of::<T>(), key.ptr())
+        })
+        .map(move |key| {
+            // SAFETY: First-next iteration ensures that we don't access the same slot twice.
+            unsafe { self.unsafe_split(|permit| permit.key(key.assume()).get()) }
+        })
+    }
 }
 
 impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: Item>
