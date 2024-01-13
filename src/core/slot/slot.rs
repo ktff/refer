@@ -208,3 +208,11 @@ impl<'a, T: Item> DerefMut for Slot<'a, permit::Mut, T> {
         self.item_mut()
     }
 }
+
+impl<'a, R, T: Item> Eq for Slot<'a, R, T> {}
+
+impl<'a, R, T: Item> PartialEq for Slot<'a, R, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.key() == other.key()
+    }
+}
