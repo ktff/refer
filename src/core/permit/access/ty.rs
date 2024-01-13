@@ -15,6 +15,10 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'
     {
         self.key_transition(|()| key)
     }
+
+    pub fn keys_split(self) -> AccessPermit<'a, C, R, T, Keys> {
+        self.key_transition(|()| Keys::default())
+    }
 }
 
 impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: Item>
