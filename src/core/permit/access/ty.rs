@@ -19,6 +19,18 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'
     pub fn keys_split(self) -> AccessPermit<'a, C, R, T, Keys> {
         self.key_transition(|()| Keys::default())
     }
+
+    pub fn key_split<K: Copy>(
+        self,
+        key: Key<K, T>,
+    ) -> (
+        AccessPermit<'a, C, R, T, Key<K, T>>,
+        AccessPermit<'a, C, R, T, Not<Key>>,
+    ) {
+        // SAFETY: Key and Not<Key> are disjoint.
+        let key_split = unsafe { self.unsafe_split(|this| this.key_transition(|()| key)) };
+        (key_split, self.key_transition(|()| key.ptr().any()))
+    }
 }
 
 impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: Item>
