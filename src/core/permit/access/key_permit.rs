@@ -65,7 +65,7 @@ impl KeyPermit for Keys {
     type State = Keys;
 
     fn allowed<K: Clone, T: DynItem + ?Sized>(state: &Self::State, key: Key<K, T>) -> bool {
-        state.contains(key)
+        !state.contains(key)
     }
 }
 

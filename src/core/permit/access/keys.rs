@@ -48,4 +48,16 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'
             None
         }
     }
+
+    pub fn borrow_key<'b, K: Copy>(
+        &'b self,
+        key: Key<K, T>,
+    ) -> Option<AccessPermit<'b, C, R, T, Key<K, T>>> {
+        if self.key_state.contains(key) {
+            None
+        } else {
+            // SAFETY: We just checked that the key is not splitted and we are allowing it to live only for the lifetime of self.
+            Some(unsafe { self.unsafe_key_split(key) })
+        }
+    }
 }
