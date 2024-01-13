@@ -216,3 +216,9 @@ impl<'a, R, T: Item> PartialEq for Slot<'a, R, T> {
         self.key() == other.key()
     }
 }
+
+impl<'a, R, T: Item> std::hash::Hash for Slot<'a, R, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.key().hash(state)
+    }
+}
