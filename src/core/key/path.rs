@@ -35,6 +35,10 @@ impl Path {
         self.0.get() ^ self.bit()
     }
 
+    pub fn is_root(self) -> bool {
+        self.0.get() == 0
+    }
+
     #[cfg(test)]
     fn bottom(self) -> IndexBase {
         self.top().rotate_left(self.level())

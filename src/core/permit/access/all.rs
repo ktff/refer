@@ -1,19 +1,14 @@
 use super::*;
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>> AccessPermit<'a, C, R, All, All> {
-    pub fn ty<T: Item>(self) -> AccessPermit<'a, C, R, T, All>
+impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, All> {
+    pub fn ty<T: Item>(self) -> Access<'a, C, R, T, All>
     where
         C: Container<T>,
     {
         self.type_transition(|()| ())
     }
 
-    pub fn type_split<T: Item>(
-        self,
-    ) -> (
-        AccessPermit<'a, C, R, T, All>,
-        AccessPermit<'a, C, R, Not<T>, All>,
-    )
+    pub fn type_split<T: Item>(self) -> (Access<'a, C, R, T, All>, Access<'a, C, R, Not<T>, All>)
     where
         C: Container<T>,
     {
@@ -23,14 +18,14 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>> AccessPermit<'a, C, R, 
         (self.ty(), not)
     }
 
-    pub fn types_split(self) -> AccessPermit<'a, C, R, Not<Types>, All> {
+    pub fn types_split(self) -> Access<'a, C, R, Not<Types>, All> {
         self.type_transition(|()| Types::default())
     }
 
     pub fn key<K: Clone, T: DynItem + ?Sized>(
         self,
         key: Key<K, T>,
-    ) -> AccessPermit<'a, C, R, All, Key<K, T>>
+    ) -> Access<'a, C, R, All, Key<K, T>>
     where
         C: AnyContainer,
     {
@@ -41,15 +36,15 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>> AccessPermit<'a, C, R, 
         self,
         key: Key<K, T>,
     ) -> (
-        AccessPermit<'a, C, R, All, Key<K, T>>,
-        AccessPermit<'a, C, R, All, Not<Key>>,
+        Access<'a, C, R, All, Key<K, T>>,
+        Access<'a, C, R, All, Not<Key>>,
     ) {
         // SAFETY: Key and Not<Key> are disjoint.
         let key_split = unsafe { self.unsafe_split(|this| this.key_transition(|()| key)) };
         (key_split, self.key_transition(|()| key.ptr().any()))
     }
 
-    pub fn keys_split(self) -> AccessPermit<'a, C, R, All, Keys> {
+    pub fn keys_split(self) -> Access<'a, C, R, All, Keys> {
         self.key_transition(|()| Keys::default())
     }
 
@@ -68,11 +63,11 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>> AccessPermit<'a, C, R, 
     // }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>> AccessPermit<'a, C, R, All, Not<Key>> {
+impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, Not<Key>> {
     pub fn key_try<K: Copy, T: DynItem + ?Sized>(
         self,
         key: Key<K, T>,
-    ) -> Option<AccessPermit<'a, C, R, All, Key<K, T>>>
+    ) -> Option<Access<'a, C, R, All, Key<K, T>>>
     where
         C: AnyContainer,
     {
@@ -84,7 +79,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>> AccessPermit<'a, C, R, 
         }
     }
 
-    pub fn keys_split(self) -> AccessPermit<'a, C, R, All, Keys> {
+    pub fn keys_split(self) -> Access<'a, C, R, All, Keys> {
         self.key_transition(|key| Keys::new([key]))
     }
 }

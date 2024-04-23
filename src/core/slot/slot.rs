@@ -7,12 +7,12 @@ use std::ops::{Deref, DerefMut};
 
 pub struct Slot<'a, R, T: Item> {
     slot: UnsafeSlot<'a, T>,
-    access: Permit<R>,
+    access: R,
 }
 
 impl<'a, T: Item, R> Slot<'a, R, T> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(slot: UnsafeSlot<'a, T>, access: Permit<R>) -> Self {
+    pub unsafe fn new(slot: UnsafeSlot<'a, T>, access: R) -> Self {
         Self { slot, access }
     }
 
@@ -31,7 +31,7 @@ impl<'a, T: Item, R> Slot<'a, R, T> {
 
     pub fn downgrade<F>(self) -> Slot<'a, F, T>
     where
-        Permit<R>: Into<Permit<F>>,
+        R: Into<F>,
     {
         Slot {
             slot: self.slot,
@@ -181,11 +181,11 @@ impl<'a, T: StandaloneItem> Slot<'a, permit::Mut, T> {
     // }
 }
 
-impl<'a, T: Item, R> Copy for Slot<'a, R, T> where Permit<R>: Copy {}
+impl<'a, T: Item, R> Copy for Slot<'a, R, T> where R: Copy {}
 
 impl<'a, T: Item, R> Clone for Slot<'a, R, T>
 where
-    Permit<R>: Clone,
+    R: Clone,
 {
     fn clone(&self) -> Self {
         Self {

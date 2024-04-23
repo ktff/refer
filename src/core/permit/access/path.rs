@@ -1,14 +1,14 @@
 use super::*;
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, P: PathPermit<C>>
-    AccessPermit<'a, C, R, T, P>
+impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, P: PathPermit<C>>
+    Access<'a, C, R, T, P>
 {
     pub fn path(&self) -> Path {
         P::path(&self.key_state, self.container)
     }
 
     /// None if the path is not a subpath of current path.
-    pub fn sub_path(self, path: impl Into<Path>) -> Option<AccessPermit<'a, C, R, T, Path>> {
+    pub fn sub_path(self, path: impl Into<Path>) -> Option<Access<'a, C, R, T, Path>> {
         let path = path.into();
         if self.path().contains(path) {
             Some(self.key_transition(|_| path))
@@ -19,15 +19,13 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, P: PathP
 
     /// Constrains the permit to the given path.
     /// None if they don't overlap.
-    pub fn and(self, path: impl Into<Path>) -> Option<AccessPermit<'a, C, R, T, Path>> {
+    pub fn and(self, path: impl Into<Path>) -> Option<Access<'a, C, R, T, Path>> {
         let path = self.path().and(path)?;
         Some(self.key_transition(|_| path))
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, P: PathPermit<C>>
-    AccessPermit<'a, C, R, All, P>
-{
+impl<'a, C: AnyContainer + ?Sized, R: Permit, P: PathPermit<C>> Access<'a, C, R, All, P> {
     // pub fn iter_dyn(self) -> impl Iterator<Item = Slot<'a, R, T>> {
     //     let path = self.path();
     //     let Self {
@@ -66,14 +64,12 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, P: PathPermit<C>>
     // }
 }
 
-impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item, P: PathPermit<C>>
-    AccessPermit<'a, C, R, T, P>
-{
+impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item, P: PathPermit<C>> Access<'a, C, R, T, P> {
     /// Splits on lower level, or returns self if level is higher.
     pub fn level_split(
         self,
         level: u32,
-    ) -> Box<dyn ExactSizeIterator<Item = AccessPermit<'a, C, R, T, Path>> + 'a>
+    ) -> Box<dyn ExactSizeIterator<Item = Access<'a, C, R, T, Path>> + 'a>
     where
         R: 'static,
     {
@@ -108,7 +104,7 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item, P: PathPermit<
     }
 }
 
-// impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, P: PathPermit<C>>
+// impl<'a, C: AnyContainer + ?Sized, R: PermitTrait, P: PathPermit<C>>
 //     AccessPermit<'a, C, R, All, P> {
 //     type Item = core::DynSlot<'a, R, T>;
 //     type IntoIter = impl Iterator<Item = core::Slot<'a, R, T>>;
@@ -118,8 +114,8 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item, P: PathPermit<
 //     }
 // }
 
-impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item, P: PathPermit<C>> IntoIterator
-    for AccessPermit<'a, C, R, T, P>
+impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item, P: PathPermit<C>> IntoIterator
+    for Access<'a, C, R, T, P>
 {
     type Item = Slot<'a, R, T>;
     type IntoIter = impl Iterator<Item = Slot<'a, R, T>>;
@@ -135,6 +131,6 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item, P: PathPermit<
             .into_iter()
             .flat_map(|iter| iter)
             // SAFETY: Type level logic of Permit ensures that it has sufficient access for 'a to all slots of T under path.
-            .map(move |slot| unsafe { Slot::new(slot, permit.access()) })
+            .map(move |slot| unsafe { Slot::new(slot, permit.copy()) })
     }
 }

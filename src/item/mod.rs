@@ -2,6 +2,12 @@
 // pub mod data;
 pub mod vertice;
 
+// TODO: Wrappers for items
+// TODO  * Drain
+// TODO  * Standalone
+// TODO  * Bi
+// TODO  * Edges
+
 // pub use addon::Addon;
 // pub use data::Data;
 pub use vertice::Vertice;

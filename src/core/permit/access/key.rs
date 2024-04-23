@@ -1,29 +1,21 @@
 use super::*;
 
-impl<
-        'a,
-        C: AnyContainer + ?Sized,
-        R: Into<permit::Ref>,
-        TP: TypePermit,
-        K: Clone,
-        T: DynItem + ?Sized,
-    > AccessPermit<'a, C, R, TP, Key<K, T>>
+impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit, K: Clone, T: DynItem + ?Sized>
+    Access<'a, C, R, TP, Key<K, T>>
 {
     pub fn key(&self) -> Key<K, T> {
         self.key_state.clone()
     }
 }
 
-impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, K: Clone, T: Item>
-    AccessPermit<'a, C, R, All, Key<K, T>>
-{
-    pub fn ty(self) -> AccessPermit<'a, C, R, T, Key<K, T>> {
+impl<'a, C: Container<T> + ?Sized, R: Permit, K: Clone, T: Item> Access<'a, C, R, All, Key<K, T>> {
+    pub fn ty(self) -> Access<'a, C, R, T, Key<K, T>> {
         self.type_transition(|()| ())
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: DynItem + ?Sized>
-    AccessPermit<'a, C, R, All, Key<Ptr, T>>
+impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
+    Access<'a, C, R, All, Key<Ptr, T>>
 {
     /// None if doesn't exist.
     pub fn get_dyn_try(self) -> Option<DynSlot<'a, R, T>> {
@@ -48,9 +40,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: DynItem + ?Sized>
     }
 }
 
-impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item>
-    AccessPermit<'a, C, R, T, Key<Ptr, T>>
-{
+impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, Key<Ptr, T>> {
     pub fn get_try(self) -> Option<Slot<'a, R, T>> {
         let Self {
             container,
@@ -65,8 +55,8 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item>
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: DynItem + ?Sized>
-    AccessPermit<'a, C, R, All, Key<Ref<'a>, T>>
+impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
+    Access<'a, C, R, All, Key<Ref<'a>, T>>
 {
     pub fn get_dyn(self) -> DynSlot<'a, R, T> {
         self.key_transition(|key| key.ptr())
@@ -83,9 +73,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: DynItem + ?Sized>
     }
 }
 
-impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item>
-    AccessPermit<'a, C, R, T, Key<Ref<'a>, T>>
-{
+impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, Key<Ref<'a>, T>> {
     pub fn get(self) -> Slot<'a, R, T> {
         self.key_transition(|key| key.ptr())
             .get_try()

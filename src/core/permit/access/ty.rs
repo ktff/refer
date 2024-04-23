@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'a, C, R, T, All> {
-    pub fn types_split(self) -> AccessPermit<'a, C, R, Types, All> {
+impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, All> {
+    pub fn types_split(self) -> Access<'a, C, R, Types, All> {
         self.type_transition(|()| {
             let mut type_state = Types::default();
             type_state.insert::<T>();
@@ -9,14 +9,14 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'
         })
     }
 
-    pub fn key<K: Clone>(self, key: Key<K, T>) -> AccessPermit<'a, C, R, T, Key<K, T>>
+    pub fn key<K: Clone>(self, key: Key<K, T>) -> Access<'a, C, R, T, Key<K, T>>
     where
         C: AnyContainer,
     {
         self.key_transition(|()| key)
     }
 
-    pub fn keys_split(self) -> AccessPermit<'a, C, R, T, Keys> {
+    pub fn keys_split(self) -> Access<'a, C, R, T, Keys> {
         self.key_transition(|()| Keys::default())
     }
 
@@ -24,8 +24,8 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'
         self,
         key: Key<K, T>,
     ) -> (
-        AccessPermit<'a, C, R, T, Key<K, T>>,
-        AccessPermit<'a, C, R, T, Not<Key>>,
+        Access<'a, C, R, T, Key<K, T>>,
+        Access<'a, C, R, T, Not<Key>>,
     ) {
         // SAFETY: Key and Not<Key> are disjoint.
         let key_split = unsafe { self.unsafe_split(|this| this.key_transition(|()| key)) };
@@ -33,10 +33,8 @@ impl<'a, C: Container<T> + ?Sized, R: Into<permit::Ref>, T: Item> AccessPermit<'
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: Item>
-    AccessPermit<'a, C, R, Not<T>, All>
-{
-    pub fn types_split(self) -> AccessPermit<'a, C, R, Not<Types>, All> {
+impl<'a, C: AnyContainer + ?Sized, R: Permit, T: Item> Access<'a, C, R, Not<T>, All> {
+    pub fn types_split(self) -> Access<'a, C, R, Not<Types>, All> {
         self.type_transition(|()| {
             let mut type_state = Types::default();
             type_state.insert::<T>();
@@ -44,7 +42,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: Item>
         })
     }
 
-    pub fn ty<D: Item>(self) -> Option<AccessPermit<'a, C, R, D, All>>
+    pub fn ty<D: Item>(self) -> Option<Access<'a, C, R, D, All>>
     where
         C: Container<D>,
     {

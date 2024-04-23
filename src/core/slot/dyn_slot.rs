@@ -15,12 +15,12 @@ use super::Slot;
 pub struct DynSlot<'a, R = permit::Ref, T: DynItem + ?Sized = dyn AnyItem> {
     metadata: T::Metadata,
     slot: AnyUnsafeSlot<'a>,
-    access: Permit<R>,
+    access: R,
 }
 
 impl<'a, R> DynSlot<'a, R> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new_any(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Self {
+    pub unsafe fn new_any(slot: AnyUnsafeSlot<'a>, access: R) -> Self {
         let metadata = std::ptr::metadata(slot.item().get());
         Self {
             metadata,
@@ -34,7 +34,7 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, R, T> {
     /// Key should correspond to the slot.
     /// None if item doesn't implement T.
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new(slot: AnyUnsafeSlot<'a>, access: Permit<R>) -> Option<Self> {
+    pub unsafe fn new(slot: AnyUnsafeSlot<'a>, access: R) -> Option<Self> {
         if let Some(metadata) = slot.metadata::<T>() {
             Some(Self {
                 metadata,
@@ -109,7 +109,7 @@ impl<'a, T: DynItem + ?Sized, R> DynSlot<'a, R, T> {
 
     pub fn downgrade<F>(self) -> DynSlot<'a, F, T>
     where
-        Permit<R>: Into<Permit<F>>,
+        R: Into<F>,
     {
         DynSlot {
             metadata: self.metadata,
@@ -240,11 +240,11 @@ impl<'a, T: DynItem + ?Sized> DynSlot<'a, permit::Mut, T> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized, R> Copy for DynSlot<'a, R, T> where Permit<R>: Copy {}
+impl<'a, T: DynItem + ?Sized, R> Copy for DynSlot<'a, R, T> where R: Copy {}
 
 impl<'a, T: DynItem + ?Sized, R> Clone for DynSlot<'a, R, T>
 where
-    Permit<R>: Clone,
+    R: Clone,
 {
     fn clone(&self) -> Self {
         Self {
