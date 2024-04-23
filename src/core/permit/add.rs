@@ -71,6 +71,8 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
         }))
     }
 
+    // TODO: Add without locality?, callers can use step_* functions to select the container.
+
     /// Adds an item to the container & connects existing source edges from it.
     /// Assumes Grc was used for building those edges.
     pub fn add<T: Item>(
