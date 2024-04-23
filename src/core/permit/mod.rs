@@ -10,6 +10,7 @@ use std::marker::PhantomData;
 //? NOTE: Permit system is by no means complete, so it's fine to extend it.
 
 // TODO: Test permit system, test compile failures?
+// TODO: Unify Add with Access?
 
 // Extension TODO: Like ExclusivePermit, SharedPermit could be constructed from ExclusivePermit for concurrent mutation.
 
