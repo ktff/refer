@@ -5,69 +5,69 @@ use std::ops::{Deref, RangeBounds};
 //?       as this would allow for a Key<Ref> to live across a remove operation, so it must not
 //?       expose &mut C outside self.
 /// Permit for adding items to a container.
-pub struct AddPermit<'a, C: AnyContainer + ?Sized> {
-    permit: Permit<permit::Mut>,
+pub struct AddAccess<'a, C: AnyContainer + ?Sized> {
+    permit: permit::Add,
     container: &'a mut C,
 }
 
-impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
+impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
     pub fn new(container: &'a mut C) -> Self {
         Self {
             // SAFETY: Mut access is proof of exclusive access.
-            permit: unsafe { Permit::<permit::Mut>::new() },
+            permit: unsafe { permit::Add::new().into() },
             container,
         }
     }
 
-    pub fn borrow_mut(&mut self) -> AddPermit<'_, C> {
-        AddPermit {
+    pub fn borrow_mut(&mut self) -> AddAccess<'_, C> {
+        AddAccess {
             // SAFETY: We are borrowing exclusive access to self.
-            permit: unsafe { self.permit.access() },
+            permit: unsafe { self.permit.copy() },
             container: self.container,
         }
     }
 
-    pub fn access(&self) -> Access<C> {
+    pub fn as_mut(&mut self) -> MutAccess<C> {
+        Access::new(self.container)
+    }
+
+    pub fn as_ref(&self) -> Access<C> {
         // SAFETY: We have at least read access for whole C.
         unsafe { Access::unsafe_new(self.permit.borrow(), &self) }
     }
 
-    pub fn access_mut(&mut self) -> MutAccess<C> {
-        Access::new(self.container)
-    }
-
-    pub fn step<T: Item>(self) -> Option<AddPermit<'a, C::Sub>>
+    pub fn step<T: Item>(self) -> Option<AddAccess<'a, C::Sub>>
     where
         C: TypeContainer<T>,
     {
         let Self { container, permit } = self;
         container
-            .get_mut()
-            .map(|container| AddPermit { container, permit })
+            .step_down_mut()
+            .map(|container| AddAccess { container, permit })
     }
 
-    pub fn step_into(self, index: usize) -> Option<AddPermit<'a, C::Sub>>
+    pub fn step_into(self, index: usize) -> Option<AddAccess<'a, C::Sub>>
     where
         C: RegionContainer,
     {
         let Self { container, permit } = self;
         container
             .get_mut(index)
-            .map(|container| AddPermit { container, permit })
+            .map(|container| AddAccess { container, permit })
     }
 
     pub fn step_range(
         self,
         range: impl RangeBounds<usize>,
-    ) -> Option<impl Iterator<Item = AddPermit<'a, C::Sub>>>
+    ) -> Option<impl Iterator<Item = AddAccess<'a, C::Sub>>>
     where
         C: RegionContainer,
     {
         let Self { container, permit } = self;
-        Some(container.iter_mut(range)?.map(move |container| AddPermit {
+        Some(container.iter_mut(range)?.map(move |container| AddAccess {
             container,
             // SAFETY: Access is split into disjoint containers.
-            permit: unsafe { permit.access() },
+            permit: unsafe { permit.copy() },
         }))
     }
 
@@ -100,7 +100,7 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
     where
         C: Container<T>,
     {
-        let (subject, mut others) = self.access_mut().key_split(subject);
+        let (subject, mut others) = self.as_mut().key_split(subject);
         let subject = subject.get();
         for edge in subject.iter_edges(Some(Side::Source)) {
             if let Some(drain) = others.borrow_mut().key_try(edge.object) {
@@ -121,14 +121,20 @@ impl<'a, C: AnyContainer + ?Sized> AddPermit<'a, C> {
                     )
                 };
                 drain.release(excess_key);
-            } else {
+            } else if edge.object == subject.key() {
                 // We skip self references
+            } else {
+                // We should have caught this earlier or handle it in some other way.
+                unimplemented!(
+                    "Drain not found for edge object: {:?}. It's probably in some other container",
+                    edge.object
+                );
             }
         }
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized> Deref for AddPermit<'a, C> {
+impl<'a, C: AnyContainer + ?Sized> Deref for AddAccess<'a, C> {
     type Target = C;
 
     fn deref(&self) -> &Self::Target {

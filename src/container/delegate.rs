@@ -154,16 +154,13 @@ mod tests {
         let key_b = container.fill_slot(&(), true).unwrap().ptr();
         let key_c = container.fill_slot(&(), "Hello").unwrap().ptr();
 
+        assert_eq!(container.as_mut().key(key_a).get_try().unwrap().item(), &42);
         assert_eq!(
-            container.access_mut().key(key_a).get_try().unwrap().item(),
-            &42
-        );
-        assert_eq!(
-            container.access_mut().key(key_b).get_try().unwrap().item(),
+            container.as_mut().key(key_b).get_try().unwrap().item(),
             &true
         );
         assert_eq!(
-            container.access_mut().key(key_c).get_try().unwrap().item(),
+            container.as_mut().key(key_c).get_try().unwrap().item(),
             &"Hello"
         );
     }
@@ -178,7 +175,7 @@ mod tests {
 
         assert_eq!(
             (container
-                .access_mut()
+                .as_mut()
                 .key(key_a.any())
                 .get_dyn_try()
                 .unwrap()
@@ -188,7 +185,7 @@ mod tests {
         );
         assert_eq!(
             (container
-                .access_mut()
+                .as_mut()
                 .key(key_b.any())
                 .get_dyn_try()
                 .unwrap()
@@ -198,7 +195,7 @@ mod tests {
         );
         assert_eq!(
             (container
-                .access_mut()
+                .as_mut()
                 .key(key_c.any())
                 .get_dyn_try()
                 .unwrap()
@@ -229,11 +226,8 @@ mod tests {
         let item = 42;
         let key = container.fill_slot(&(), item).unwrap().ptr();
 
-        assert_eq!(
-            container.access_mut().key(key).get_try().unwrap().item(),
-            &item
-        );
-        let mut iter = container.access_mut().ty::<i32>().into_iter();
+        assert_eq!(container.as_mut().key(key).get_try().unwrap().item(), &item);
+        let mut iter = container.as_mut().ty::<i32>().into_iter();
         assert_eq!(iter.next().unwrap().item(), &item);
         assert!(iter.next().is_none());
     }
@@ -245,17 +239,14 @@ mod tests {
         let item = 42;
         let key = container.fill_slot(&(), item).unwrap().ptr();
 
-        assert_eq!(
-            container.access_mut().key(key).get_try().unwrap().item(),
-            &item
-        );
+        assert_eq!(container.as_mut().key(key).get_try().unwrap().item(), &item);
 
         assert_eq!(
             container.unfill_slot(key.ptr()).map(|(item, _)| item),
             Some(item)
         );
 
-        assert!(container.access_mut().key(key).get_try().is_none());
-        assert_eq!(container.access_mut().ty::<i32>().into_iter().count(), 0);
+        assert!(container.as_mut().key(key).get_try().is_none());
+        assert_eq!(container.as_mut().ty::<i32>().into_iter().count(), 0);
     }
 }

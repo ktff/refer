@@ -186,14 +186,14 @@ mod tests {
     fn add_items() {
         let n = 20;
         let mut container = container();
-        let mut access = container.access_add();
+        let mut access = container.as_add();
 
         let keys = (0..n)
             .map(|i| access.add(&SpaceId(i), i).unwrap())
             .collect::<Vec<_>>();
 
         for (i, key) in keys.iter().enumerate() {
-            assert_eq!(access.access().key(*key).get().item(), &i);
+            assert_eq!(access.as_ref().key(*key).get().item(), &i);
         }
     }
 
@@ -201,7 +201,7 @@ mod tests {
     fn iter() {
         let n = 20;
         let mut container = container();
-        let mut access = container.access_add();
+        let mut access = container.as_add();
 
         let mut keys = (0..n)
             .map(|i| (access.add(&SpaceId(i), i).unwrap(), i))
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(
             keys,
             access
-                .access()
+                .as_ref()
                 .ty()
                 .into_iter()
                 .map(|slot| (slot.key(), *slot.item()))
@@ -223,13 +223,13 @@ mod tests {
     #[test]
     fn get_any() {
         let mut container = container();
-        let mut access = container.access_add();
+        let mut access = container.as_add();
 
         let item = 42;
         let key = access.add(&SpaceId(item), item).unwrap();
 
         assert_eq!(
-            (access.access().key(key.any()).get_dyn().item() as &dyn Any).downcast_ref::<usize>(),
+            (access.as_ref().key(key.any()).get_dyn().item() as &dyn Any).downcast_ref::<usize>(),
             Some(&item)
         );
     }
@@ -239,13 +239,9 @@ mod tests {
         let mut container = container();
 
         let item = 42;
-        let key = container
-            .access_add()
-            .add(&SpaceId(item), item)
-            .unwrap()
-            .ptr();
+        let key = container.as_add().add(&SpaceId(item), item).unwrap().ptr();
 
-        container.access_remove().localized_drop(key.any().ptr());
+        container.localized_drop(key.any().ptr());
         assert!(container.get_slot(key.ptr()).is_none());
     }
 }

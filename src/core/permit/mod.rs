@@ -3,6 +3,7 @@ pub mod add;
 pub mod remove;
 
 pub use access::{All, Keys, Not, Types};
+pub use remove::ContainerExt;
 
 use std::marker::PhantomData;
 
@@ -12,59 +13,63 @@ use std::marker::PhantomData;
 
 // Extension TODO: Like ExclusivePermit, SharedPermit could be constructed from ExclusivePermit for concurrent mutation.
 
-pub struct Mut;
-
-pub struct Ref;
-impl From<Mut> for Ref {
-    fn from(_: Mut) -> Self {
-        Ref
-    }
-}
-
-pub struct Permit<R> {
-    _marker: PhantomData<R>,
-}
-
-impl<R> Permit<R> {
-    /// UNSAFE: So that it's constructed sparingly.
-    pub unsafe fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-
+pub trait Permit: Into<Ref> {
     /// UNSAFE: Caller must ensure one of:
     /// - permits represent disjoint set of keys
     /// - self is exclusively borrowed by the other
-    pub unsafe fn access(&self) -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+    unsafe fn copy(&self) -> Self;
+
+    fn borrow(&self) -> Ref {
+        Ref(PhantomData)
     }
 }
 
-impl Permit<Mut> {
-    pub fn borrow(&self) -> Permit<Ref> {
-        Permit {
-            _marker: PhantomData,
-        }
+pub struct Add(PhantomData<()>);
+
+impl Add {
+    /// UNSAFE: So that it's constructed sparingly.
+    unsafe fn new() -> Self {
+        Self(PhantomData)
     }
 }
 
-impl Copy for Permit<Ref> {}
-
-impl Clone for Permit<Ref> {
-    fn clone(&self) -> Self {
-        Permit {
-            _marker: PhantomData,
-        }
+impl Permit for Add {
+    unsafe fn copy(&self) -> Self {
+        Self(PhantomData)
     }
 }
 
-impl From<Permit<Mut>> for Permit<Ref> {
-    fn from(_: Permit<Mut>) -> Self {
-        Permit {
-            _marker: PhantomData,
-        }
+impl From<Add> for Mut {
+    fn from(_: Add) -> Self {
+        Mut(PhantomData)
+    }
+}
+
+impl From<Add> for Ref {
+    fn from(_: Add) -> Self {
+        Ref(PhantomData)
+    }
+}
+
+pub struct Mut(PhantomData<()>);
+
+impl Permit for Mut {
+    unsafe fn copy(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl From<Mut> for Ref {
+    fn from(_: Mut) -> Self {
+        Ref(PhantomData)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Ref(PhantomData<()>);
+
+impl Permit for Ref {
+    unsafe fn copy(&self) -> Self {
+        Self(PhantomData)
     }
 }

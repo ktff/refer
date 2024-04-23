@@ -134,16 +134,13 @@ mod tests {
         let key_b = container.fill_slot(&(), true).unwrap().ptr();
         let key_c = container.fill_slot(&(), "Hello").unwrap().ptr();
 
+        assert_eq!(container.as_mut().key(key_a).get_try().unwrap().item(), &42);
         assert_eq!(
-            container.access_mut().key(key_a).get_try().unwrap().item(),
-            &42
-        );
-        assert_eq!(
-            container.access_mut().key(key_b).get_try().unwrap().item(),
+            container.as_mut().key(key_b).get_try().unwrap().item(),
             &true
         );
         assert_eq!(
-            container.access_mut().key(key_c).get_try().unwrap().item(),
+            container.as_mut().key(key_c).get_try().unwrap().item(),
             &"Hello"
         );
     }
@@ -158,7 +155,7 @@ mod tests {
 
         assert_eq!(
             (container
-                .access_mut()
+                .as_mut()
                 .key(key_a.any())
                 .get_dyn_try()
                 .unwrap()
@@ -168,7 +165,7 @@ mod tests {
         );
         assert_eq!(
             (container
-                .access_mut()
+                .as_mut()
                 .key(key_b.any())
                 .get_dyn_try()
                 .unwrap()
@@ -178,7 +175,7 @@ mod tests {
         );
         assert_eq!(
             (container
-                .access_mut()
+                .as_mut()
                 .key(key_c.any())
                 .get_dyn_try()
                 .unwrap()

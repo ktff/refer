@@ -27,52 +27,18 @@ pub struct Not<T>(T);
 /// R - Ref/Mut restriction
 /// T - Type restriction
 /// K - Key restriction
-pub struct AccessPermit<
-    'a,
-    C: AnyContainer + ?Sized,
-    R: Into<permit::Ref>,
-    T: TypePermit,
-    K: KeyPermit,
-> {
+pub struct Access<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> {
     container: &'a C,
-    permit: Permit<R>,
+    permit: R,
     type_state: T::State,
     key_state: K::State,
     _marker: PhantomData<Key<Ref<'a>>>,
 }
 
-impl<'a, C: AnyContainer + ?Sized> AccessPermit<'a, C, Mut, All, All> {
+impl<'a, C: AnyContainer + ?Sized> Access<'a, C, Mut, All, All> {
     pub fn new(container: &'a mut C) -> Self {
         // SAFETY: We have exclusive access to the container so any Permit is valid.
-        unsafe {
-            Self {
-                container: container,
-                permit: Permit::new(),
-                type_state: Default::default(),
-                key_state: Default::default(),
-                _marker: PhantomData,
-            }
-        }
-    }
-}
-
-impl<'a, C: AnyContainer + ?Sized> AccessPermit<'a, C, permit::Ref, All, All> {
-    pub fn new_ref(container: &'a mut C) -> Self {
-        // SAFETY: We have exclusive access to the container so any Permit is valid.
-        unsafe {
-            Self {
-                container: container,
-                permit: Permit::new(),
-                type_state: Default::default(),
-                key_state: Default::default(),
-                _marker: PhantomData,
-            }
-        }
-    }
-
-    /// SAFETY: Caller must ensure that it has the correct Ref access to C for the given 'a and that
-    ///         all keys are valid for 'a.
-    pub unsafe fn unsafe_new(permit: Permit<permit::Ref>, container: &'a C) -> Self {
+        let permit = unsafe { permit::Add::new().into() };
         Self {
             container: container,
             permit,
@@ -83,15 +49,39 @@ impl<'a, C: AnyContainer + ?Sized> AccessPermit<'a, C, permit::Ref, All, All> {
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPermit>
-    AccessPermit<'a, C, R, T, K>
-{
+impl<'a, C: AnyContainer + ?Sized> Access<'a, C, permit::Ref, All, All> {
+    pub fn new_ref(container: &'a mut C) -> Self {
+        // SAFETY: We have exclusive access to the container so any Permit is valid.
+        let permit = unsafe { permit::Add::new().into() };
+        Self {
+            container: container,
+            permit,
+            type_state: Default::default(),
+            key_state: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+
+    /// SAFETY: Caller must ensure that it has the correct Ref access to C for the given 'a and that
+    ///         all keys are valid for 'a.
+    pub unsafe fn unsafe_new(permit: permit::Ref, container: &'a C) -> Self {
+        Self {
+            container: container,
+            permit,
+            type_state: Default::default(),
+            key_state: Default::default(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Access<'a, C, R, T, K> {
     /// UNSAFE: Caller must ensure some kind of division between jurisdictions of the two permits.
     #[inline(always)]
     unsafe fn unsafe_split<P>(&self, map: impl FnOnce(Self) -> P) -> P {
         map(Self {
             container: self.container,
-            permit: self.permit.access(),
+            permit: self.permit.copy(),
             type_state: self.type_state.clone(),
             key_state: self.key_state.clone(),
             _marker: PhantomData,
@@ -103,10 +93,10 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPe
     unsafe fn unsafe_type_split<P: TypePermit>(
         &self,
         type_state: P::State,
-    ) -> AccessPermit<'a, C, R, P, K> {
-        AccessPermit {
+    ) -> Access<'a, C, R, P, K> {
+        Access {
             container: self.container,
-            permit: self.permit.access(),
+            permit: self.permit.copy(),
             type_state,
             key_state: self.key_state.clone(),
             _marker: PhantomData,
@@ -115,13 +105,10 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPe
 
     /// UNSAFE: Caller must ensure key division between jurisdictions of the two permits.
     #[inline(always)]
-    unsafe fn unsafe_key_split<P: KeyPermit>(
-        &self,
-        key_state: P::State,
-    ) -> AccessPermit<'a, C, R, T, P> {
-        AccessPermit {
+    unsafe fn unsafe_key_split<P: KeyPermit>(&self, key_state: P::State) -> Access<'a, C, R, T, P> {
+        Access {
             container: self.container,
-            permit: self.permit.access(),
+            permit: self.permit.copy(),
             type_state: self.type_state.clone(),
             key_state,
             _marker: PhantomData,
@@ -131,8 +118,8 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPe
     fn type_transition<P: TypePermit>(
         self,
         map: impl FnOnce(T::State) -> P::State,
-    ) -> AccessPermit<'a, C, R, P, K> {
-        AccessPermit {
+    ) -> Access<'a, C, R, P, K> {
+        Access {
             container: self.container,
             permit: self.permit,
             type_state: map(self.type_state),
@@ -144,8 +131,8 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPe
     fn key_transition<P: KeyPermit>(
         self,
         map: impl FnOnce(K::State) -> P::State,
-    ) -> AccessPermit<'a, C, R, T, P> {
-        AccessPermit {
+    ) -> Access<'a, C, R, T, P> {
+        Access {
             container: self.container,
             permit: self.permit,
             type_state: self.type_state,
@@ -322,17 +309,26 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPe
 //     }
 // }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit>
-    AccessPermit<'a, C, permit::Ref, T, K>
-{
-    pub fn borrow(&self) -> AccessPermit<'a, C, permit::Ref, T, K> {
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Access<'a, C, permit::Ref, T, K> {
+    pub fn borrow(&self) -> Access<'a, C, permit::Ref, T, K> {
         self.clone()
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> AccessPermit<'a, C, Mut, T, K> {
-    pub fn borrow(&self) -> AccessPermit<'_, C, permit::Ref, T, K> {
-        AccessPermit {
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Access<'a, C, Mut, T, K> {
+    pub fn borrow_mut(&mut self) -> Access<'_, C, Mut, T, K> {
+        Access {
+            container: self.container,
+            // SAFETY: We are borrowing exclusive access to self.
+            permit: unsafe { self.permit.copy() }.into(),
+            type_state: self.type_state.clone(),
+            key_state: self.key_state.clone(),
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn as_ref(&self) -> Access<'_, C, permit::Ref, T, K> {
+        Access {
             container: self.container,
             permit: self.permit.borrow(),
             type_state: self.type_state.clone(),
@@ -340,21 +336,10 @@ impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> AccessPermit<'a,
             _marker: PhantomData,
         }
     }
-
-    pub fn borrow_mut(&mut self) -> AccessPermit<'_, C, Mut, T, K> {
-        AccessPermit {
-            container: self.container,
-            // SAFETY: We are borrowing exclusive access to self.
-            permit: unsafe { self.permit.access() }.into(),
-            type_state: self.type_state.clone(),
-            key_state: self.key_state.clone(),
-            _marker: PhantomData,
-        }
-    }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPermit> Deref
-    for AccessPermit<'a, C, R, T, K>
+impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Deref
+    for Access<'a, C, R, T, K>
 {
     type Target = &'a C;
 
@@ -364,7 +349,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Into<permit::Ref>, T: TypePermit, K: KeyPe
 }
 
 impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Copy
-    for AccessPermit<'a, C, permit::Ref, T, K>
+    for Access<'a, C, permit::Ref, T, K>
 where
     T::State: Copy,
     K::State: Copy,
@@ -372,7 +357,7 @@ where
 }
 
 impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Clone
-    for AccessPermit<'a, C, permit::Ref, T, K>
+    for Access<'a, C, permit::Ref, T, K>
 {
     fn clone(&self) -> Self {
         Self {
@@ -385,10 +370,10 @@ impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Clone
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> From<AccessPermit<'a, C, Mut, T, K>>
-    for AccessPermit<'a, C, permit::Ref, T, K>
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> From<Access<'a, C, Mut, T, K>>
+    for Access<'a, C, permit::Ref, T, K>
 {
-    fn from(permit: AccessPermit<'a, C, Mut, T, K>) -> Self {
+    fn from(permit: Access<'a, C, Mut, T, K>) -> Self {
         Self {
             container: permit.container,
             type_state: permit.type_state,
