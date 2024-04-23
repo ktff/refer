@@ -36,7 +36,7 @@ impl<F: Send + Sync + 'static> AllContainer<F> {
 impl<F: ContainerFamily<T>, T: Item> TypeContainer<T> for AllContainer<F> {
     type Sub = F::Container;
 
-    fn get(&self) -> Option<&Self::Sub> {
+    fn step_down(&self) -> Option<&Self::Sub> {
         let index = self.type_to_index(TypeId::of::<T>())?;
         let container = self.get_any_index(index)?;
 
@@ -47,7 +47,7 @@ impl<F: ContainerFamily<T>, T: Item> TypeContainer<T> for AllContainer<F> {
         )
     }
 
-    fn get_mut(&mut self) -> Option<&mut Self::Sub> {
+    fn step_down_mut(&mut self) -> Option<&mut Self::Sub> {
         let index = self.type_to_index(TypeId::of::<T>())?;
         let container = self.get_mut_any_index(index)?;
         Some(

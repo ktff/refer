@@ -3,9 +3,9 @@ use super::*;
 pub trait TypeContainer<T: Item> {
     type Sub: Container<T>;
 
-    fn get(&self) -> Option<&Self::Sub>;
+    fn step_down(&self) -> Option<&Self::Sub>;
 
-    fn get_mut(&mut self) -> Option<&mut Self::Sub>;
+    fn step_down_mut(&mut self) -> Option<&mut Self::Sub>;
 
     fn fill(&mut self) -> &mut Self::Sub;
 }
@@ -43,11 +43,11 @@ macro_rules! single_type_container {
         type SlotIter<'a> = <<Self as $crate::core::container::TypeContainer<$t>>::Sub as $crate::core::container::Container<$t>>::SlotIter<'a>;
 
         fn get_locality(&self, key: &impl $crate::core::LocalityPath) -> Option<$crate::core::ContainerLocality<$t>> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.get_locality(key)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.get_locality(key)
         }
 
         fn iter_slot(&self, path: $crate::core::KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.iter_slot(path)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.iter_slot(path)
         }
 
         fn fill_slot(
@@ -64,22 +64,22 @@ macro_rules! single_type_container {
 
         #[inline(always)]
         fn get_slot(&self, key: $crate::core::Key<Ptr,$t>) -> Option<$crate::core::UnsafeSlot<$t>> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.get_slot(key)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.get_slot(key)
         }
 
         fn unfill_slot(&mut self, key: $crate::core::Key<Ptr,$t>) -> Option<($t, $crate::core::ItemLocality<$t>)> {
-            $crate::core::container::TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
+            $crate::core::container::TypeContainer::<$t>::step_down_mut(self)?.unfill_slot(key)
         }
 
         #[inline(always)]
         fn contains_slot(&self, key: Key<Ptr, $t>) -> bool{
-            $crate::core::container::TypeContainer::<$t>::get(self).filter(|sub|sub.contains_slot(key)).is_some()
+            $crate::core::container::TypeContainer::<$t>::step_down(self).filter(|sub|sub.contains_slot(key)).is_some()
         }
     };
     (impl AnyContainer<$t:ty>) => {
         #[inline(always)]
         fn any_get_slot(&self, key: $crate::core::Key) -> Option<$crate::core::AnyUnsafeSlot> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.any_get_slot(key)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.any_get_slot(key)
         }
 
         fn any_get_locality(
@@ -87,19 +87,19 @@ macro_rules! single_type_container {
             path: &dyn $crate::core::LocalityPath,
             ty: std::any::TypeId,
         ) -> Option<$crate::core::AnyContainerLocality> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.any_get_locality(path, ty)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.any_get_locality(path, ty)
         }
 
         fn first_key(&self, key: std::any::TypeId) -> Option<$crate::core::Key<Ref>> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.first_key(key)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.first_key(key)
         }
 
         fn next_key(&self, ty: std::any::TypeId, key: $crate::core::Key) -> Option<$crate::core::Key<Ref>> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.next_key(ty, key)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.next_key(ty, key)
         }
 
         fn last_key(&self, key: std::any::TypeId) -> Option<$crate::core::Key<Ref>> {
-            $crate::core::container::TypeContainer::<$t>::get(self)?.last_key(key)
+            $crate::core::container::TypeContainer::<$t>::step_down(self)?.last_key(key)
         }
 
         fn types(&self) -> std::collections::HashMap<std::any::TypeId, $crate::core::ItemTraits> {
@@ -113,7 +113,7 @@ macro_rules! single_type_container {
             path: &dyn $crate::core::LocalityPath,
             item: Box<dyn std::any::Any>,
         ) -> std::result::Result<$crate::core::Key<Ref>, String> {
-            if let Some(sub) = $crate::core::container::TypeContainer::<$t>::get_mut(self) {
+            if let Some(sub) = $crate::core::container::TypeContainer::<$t>::step_down_mut(self) {
                 sub.any_fill_slot(path, item)
             } else {
                 Err(format!(
@@ -132,7 +132,7 @@ macro_rules! single_type_container {
         }
 
         fn localized_drop(&mut self, key: $crate::core::Key)-> Option<Vec<PartialEdge<Key<Owned>>>> {
-            $crate::core::container::TypeContainer::<$t>::get_mut(self)?.localized_drop(key)
+            $crate::core::container::TypeContainer::<$t>::step_down_mut(self)?.localized_drop(key)
         }
     };
 }
@@ -143,11 +143,11 @@ macro_rules! multi_type_container {
         type SlotIter<'a> = <<Self as TypeContainer<$t>>::Sub as Container<$t>>::SlotIter<'a>;
 
         fn get_locality(&self, key: &impl LocalityPath) -> Option<ContainerLocality<$t>> {
-            TypeContainer::<$t>::get(self)?.get_locality(key)
+            TypeContainer::<$t>::step_down(self)?.get_locality(key)
         }
 
         fn iter_slot(&self, path: KeyPath<$t>) -> Option<Self::SlotIter<'_>> {
-            TypeContainer::<$t>::get(self)?.iter_slot(path)
+            TypeContainer::<$t>::step_down(self)?.iter_slot(path)
         }
 
         fn fill_slot(
@@ -168,17 +168,17 @@ macro_rules! multi_type_container {
 
         #[inline(always)]
         fn get_slot(&self, key: Key<Ptr,$t>) -> Option<UnsafeSlot<$t>> {
-            TypeContainer::<$t>::get(self)?.get_slot(key)
+            TypeContainer::<$t>::step_down(self)?.get_slot(key)
         }
 
 
         fn unfill_slot(&mut self, key: Key<Ptr,$t>) -> Option<($t, ItemLocality<$t>)> {
-            TypeContainer::<$t>::get_mut(self)?.unfill_slot(key)
+            TypeContainer::<$t>::step_down_mut(self)?.unfill_slot(key)
         }
 
         #[inline(always)]
         fn contains_slot(&self, key: Key<Ptr, $t>) -> bool{
-            TypeContainer::<$t>::get(self).filter(|sub|sub.contains_slot(key)).is_some()
+            TypeContainer::<$t>::step_down(self).filter(|sub|sub.contains_slot(key)).is_some()
         }
     };
     (impl Container<$t:ty> prefer index) => {

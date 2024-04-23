@@ -11,11 +11,11 @@ macro_rules! delegate_container {
             type Sub =  $i;
 
             #[inline(always)]
-            fn get(&self) -> Option<&Self::Sub> {
+            fn step_down(&self) -> Option<&Self::Sub> {
                Some(&self.$e)
             }
 
-            fn get_mut(&mut self) -> Option<&mut Self::Sub> {
+            fn step_down_mut(&mut self) -> Option<&mut Self::Sub> {
                 Some(&mut self.$e)
             }
 
@@ -43,11 +43,11 @@ macro_rules! delegate_container {
                 type Sub =  $i;
 
                 #[inline(always)]
-                fn get(&self) -> Option<&Self::Sub> {
+                fn step_down(&self) -> Option<&Self::Sub> {
                    Some(&self.$e)
                 }
 
-                fn get_mut(&mut self) -> Option<&mut Self::Sub> {
+                fn step_down_mut(&mut self) -> Option<&mut Self::Sub> {
                     Some(&mut self.$e)
                 }
 
