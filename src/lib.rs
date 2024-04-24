@@ -16,6 +16,7 @@
 #![feature(const_type_id)]
 #![feature(specialization)]
 #![feature(extract_if)]
+#![feature(type_changing_struct_update)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs

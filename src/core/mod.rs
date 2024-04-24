@@ -9,6 +9,7 @@ mod item;
 mod key;
 pub mod permit;
 mod slot;
+pub mod iter;
 
 pub use container::{AnyContainer, Container};
 pub use edge::*;

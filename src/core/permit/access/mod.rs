@@ -27,9 +27,9 @@ pub struct Not<T>(T);
 /// R - Ref/Mut restriction
 /// T - Type restriction
 /// K - Key restriction
-pub struct Access<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> {
+pub struct Access<'a, C: AnyContainer + ?Sized, P: Permit, T: TypePermit, K: KeyPermit> {
     container: &'a C,
-    permit: R,
+    permit: P,
     type_state: T::State,
     key_state: K::State,
     _marker: PhantomData<Key<Ref<'a>>>,
