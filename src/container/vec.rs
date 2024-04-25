@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn fill() {
-        let n = 20;
+        let n = 20usize;
         let mut container = VecContainer::default();
 
         let indices = (0..n)

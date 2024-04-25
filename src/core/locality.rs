@@ -1,9 +1,10 @@
 use super::{
-    permit, BiItem, DrainItem, DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey,
-    LocalityPath, Owned, Path, Ref, Slot,
+    cast_as_eq_type, permit, AnyAlloc, AnyDynItem, AnyItem, AnyLocalityData, BiItem, DrainItem,
+    DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath, Owned, Path, Ref,
+    Slot,
 };
 use getset::{CopyGetters, Getters};
-use std::{any::Any, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 #[derive(Getters, Debug)]
 #[getset(get = "pub")]
@@ -52,6 +53,8 @@ impl<T: Item> Locality<T> {
 
 pub type ItemLocality<'a, T: Item> = LocalityRef<'a, Key<Ref<'a>, T>, T::LocalityData, T::Alloc>;
 pub type AnyItemLocality<'a> = LocalityRef<'a, Key<Ref<'a>>>;
+pub type UniversalItemLocality<'a, T: DynItem + ?Sized = dyn AnyItem> =
+    LocalityRef<'a, Key<Ref<'a>, T>, T::AnyLocalityData, T::AnyAlloc>;
 pub type ContainerLocality<'a, T: Item> = LocalityRef<'a, KeyPath<T>, T::LocalityData, T::Alloc>;
 pub type AnyContainerLocality<'a> = LocalityRef<'a>;
 
@@ -60,8 +63,8 @@ pub type AnyContainerLocality<'a> = LocalityRef<'a>;
 pub struct LocalityRef<
     'a,
     K: LocalityPath + Copy = Path,
-    D: ?Sized = (dyn Any + Send + Sync + 'static),
-    A: ?Sized = (dyn Any + Send + Sync + 'static),
+    D: ?Sized = AnyLocalityData,
+    A: ?Sized = AnyAlloc,
 > {
     path: K,
     data: &'a D,
@@ -88,6 +91,15 @@ impl<'a, T: DynItem + ?Sized, D: ?Sized, A: ?Sized> LocalityRef<'a, Key<Ref<'a>,
         Key::new_owned(self.path.index())
     }
 }
+impl<'a, T: DynItem + ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, T::AnyLocalityData, T::AnyAlloc> {
+    pub fn any_universal(self) -> UniversalItemLocality<'a> {
+        UniversalItemLocality {
+            path: self.path.any(),
+            data: T::as_any_locality_data(self.data),
+            allocator: T::as_any_alloc(self.allocator),
+        }
+    }
+}
 
 impl<'a, T: Item> ItemLocality<'a, T> {
     /// Adds drain edge to drain.
@@ -112,7 +124,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
             .any_localized(|item, locality| {
                 item.any_add_drain_edge(locality, self.owned_key().any())
             })
-            .map(|()| drain.locality().owned_key().assume())
+            .map(|()| drain.locality().owned_key().any().assume())
             .map_err(std::mem::forget)
             .ok()
     }
@@ -244,6 +256,32 @@ impl<'a> AnyItemLocality<'a> {
             })
         } else {
             None
+        }
+    }
+}
+
+impl<'a, T: AnyDynItem + ?Sized> UniversalItemLocality<'a, T> {
+    pub fn downcast_universal<D: Item>(self) -> Option<ItemLocality<'a, D>> {
+        if let Some(data) = self.data.downcast_ref() {
+            Some(ItemLocality {
+                path: self.path.any().assume(),
+                data,
+                allocator: self
+                    .allocator
+                    .downcast_ref()
+                    .expect("Mismatched allocator type"),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn sidecast<D: AnyDynItem + ?Sized>(self) -> UniversalItemLocality<'a, D> {
+        // We know that T and D both have same types in AnyDynItem.
+        UniversalItemLocality {
+            path: self.path.any().assume(),
+            data: cast_as_eq_type(self.data),
+            allocator: cast_as_eq_type(self.allocator),
         }
     }
 }

@@ -6,10 +6,10 @@ mod edge;
 mod locality;
 #[macro_use]
 mod item;
+pub mod iter;
 mod key;
 pub mod permit;
 mod slot;
-pub mod iter;
 
 pub use container::{AnyContainer, Container};
 pub use edge::*;
@@ -50,24 +50,24 @@ fn compile_check<'a, T: Item, C: Container<T>>(key: &Grc<T>, container: &'a mut 
     rf.get(&access);
     rf.get(access.as_ref());
     rf.get(&access.as_ref());
-    key.get_dyn(&access);
-    key.get_dyn(access.as_ref());
-    key.get_dyn(&access.as_ref());
-    rf.get_dyn(&access);
-    rf.get_dyn(access.as_ref());
-    rf.get_dyn(&access.as_ref());
+    key.borrow().any().get_dyn(&access);
+    key.borrow().any().get_dyn(access.as_ref());
+    key.borrow().any().get_dyn(&access.as_ref());
+    rf.any().get_dyn(&access);
+    rf.any().get_dyn(access.as_ref());
+    rf.any().get_dyn(&access.as_ref());
     dy.get_dyn(&access);
     dy.get_dyn(access.as_ref());
     dy.get_dyn(&access.as_ref());
     key.get(&mut access);
     rf.get(&mut access);
-    key.get_dyn(&mut access);
-    rf.get_dyn(&mut access);
+    key.borrow().any().get_dyn(&mut access);
+    rf.any().get_dyn(&mut access);
     dy.get_dyn(&mut access);
     key.get(access);
     rf.get(container.as_mut());
-    key.get_dyn(container.as_mut());
-    rf.get_dyn(container.as_mut());
+    key.borrow().any().get_dyn(container.as_mut());
+    rf.any().get_dyn(container.as_mut());
     dy.get_dyn(container.as_mut());
 
     // TypePermit
@@ -86,8 +86,8 @@ fn compile_check<'a, T: Item, C: Container<T>>(key: &Grc<T>, container: &'a mut 
     // Container
     key.get(&mut *container);
     rf.get(&mut *container);
-    key.get_dyn(&mut *container);
-    rf.get_dyn(&mut *container);
+    key.borrow().any().get_dyn(&mut *container);
+    rf.any().get_dyn(&mut *container);
     dy.get_dyn(&mut *container);
     key.get(container);
 }
@@ -305,7 +305,7 @@ pub trait DynKeyAccess<'a, C, R, A> {
     fn get_dyn(&self, access: A) -> DynSlot<'a, R, Self::T>;
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Ref, Access<'a, C>>
+impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Ref, Access<'a, C>>
     for Key<Ref<'a>, T>
 {
     type T = T;
@@ -314,7 +314,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Ref, 
     }
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, MutAccess<'a, C>>
+impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, MutAccess<'a, C>>
     for Key<Ref<'a>, T>
 {
     type T = T;
@@ -323,7 +323,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, 
     }
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, &'a mut C>
+impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, &'a mut C>
     for Key<Ref<'a>, T>
 {
     type T = T;
@@ -332,7 +332,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, 
     }
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Ref, Access<'a, C>>
+impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Ref, Access<'a, C>>
     for Key<Owned, T>
 {
     type T = T;
@@ -341,7 +341,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Ref, 
     }
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, MutAccess<'a, C>>
+impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, MutAccess<'a, C>>
     for Key<Owned, T>
 {
     type T = T;
@@ -350,7 +350,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, 
     }
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, &'a mut C>
+impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, &'a mut C>
     for Key<Owned, T>
 {
     type T = T;
@@ -359,7 +359,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mut, 
     }
 }
 
-impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer>
+impl<'a: 'b, 'b, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'b Access<'a, C>> for Key<Ref<'a>, T>
 {
     type T = T;
@@ -368,7 +368,7 @@ impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer>
     }
 }
 
-impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
+impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Mut, &'a mut MutAccess<'b, C>> for Key<Ref<'a>, T>
 {
     type T = T;
@@ -377,7 +377,7 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
     }
 }
 
-impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
+impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'a MutAccess<'b, C>> for Key<Ref<'a>, T>
 {
     type T = T;
@@ -386,7 +386,7 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
     }
 }
 
-impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer>
+impl<'a: 'b, 'b, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'b Access<'a, C>> for Key<Owned, T>
 {
     type T = T;
@@ -395,7 +395,7 @@ impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer>
     }
 }
 
-impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
+impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Mut, &'a mut MutAccess<'b, C>> for Key<Owned, T>
 {
     type T = T;
@@ -404,7 +404,7 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
     }
 }
 
-impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
+impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'a MutAccess<'b, C>> for Key<Owned, T>
 {
     type T = T;

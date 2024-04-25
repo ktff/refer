@@ -122,7 +122,7 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
                         subject.key(), drain.key(),
                     )
                 };
-                drain.release(excess_key);
+                drain.release_dyn(excess_key);
             } else if edge.object == subject.key() {
                 // We skip self references
             } else {

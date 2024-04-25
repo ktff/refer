@@ -1,15 +1,13 @@
 mod any;
+mod dym;
 mod traits;
 
 pub use any::*;
+pub use dym::*;
 pub use traits::*;
 
 use super::{Grc, ItemLocality, Key, MultiOwned, Owned, PartialEdge, Ptr, Ref, Side};
-use std::{alloc::Allocator, any::Any, ptr::Pointee};
-
-/// Marker trait for dyn compliant traits of items.
-pub trait DynItem: Any + Pointee {}
-impl<T: Any + Pointee + ?Sized> DynItem for T {}
+use std::{alloc::Allocator, any::Any, ptr::Thin};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Found {
@@ -28,7 +26,7 @@ impl Found {
 }
 
 /// Structure whose lifetime and edges can be managed by a container/model.
-pub trait Item: Sized + Any + Sync + Send {
+pub trait Item: Sized + Any + Sync + Send + Thin {
     /// Allocator used by item.
     type Alloc: Allocator + Any + Clone + 'static + Send + Sync;
 

@@ -13,7 +13,7 @@ pub use type_permit::*;
 use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
 
 use crate::core::{
-    permit, AnyContainer, Container, DynItem, DynSlot, Item, Key, Path, Ptr, Ref, Slot,
+    permit, AnyContainer, AnyDynItem, Container, DynItem, DynSlot, Item, Key, Path, Ptr, Ref, Slot,
 };
 
 use super::{Mut, Permit};

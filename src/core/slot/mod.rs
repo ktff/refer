@@ -1,9 +1,8 @@
-mod any_unsafe;
-mod dyn_slot;
-mod slot;
-mod unsafe_slot;
+mod universal;
+mod universal_unsafe;
 
-pub use any_unsafe::AnyUnsafeSlot;
-pub use dyn_slot::DynSlot;
-pub use slot::Slot;
-pub use unsafe_slot::UnsafeSlot;
+pub use universal::Slot;
+pub use universal_unsafe::AnyUnsafeSlot;
+
+pub type DynSlot<'a, R, T> = Slot<'a, R, T>;
+pub type UnsafeSlot<'a, T> = AnyUnsafeSlot<'a, T>;
