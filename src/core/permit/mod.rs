@@ -2,7 +2,7 @@ pub mod access;
 pub mod add;
 pub mod remove;
 
-pub use access::{All, Keys, Not, Types};
+pub use access::{All, Keys, Not, SlotAccess, Types};
 pub use remove::ContainerExt;
 
 use std::marker::PhantomData;

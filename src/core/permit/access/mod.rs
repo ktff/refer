@@ -7,6 +7,7 @@ mod ty;
 mod type_permit;
 mod types;
 
+pub use key::SlotAccess;
 pub use key_permit::*;
 pub use type_permit::*;
 

@@ -237,20 +237,6 @@ impl<'a, T: StandaloneItem> Slot<'a, permit::Mut, T> {
     // }
 }
 
-// impl<'a, T: Item, R: Into<permit::Ref>> Deref for Slot<'a, R, T> {
-//     type Target = T;
-
-//     fn deref(&self) -> &Self::Target {
-//         self.item()
-//     }
-// }
-
-// impl<'a, T: Item> DerefMut for Slot<'a, permit::Mut, T> {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         self.item_mut()
-//     }
-// }
-
 impl<'a, R, T: Item> Eq for Slot<'a, R, T> {}
 
 impl<'a, R, T: Item> PartialEq for Slot<'a, R, T> {

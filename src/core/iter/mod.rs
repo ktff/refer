@@ -3,6 +3,7 @@ mod start;
 
 use std::{
     any::Any,
+    borrow::Borrow,
     collections::{binary_heap::Iter, HashSet},
     marker::PhantomData,
 };
@@ -10,22 +11,19 @@ use std::{
 use super::{
     permit::access::*,
     permit::{self, Permit},
-    AnyContainer, Container, DynItem, DynSlot, Index, Item, Key, Ref, Slot,
+    AnyContainer, Container, DynContainer, DynItem, Index, Item, Key, Ref, Slot,
 };
-use order::Order;
+use order::{Order, OrderJoin};
 use start::Start;
 
-pub type DataIterator<T> = impl Iterator<Item = T>;
-
-fn iter<T>(access: Access<impl Container<()>, permit::Mut, All, All>) -> DataIterator<T> {
-    IterDag::rooted(unsafe { Key::<_, ()>::new_ref(Index::new(1).unwrap()) })
-        .as_mut()
-        .depth()
+fn iter<T>(access: Access<impl Container<()>, permit::Mut, All, All>) {
+    for _work_slot in IterDag::rooted(unsafe { Key::<_, ()>::new_ref(Index::new(1).unwrap()) })
+        // .mutate()
         .filter_map(|input, node| Some(2))
-        .edges_map_dyn(|input, node| Vec::<(bool, _)>::new().into_iter())
-        .run(access.ty());
-
-    Vec::<T>::new().into_iter()
+        .edges_map(|input, node| Vec::<(bool, _)>::new().into_iter())
+        .depth()
+        .into_iter(access.ty().as_ref())
+    {}
 }
 
 // ? NOTE: Zahtijevati usmjerenost edge-ova?
@@ -58,66 +56,66 @@ fn iter<T>(access: Access<impl Container<()>, permit::Mut, All, All>) -> DataIte
 /// Iteration of directed acyclic graph
 pub struct IterDag<
     'a,
+    C: ?Sized,
     S = (),
     P = (),
-    O = (),
     NI: 'a = (),
     NP: 'a = (),
     NO: 'a = (),
     EP: 'a = (),
     EI: 'a = (),
+    O = (),
 > {
-    _ref: PhantomData<&'a ()>,
+    _container: PhantomData<&'a C>,
     start: S,
     permit: PhantomData<P>,
-    order: O,
+
     node_input: PhantomData<&'a NI>,
     node_processor: NP,
     node_output: PhantomData<&'a NO>,
     edge_processor: EP,
     edge_iterator: PhantomData<&'a EI>,
+    order: O,
 }
 
-impl<'a> IterDag<'a> {
+impl<'a, C: ?Sized> IterDag<'a, C> {
     fn new() -> Self {
         IterDag {
-            _ref: PhantomData,
+            _container: PhantomData,
             start: (),
             permit: PhantomData,
-            order: (),
             node_input: PhantomData,
             node_processor: (),
             node_output: PhantomData,
             edge_processor: (),
             edge_iterator: PhantomData,
+            order: (),
         }
     }
 
     pub fn subset<T: DynItem + ?Sized>(
         start: HashSet<Key<Ref<'a>, T>>,
-    ) -> IterDag<'a, start::Subset<'a, T>> {
+    ) -> IterDag<'a, C, start::Subset<'a, T>, permit::Ref> {
         IterDag {
             start: start::Subset(start),
+            permit: PhantomData,
             ..Self::new()
         }
     }
 
-    pub fn rooted<T: DynItem + ?Sized>(start: Key<Ref<'a>, T>) -> IterDag<'a, start::Root<T>> {
+    pub fn rooted<T: DynItem + ?Sized>(
+        start: Key<Ref<'a>, T>,
+    ) -> IterDag<'a, C, start::Root<T>, permit::Ref> {
         IterDag {
             start: start::Root(start),
+            permit: PhantomData,
             ..Self::new()
         }
     }
 }
 
-impl<'a, S: Start<'a>> IterDag<'a, S> {
-    pub fn as_ref(self) -> IterDag<'a, S, permit::Ref> {
-        IterDag {
-            permit: PhantomData,
-            ..self
-        }
-    }
-    pub fn as_mut(self) -> IterDag<'a, S, permit::Mut> {
+impl<'a, C: ?Sized, S: Start<'a>> IterDag<'a, C, S, permit::Ref> {
+    pub fn mutate(self) -> IterDag<'a, C, S, permit::Mut> {
         IterDag {
             permit: PhantomData,
             ..self
@@ -125,45 +123,78 @@ impl<'a, S: Start<'a>> IterDag<'a, S> {
     }
 }
 
-impl<'a, S: Start<'a>, P: Permit> IterDag<'a, S, P> {
-    pub fn depth(self) -> IterDag<'a, S, P, order::Depth> {
+impl<'a, C: ?Sized, S: Start<'a>, P: Permit> IterDag<'a, C, S, P> {
+    // TODO: Option to enable for not expanded nodes to be called again with expanded [NI].
+
+    pub fn filter_map<
+        NI: 'a,
+        NP: FnMut(&[NI], &mut Slot<'a, P, S::T>) -> Option<NO> + 'a,
+        NO: 'a,
+    >(
+        self,
+        node_processor: NP,
+    ) -> IterDag<'a, C, S, P, NI, NP, NO> {
+        IterDag {
+            node_input: PhantomData,
+            node_processor,
+            node_output: PhantomData,
+            ..self
+        }
+    }
+}
+
+impl<'a, C: ?Sized, S: Start<'a>, P: Permit, NI, NP, NO> IterDag<'a, C, S, P, NI, NP, NO> {
+    pub fn edges_map<
+        EP: FnMut(&NO, &mut Slot<'a, P, S::T>) -> EI,
+        EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
+    >(
+        self,
+        edge_processor: EP,
+    ) -> IterDag<'a, C, S, P, NI, NP, NO, EP, EI> {
+        IterDag {
+            edge_processor,
+            edge_iterator: PhantomData,
+            ..self
+        }
+    }
+}
+
+impl<'a, C: ?Sized, S: Start<'a>, P: Permit, NI, NP, NO, EP, EI>
+    IterDag<'a, C, S, P, NI, NP, NO, EP, EI>
+{
+    pub fn depth(self) -> IterDag<'a, C, S, P, NI, NP, NO, EP, EI, order::Depth> {
         IterDag {
             order: order::Depth,
             ..self
         }
     }
 
-    pub fn breadth(self) -> IterDag<'a, S, P, order::Breadth> {
+    pub fn breadth(self) -> IterDag<'a, C, S, P, NI, NP, NO, EP, EI, order::Breadth> {
         IterDag {
             order: order::Breadth,
             ..self
         }
     }
 
-    pub fn topological<F: FnMut(&mut Slot<'a, P, S::T>) -> Option<usize>>(
+    /// Topological sort.
+    /// Items with lower order are processed before items with higher order.
+    pub fn topological<O: FnMut(&NI, SlotAccess<C, P, S::T>) -> Option<TO>, TO: Ord + Copy>(
         self,
-        order: F,
-    ) -> IterDag<'a, S, P, order::Topological<F>>
+        order: O,
+        join: OrderJoin<TO>,
+    ) -> IterDag<'a, C, S, P, NI, NP, NO, EP, EI, order::Topological<O, TO>>
     where
-        S::T: Item,
+        C: AnyContainer,
     {
         IterDag {
-            order: order::Topological(order),
+            order: order::Topological(order, join),
             ..self
         }
     }
 
-    pub fn topological_dyn<F: FnMut(&mut DynSlot<'a, P, S::T>) -> Option<usize>>(
+    pub fn topological_by_key(
         self,
-        order: F,
-    ) -> IterDag<'a, S, P, order::Topological<F>> {
-        IterDag {
-            order: order::Topological(order),
-            ..self
-        }
-    }
-
-    pub fn topological_by_key(self) -> IterDag<'a, S, P, order::TopologicalKey> {
+    ) -> IterDag<'a, C, S, P, NI, NP, NO, EP, EI, order::TopologicalKey> {
         IterDag {
             order: order::TopologicalKey,
             ..self
@@ -171,90 +202,27 @@ impl<'a, S: Start<'a>, P: Permit> IterDag<'a, S, P> {
     }
 }
 
-impl<'a, S: Start<'a>, P: Permit, O: Order> IterDag<'a, S, P, O> {
-    pub fn filter_map<
-        NI: 'a,
-        NP: FnMut(DataIterator<NI>, &mut Slot<'a, P, S::T>) -> Option<NO> + 'a,
-        NO: 'a,
-    >(
-        self,
-        node_processor: NP,
-    ) -> IterDag<'a, S, P, O, NI, NP, NO>
-    where
-        S::T: Item,
-    {
-        IterDag {
-            node_input: PhantomData,
-            node_processor,
-            node_output: PhantomData,
-            ..self
-        }
-    }
-
-    pub fn filter_map_dyn<
-        NI: 'a,
-        NP: FnMut(DataIterator<NI>, &mut DynSlot<'a, P, S::T>) -> Option<NO> + 'a,
-        NO: 'a,
-    >(
-        self,
-        node_processor: NP,
-    ) -> IterDag<'a, S, P, O, NI, NP, NO>
-    where
-        S::T: Item,
-    {
-        IterDag {
-            node_input: PhantomData,
-            node_processor,
-            node_output: PhantomData,
-            ..self
-        }
-    }
-}
-
-impl<'a, S: Start<'a>, P: Permit, O: Order, NI, NP, NO> IterDag<'a, S, P, O, NI, NP, NO> {
-    pub fn edges_map<
-        EP: FnMut(NO, &mut Slot<'a, P, S::T>) -> EI,
-        EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
-    >(
-        self,
-        edge_processor: EP,
-    ) -> IterDag<'a, S, P, O, NI, NP, NO, EP, EI>
-    where
-        S::T: Item,
-    {
-        IterDag {
-            edge_processor,
-            edge_iterator: PhantomData,
-            ..self
-        }
-    }
-
-    pub fn edges_map_dyn<
-        EP: FnMut(NO, &mut DynSlot<'a, P, S::T>) -> EI,
-        EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
-    >(
-        self,
-        edge_processor: EP,
-    ) -> IterDag<'a, S, P, O, NI, NP, NO, EP, EI> {
-        IterDag {
-            edge_processor,
-            edge_iterator: PhantomData,
-            ..self
-        }
-    }
-}
-
-impl<'a, S: Start<'a>, P: Permit, O: Order, NI, NP, NO, EP, EI>
-    IterDag<'a, S, P, O, NI, NP, NO, EP, EI>
+impl<'a, C: AnyContainer + ?Sized, S: Start<'a>, P: Permit, NI, NP, NO, EP, EI, O: Order>
+    IterDag<'a, C, S, P, NI, NP, NO, EP, EI, O>
 {
-    pub fn run(self, access: Access<'a, impl Container<S::T>, P, S::T, impl KeyPermit>)
-    where
-        S::T: Item,
-    {
-        unimplemented!()
+    pub fn into_iter(
+        self,
+        access: Access<'a, C, P, impl Permits<S::T>, impl KeyPermit>,
+    ) -> impl Iterator<Item = IterNode<'a, P, S::T, NI, NO>> + 'a {
+        // NOTES:
+        // - Only ever use get_try for getting slots to cover cases when a sub container is passed here or constrictive KeyPermit
+        // - More generally this should be robust against malformed user input
+        // TODO
+        std::iter::empty()
     }
+}
 
-    pub fn run_dyn(self, access: Access<'a, impl AnyContainer, P, All, impl KeyPermit>) {
-        unimplemented!()
-    }
+pub enum IterNode<'a, P: Permit, T: DynItem + ?Sized, IN, OUT> {
+    /// Was not expanded.
+    Idle(Key<Ref<'a>, T>),
+
+    Expanded(Slot<'a, P, T>, OUT),
+
+    /// This node was called out of order.
+    OutOfOrder(IN, Key<Ref<'a>, T>),
 }
