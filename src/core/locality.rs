@@ -1,6 +1,6 @@
 use super::{
-    cast_as_eq_type, permit, AnyAlloc, AnyDynItem, AnyItem, AnyLocalityData, BiItem, DrainItem,
-    DynItem, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath, Owned, Path, Ref, Slot, 
+    cast_as_eq_type, permit, AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Item, Key, KeyPath,
+    LeafPath, LocalityKey, LocalityPath, Owned, Path, Ref, Slot,
 };
 use getset::{CopyGetters, Getters};
 use std::num::NonZeroUsize;
@@ -45,33 +45,24 @@ impl<T: Item> Locality<T> {
         self.item_locality(key)
     }
 
-    pub fn container_locality(&self) -> ContainerLocality<'_, T> {
-        ContainerLocality::new(self.locality_key.into(), &self.data, &self.allocator)
+    pub fn container_locality(&self) -> LocalityRef<'_, KeyPath<T>, T> {
+        LocalityRef::new(self.locality_key.into(), &self.data, &self.allocator)
     }
 }
 
-pub type ItemLocality<'a, T: Item> = LocalityRef<'a, Key<Ref<'a>, T>, T::LocalityData, T::Alloc>;
-pub type AnyItemLocality<'a> = LocalityRef<'a, Key<Ref<'a>>>;
-pub type UniversalItemLocality<'a, T: DynItem + ?Sized = dyn AnyItem> =
-    LocalityRef<'a, Key<Ref<'a>, T>, T::AnyLocalityData, T::AnyAlloc>;
-pub type ContainerLocality<'a, T: Item> = LocalityRef<'a, KeyPath<T>, T::LocalityData, T::Alloc>;
-pub type AnyContainerLocality<'a> = LocalityRef<'a>;
+pub type ItemLocality<'a, T: DynItem + ?Sized = dyn AnyItem> = LocalityRef<'a, Key<Ref<'a>, T>, T>;
+pub type ContainerLocality<'a, T: DynItem + ?Sized = dyn AnyItem> = LocalityRef<'a, KeyPath<T>, T>;
 
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct LocalityRef<
-    'a,
-    K: LocalityPath + Copy = Path,
-    D: ?Sized = AnyLocalityData,
-    A: ?Sized = AnyAlloc,
-> {
+pub struct LocalityRef<'a, K: LocalityPath + Copy = Path, T: DynItem + ?Sized = dyn AnyItem> {
     path: K,
-    data: &'a D,
-    allocator: &'a A,
+    data: &'a T::AnyLocalityData,
+    allocator: &'a T::AnyAlloc,
 }
 
-impl<'a, K: LocalityPath + Copy, D: ?Sized, A: ?Sized> LocalityRef<'a, K, D, A> {
-    pub fn new(path: K, data: &'a D, allocator: &'a A) -> Self {
+impl<'a, K: LocalityPath + Copy, T: DynItem + ?Sized> LocalityRef<'a, K, T> {
+    pub fn new(path: K, data: &'a T::AnyLocalityData, allocator: &'a T::AnyAlloc) -> Self {
         Self {
             path,
             data,
@@ -80,7 +71,7 @@ impl<'a, K: LocalityPath + Copy, D: ?Sized, A: ?Sized> LocalityRef<'a, K, D, A> 
     }
 }
 
-impl<'a, T: DynItem + ?Sized, D: ?Sized, A: ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, D, A> {
+impl<'a, T: DynItem + ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, T> {
     /// UNSAFE: This isn't unsafe per se since safety checks will still be made, but they can panic if
     /// caller allows for this key to outlive this T.
     ///
@@ -90,9 +81,9 @@ impl<'a, T: DynItem + ?Sized, D: ?Sized, A: ?Sized> LocalityRef<'a, Key<Ref<'a>,
         Key::new_owned(self.path.index())
     }
 }
-impl<'a, T: DynItem + ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, T::AnyLocalityData, T::AnyAlloc> {
-    pub fn any_universal(self) -> UniversalItemLocality<'a> {
-        UniversalItemLocality {
+impl<'a, T: DynItem + ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, T> {
+    pub fn any_universal(self) -> ItemLocality<'a> {
+        ItemLocality {
             path: self.path.any(),
             data: T::as_any_locality_data(self.data),
             allocator: T::as_any_alloc(self.allocator),
@@ -223,8 +214,8 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     //         })
     // }
 
-    pub fn any(self) -> AnyItemLocality<'a> {
-        AnyItemLocality {
+    pub fn any(self) -> ItemLocality<'a> {
+        ItemLocality {
             path: self.path.any(),
             data: self.data,
             allocator: self.allocator,
@@ -232,9 +223,9 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     }
 }
 
-impl<'a, T: Item> ContainerLocality<'a, T> {
-    pub fn any(self) -> AnyContainerLocality<'a> {
-        AnyContainerLocality {
+impl<'a, T: Item> LocalityRef<'a, KeyPath<T>, T> {
+    pub fn any(self) -> LocalityRef<'a> {
+        LocalityRef {
             path: self.path.path(),
             data: self.data,
             allocator: self.allocator,
@@ -242,7 +233,7 @@ impl<'a, T: Item> ContainerLocality<'a, T> {
     }
 }
 
-impl<'a> AnyItemLocality<'a> {
+impl<'a> ItemLocality<'a> {
     pub fn downcast<T: Item>(self) -> Option<ItemLocality<'a, T>> {
         if let Some(data) = self.data.downcast_ref() {
             Some(ItemLocality {
@@ -259,7 +250,7 @@ impl<'a> AnyItemLocality<'a> {
     }
 }
 
-impl<'a, T: AnyDynItem + ?Sized> UniversalItemLocality<'a, T> {
+impl<'a, T: AnyDynItem + ?Sized> ItemLocality<'a, T> {
     pub fn downcast_universal<D: Item>(self) -> Option<ItemLocality<'a, D>> {
         if let Some(data) = self.data.downcast_ref() {
             Some(ItemLocality {
@@ -275,9 +266,9 @@ impl<'a, T: AnyDynItem + ?Sized> UniversalItemLocality<'a, T> {
         }
     }
 
-    pub fn sidecast<D: AnyDynItem + ?Sized>(self) -> UniversalItemLocality<'a, D> {
+    pub fn sidecast<D: AnyDynItem + ?Sized>(self) -> ItemLocality<'a, D> {
         // We know that T and D both have same types in AnyDynItem.
-        UniversalItemLocality {
+        ItemLocality {
             path: self.path.any().assume(),
             data: cast_as_eq_type(self.data),
             allocator: cast_as_eq_type(self.allocator),
@@ -285,10 +276,10 @@ impl<'a, T: AnyDynItem + ?Sized> UniversalItemLocality<'a, T> {
     }
 }
 
-impl<'a> AnyContainerLocality<'a> {
-    pub fn downcast<T: Item>(self) -> Option<ContainerLocality<'a, T>> {
+impl<'a> LocalityRef<'a> {
+    pub fn downcast<T: Item>(self) -> Option<LocalityRef<'a, KeyPath<T>, T>> {
         if let Some(data) = self.data.downcast_ref() {
-            Some(ContainerLocality {
+            Some(LocalityRef {
                 path: KeyPath::new(self.path),
                 data,
                 allocator: self
@@ -302,9 +293,9 @@ impl<'a> AnyContainerLocality<'a> {
     }
 }
 
-impl<'a, K: LocalityPath + Copy, D: ?Sized, A: ?Sized> Copy for LocalityRef<'a, K, D, A> {}
+impl<'a, K: LocalityPath + Copy, T: DynItem + ?Sized> Copy for LocalityRef<'a, K, T> {}
 
-impl<'a, K: LocalityPath + Copy, D: ?Sized, A: ?Sized> Clone for LocalityRef<'a, K, D, A> {
+impl<'a, K: LocalityPath + Copy, T: DynItem + ?Sized> Clone for LocalityRef<'a, K, T> {
     fn clone(&self) -> Self {
         Self {
             path: self.path,

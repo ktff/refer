@@ -106,7 +106,7 @@ macro_rules! region_container {
             &self,
             path: &dyn LocalityPath,
             ty: std::any::TypeId,
-        ) -> Option<AnyContainerLocality> {
+        ) -> Option<LocalityRef> {
             self.locality(path)?.any_get_locality(path, ty)
         }
 

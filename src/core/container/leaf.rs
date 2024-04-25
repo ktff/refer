@@ -137,7 +137,7 @@ macro_rules! leaf_container {
             self.get_slot(key.assume()).map(|slot| slot.any())
         }
 
-        fn any_get_locality(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnyContainerLocality>{
+        fn any_get_locality(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<LocalityRef>{
             if ty == TypeId::of::<$t>() {
                 Some(self.locality().container_locality().any())
             } else {

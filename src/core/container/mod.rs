@@ -10,8 +10,8 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    AnyContainerLocality, ContainerLocality, Item, ItemLocality, ItemTraits, Key, KeyPath,
-    LocalityKey, LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
+    Item, ItemLocality, ItemTraits, Key, KeyPath, LocalityKey, LocalityPath, LocalityRef, Owned,
+    PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
@@ -49,7 +49,7 @@ pub unsafe trait Container<T: Item>: AnyContainer {
     /// SAFETY: Bijection between keys and slots MUST be enforced.
     fn get_slot(&self, key: Key<Ptr, T>) -> Option<UnsafeSlot<T>>;
 
-    fn get_locality(&self, key: &impl LocalityPath) -> Option<ContainerLocality<T>>;
+    fn get_locality(&self, key: &impl LocalityPath) -> Option<LocalityRef<KeyPath<T>, T>>;
 
     /// Iterates in ascending order of key for keys under/with given prefix.
     /// SAFETY: Iterator MUST NOT return the same slot more than once.
@@ -95,7 +95,7 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
     fn any_get_slot(&self, key: Key) -> Option<UnsafeSlot>;
 
     /// None if there is no locality for given type under given key.
-    fn any_get_locality(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnyContainerLocality>;
+    fn any_get_locality(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<LocalityRef>;
 
     /// Err if:
     /// - no more place in locality

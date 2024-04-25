@@ -1,5 +1,5 @@
 use super::{DrainItem, Found, Item, ItemTrait, StandaloneItem};
-use crate::core::{AnyItemLocality, Grc, Key, MultiOwned, Owned, PartialEdge, Ref, Side};
+use crate::core::{Grc, ItemLocality, Key, MultiOwned, Owned, PartialEdge, Ref, Side};
 use std::{
     any::{Any, TypeId},
     fmt::Display,
@@ -35,7 +35,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
 
     fn any_iter_edges(
         &self,
-        locality: AnyItemLocality<'_>,
+        locality: ItemLocality<'_>,
         filter: Option<Side>,
     ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>>;
 
@@ -45,7 +45,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     #[must_use]
     fn any_add_drain_edge(
         &mut self,
-        locality: AnyItemLocality<'_>,
+        locality: ItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<(), Key<Owned>>;
 
@@ -54,18 +54,18 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     #[must_use]
     fn any_remove_edges(
         &mut self,
-        locality: AnyItemLocality<'_>,
+        locality: ItemLocality<'_>,
         edge: PartialEdge<Key>,
     ) -> Result<MultiOwned, Found>;
 
     #[must_use]
-    fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Grc>;
+    fn any_inc_owners(&mut self, locality: ItemLocality<'_>) -> Option<Grc>;
 
     /// Panics if Grc is not owned by this.
-    fn any_dec_owners(&mut self, locality: AnyItemLocality<'_>, this: Grc);
+    fn any_dec_owners(&mut self, locality: ItemLocality<'_>, this: Grc);
 
     /// True if there is Ref without edge to this item.
-    fn any_has_owner(&self, locality: AnyItemLocality<'_>) -> bool;
+    fn any_has_owner(&self, locality: ItemLocality<'_>) -> bool;
 
     /// TypeId<dyn D> -> <dyn D>::Metadata for this item.
     /// Including AnyItem.
@@ -84,7 +84,7 @@ impl<T: Item> AnyItem for T {
 
     fn any_iter_edges(
         &self,
-        locality: AnyItemLocality<'_>,
+        locality: ItemLocality<'_>,
         filter: Option<Side>,
     ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>> {
         let edges = self.iter_edges(locality.downcast().expect("Unexpected item type"), filter);
@@ -97,7 +97,7 @@ impl<T: Item> AnyItem for T {
 
     default fn any_add_drain_edge(
         &mut self,
-        _: AnyItemLocality<'_>,
+        _: ItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<(), Key<Owned>> {
         Err(source)
@@ -105,19 +105,19 @@ impl<T: Item> AnyItem for T {
 
     fn any_remove_edges(
         &mut self,
-        locality: AnyItemLocality<'_>,
+        locality: ItemLocality<'_>,
         edge: PartialEdge<Key>,
     ) -> Result<MultiOwned, Found> {
         self.try_remove_edges(locality.downcast().expect("Unexpected item type"), edge)
     }
 
-    default fn any_inc_owners(&mut self, _: AnyItemLocality<'_>) -> Option<Grc> {
+    default fn any_inc_owners(&mut self, _: ItemLocality<'_>) -> Option<Grc> {
         None
     }
 
-    default fn any_dec_owners(&mut self, _: AnyItemLocality<'_>, _: Grc) {}
+    default fn any_dec_owners(&mut self, _: ItemLocality<'_>, _: Grc) {}
 
-    default fn any_has_owner(&self, _: AnyItemLocality<'_>) -> bool {
+    default fn any_has_owner(&self, _: ItemLocality<'_>) -> bool {
         false
     }
 
@@ -130,7 +130,7 @@ impl<T: Item> AnyItem for T {
 default impl<T: DrainItem> AnyItem for T {
     fn any_add_drain_edge(
         &mut self,
-        locality: AnyItemLocality<'_>,
+        locality: ItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<(), Key<Owned>> {
         Ok(self.add_drain_edge(locality.downcast().expect("Unexpected item type"), source))
@@ -138,21 +138,21 @@ default impl<T: DrainItem> AnyItem for T {
 }
 
 impl<T: StandaloneItem> AnyItem for T {
-    fn any_inc_owners(&mut self, locality: AnyItemLocality<'_>) -> Option<Grc> {
+    fn any_inc_owners(&mut self, locality: ItemLocality<'_>) -> Option<Grc> {
         Some(
             self.inc_owners(locality.downcast().expect("Unexpected item type"))
                 .any(),
         )
     }
 
-    fn any_dec_owners(&mut self, locality: AnyItemLocality<'_>, this: Grc) {
+    fn any_dec_owners(&mut self, locality: ItemLocality<'_>, this: Grc) {
         self.dec_owners(
             locality.downcast().expect("Unexpected item type"),
             this.assume(),
         );
     }
 
-    fn any_has_owner(&self, locality: AnyItemLocality<'_>) -> bool {
+    fn any_has_owner(&self, locality: ItemLocality<'_>) -> bool {
         self.has_owner(locality.downcast().expect("Unexpected item type"))
     }
 }

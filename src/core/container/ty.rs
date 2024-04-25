@@ -86,7 +86,7 @@ macro_rules! single_type_container {
             &self,
             path: &dyn $crate::core::LocalityPath,
             ty: std::any::TypeId,
-        ) -> Option<$crate::core::AnyContainerLocality> {
+        ) -> Option<$crate::core::LocalityRef> {
             $crate::core::container::TypeContainer::<$t>::step_down(self)?.any_get_locality(path, ty)
         }
 
@@ -218,7 +218,7 @@ macro_rules! multi_type_container {
             self.get_any(key)?.any_get_slot(key)
         }
 
-        fn any_get_locality(&self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<AnyContainerLocality> {
+        fn any_get_locality(&self, path: &dyn LocalityPath, ty: std::any::TypeId) -> Option<LocalityRef> {
             self.get_any_index(self.type_to_index(ty)?)?.any_get_locality(path,ty)
         }
 

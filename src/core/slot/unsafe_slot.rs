@@ -1,6 +1,5 @@
 use crate::core::{
-    cast_as_eq_type, AnyAlloc, AnyDynItem, AnyItem, AnyLocalityData, DynItem, Item,
-    UniversalItemLocality,
+    cast_as_eq_type, AnyAlloc, AnyDynItem, AnyItem, AnyLocalityData, DynItem, Item, ItemLocality,
 };
 use getset::CopyGetters;
 use std::{
@@ -12,15 +11,12 @@ use std::{
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
 pub struct UnsafeSlot<'a, T: DynItem + ?Sized = dyn AnyItem> {
-    locality: UniversalItemLocality<'a, T>,
+    locality: ItemLocality<'a, T>,
     item: &'a SyncUnsafeCell<T::AnyType>,
 }
 
 impl<'a, T: DynItem + ?Sized> UnsafeSlot<'a, T> {
-    pub fn new(
-        locality: UniversalItemLocality<'a, T>,
-        item: &'a SyncUnsafeCell<T::AnyType>,
-    ) -> Self {
+    pub fn new(locality: ItemLocality<'a, T>, item: &'a SyncUnsafeCell<T::AnyType>) -> Self {
         Self { locality, item }
     }
 
@@ -82,7 +78,7 @@ impl<'a, T: DynItem + ?Sized> Clone for UnsafeSlot<'a, T> {
 
 // Deref to locality
 impl<'a, T: DynItem + ?Sized> std::ops::Deref for UnsafeSlot<'a, T> {
-    type Target = UniversalItemLocality<'a, T>;
+    type Target = ItemLocality<'a, T>;
 
     fn deref(&self) -> &Self::Target {
         &self.locality

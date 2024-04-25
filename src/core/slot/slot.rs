@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Found, Grc, Item, Key, MultiOwned, Owned,
-    PartialEdge, Ptr, Ref, Side, StandaloneItem, UniversalItemLocality, UnsafeSlot,
+    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Found, Grc, Item, ItemLocality, Key,
+    MultiOwned, Owned, PartialEdge, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
 };
 use std::{
     any::Any,
@@ -129,7 +129,7 @@ impl<'a, T: DynItem + ?Sized, R> Slot<'a, R, T> {
         self.slot.item_type_id()
     }
 
-    pub fn locality(&self) -> UniversalItemLocality<'a, T> {
+    pub fn locality(&self) -> ItemLocality<'a, T> {
         self.slot.locality()
     }
 }
@@ -326,7 +326,7 @@ impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Mut, T> {
 
     pub fn any_localized<R>(
         &mut self,
-        func: impl FnOnce(&mut dyn AnyItem, UniversalItemLocality<'a>) -> R,
+        func: impl FnOnce(&mut dyn AnyItem, ItemLocality<'a>) -> R,
     ) -> R {
         let locality = self.locality().any_universal();
         func(self.any_item_mut(), locality)
@@ -336,10 +336,7 @@ impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Mut, T> {
         (self.any_item_mut() as &mut dyn Any).downcast_mut::<U>()
     }
 
-    pub fn localized<R>(
-        &mut self,
-        func: impl FnOnce(&mut T, UniversalItemLocality<'a, T>) -> R,
-    ) -> R {
+    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, ItemLocality<'a, T>) -> R) -> R {
         let locality = self.locality();
         func(self.item_mut(), locality)
     }
