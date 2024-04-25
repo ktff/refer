@@ -1,6 +1,6 @@
 use super::{
-    cast_as_eq_type, permit, AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Item, Key, KeyPath,
-    LeafPath, LocalityKey, LocalityPath, Owned, Path, Ref, Slot,
+    permit, AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Item, Key, KeyPath, LeafPath,
+    LocalityKey, LocalityPath, Owned, Path, Ref, Slot,
 };
 use getset::{CopyGetters, Getters};
 use std::num::NonZeroUsize;
@@ -79,15 +79,6 @@ impl<'a, T: DynItem + ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, T> {
     #[must_use]
     pub unsafe fn owned_key(&self) -> Key<Owned, T> {
         Key::new_owned(self.path.index())
-    }
-}
-impl<'a, T: DynItem + ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, T> {
-    pub fn any_universal(self) -> ItemLocality<'a> {
-        ItemLocality {
-            path: self.path.any(),
-            data: T::as_any_locality_data(self.data),
-            allocator: T::as_any_alloc(self.allocator),
-        }
     }
 }
 
@@ -213,45 +204,30 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     //             subject.object(object_key)
     //         })
     // }
+}
 
+impl<'a, T: DynItem + ?Sized> LocalityRef<'a, Key<Ref<'a>, T>, T> {
     pub fn any(self) -> ItemLocality<'a> {
         ItemLocality {
             path: self.path.any(),
-            data: self.data,
-            allocator: self.allocator,
+            data: T::as_any_locality_data(self.data),
+            allocator: T::as_any_alloc(self.allocator),
         }
     }
 }
 
-impl<'a, T: Item> LocalityRef<'a, KeyPath<T>, T> {
+impl<'a, T: DynItem + ?Sized> LocalityRef<'a, KeyPath<T>, T> {
     pub fn any(self) -> LocalityRef<'a> {
         LocalityRef {
             path: self.path.path(),
-            data: self.data,
-            allocator: self.allocator,
-        }
-    }
-}
-
-impl<'a> ItemLocality<'a> {
-    pub fn downcast<T: Item>(self) -> Option<ItemLocality<'a, T>> {
-        if let Some(data) = self.data.downcast_ref() {
-            Some(ItemLocality {
-                path: self.path.assume(),
-                data,
-                allocator: self
-                    .allocator
-                    .downcast_ref()
-                    .expect("Mismatched allocator type"),
-            })
-        } else {
-            None
+            data: T::as_any_locality_data(self.data),
+            allocator: T::as_any_alloc(self.allocator),
         }
     }
 }
 
 impl<'a, T: AnyDynItem + ?Sized> ItemLocality<'a, T> {
-    pub fn downcast_universal<D: Item>(self) -> Option<ItemLocality<'a, D>> {
+    pub fn downcast<D: Item>(self) -> Option<ItemLocality<'a, D>> {
         if let Some(data) = self.data.downcast_ref() {
             Some(ItemLocality {
                 path: self.path.any().assume(),
@@ -266,18 +242,20 @@ impl<'a, T: AnyDynItem + ?Sized> ItemLocality<'a, T> {
         }
     }
 
-    pub fn sidecast<D: AnyDynItem + ?Sized>(self) -> ItemLocality<'a, D> {
-        // We know that T and D both have same types in AnyDynItem.
+    pub fn sidecast<
+        D: DynItem<AnyLocalityData = T::AnyLocalityData, AnyAlloc = T::AnyAlloc> + ?Sized,
+    >(
+        self,
+    ) -> ItemLocality<'a, D> {
         ItemLocality {
             path: self.path.any().assume(),
-            data: cast_as_eq_type(self.data),
-            allocator: cast_as_eq_type(self.allocator),
+            ..self
         }
     }
 }
 
-impl<'a> LocalityRef<'a> {
-    pub fn downcast<T: Item>(self) -> Option<LocalityRef<'a, KeyPath<T>, T>> {
+impl<'a, T: AnyDynItem + ?Sized> LocalityRef<'a, Path, T> {
+    pub fn downcast<D: Item>(self) -> Option<LocalityRef<'a, KeyPath<D>, D>> {
         if let Some(data) = self.data.downcast_ref() {
             Some(LocalityRef {
                 path: KeyPath::new(self.path),

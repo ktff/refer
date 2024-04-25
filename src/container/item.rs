@@ -136,14 +136,11 @@ mod tests {
         let item = 42;
         let key = container.fill(item).unwrap();
 
-        assert_eq!(
-            unsafe { *container.get(key.get()).unwrap().item().get() },
-            item
-        );
+        assert_eq!(unsafe { *container.get(key.get()).unwrap().item() }, item);
         assert!(container
             .iter(..)
             .map(|slot| (slot.locality().path().index().get(), unsafe {
-                *slot.item().get()
+                *slot.item()
             }))
             .eq(Some((key.get() as u64, item))));
     }
@@ -155,10 +152,7 @@ mod tests {
         let item = 42;
         let key = container.fill(item).unwrap();
 
-        assert_eq!(
-            unsafe { *container.get(key.get()).unwrap().item().get() },
-            item
-        );
+        assert_eq!(unsafe { *container.get(key.get()).unwrap().item() }, item);
 
         assert_eq!(container.unfill(key.get()), Some(item));
 

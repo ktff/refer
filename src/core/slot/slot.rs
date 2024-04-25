@@ -9,49 +9,22 @@ use std::{
 };
 
 pub struct Slot<'a, R, T: DynItem + ?Sized = dyn AnyItem> {
-    metadata: T::Metadata,
     slot: UnsafeSlot<'a, T>,
     access: R,
 }
 
 impl<'a, R> Slot<'a, R> {
-    /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new_any(slot: UnsafeSlot<'a>, access: R) -> Self {
-        let metadata = std::ptr::metadata(slot.item().get());
-        Self {
-            metadata,
-            slot,
-            access,
-        }
-    }
-
     pub fn type_name(&self) -> &'static str {
-        self.slot.item().get().type_info().name
+        self.slot.item_type_name()
     }
 }
 
-// impl<'a, T: DynItem + ?Sized, R> Slot<'a, R, T> {
-//     /// Key should correspond to the slot.
-//     /// None if item doesn't implement T.
-//     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-//     pub unsafe fn new_dyn(slot: UnsafeSlot<'a, T>, access: R) -> Option<Self> {
-//         if let Some(metadata) = slot.metadata::<T>() {
-//             Some(Self {
-//                 metadata,
-//                 slot,
-//                 access,
-//             })
-//         } else {
-//             warn!(
-//                 "Item at {:?}:{} is not {:?} which was assumed to be true.",
-//                 slot.locality().path(),
-//                 slot.item().get().type_info().name,
-//                 std::any::type_name::<T>()
-//             );
-//             None
-//         }
-//     }
-// }
+impl<'a, T: DynItem + ?Sized, R> Slot<'a, R, T> {
+    /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
+    pub unsafe fn new(slot: UnsafeSlot<'a, T>, access: R) -> Self {
+        Self { slot, access }
+    }
+}
 
 impl<'a, T: AnyDynItem + ?Sized, R> Slot<'a, R, T> {
     // pub fn upcast<U: DynItem + ?Sized>(self) -> Slot<'a, R, U>
@@ -71,11 +44,21 @@ impl<'a, T: AnyDynItem + ?Sized, R> Slot<'a, R, T> {
     //     }
     // }
 
-    pub fn sidecast<U: AnyDynItem + ?Sized>(self) -> Result<Slot<'a, R, U>, Self> {
-        if let Some(metadata) = self.slot.metadata::<U>() {
+    pub fn anycast<D: DynItem + ?Sized>(self) -> Result<Slot<'a, R, D>, Self> {
+        if let Some(slot) = self.slot.anycast() {
             Ok(Slot {
-                metadata,
-                slot: self.slot.sidecast(),
+                slot,
+                access: self.access,
+            })
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn sidecast<U: AnyDynItem + ?Sized>(self) -> Result<Slot<'a, R, U>, Self> {
+        if let Some(slot) = self.slot.sidecast() {
+            Ok(Slot {
+                slot,
                 access: self.access,
             })
         } else {
@@ -85,8 +68,10 @@ impl<'a, T: AnyDynItem + ?Sized, R> Slot<'a, R, T> {
 
     pub fn downcast<U: Item>(self) -> Result<Slot<'a, R, U>, Self> {
         if let Some(slot) = self.slot.downcast() {
-            // SAFETY: We have the same access to the slot.
-            Ok(unsafe { Slot::new(slot, self.access) })
+            Ok(Slot {
+                slot,
+                access: self.access,
+            })
         } else {
             Err(self)
         }
@@ -94,19 +79,11 @@ impl<'a, T: AnyDynItem + ?Sized, R> Slot<'a, R, T> {
 }
 
 impl<'a, T: Item, R> Slot<'a, R, T> {
-    /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.
-    pub unsafe fn new(slot: UnsafeSlot<'a, T>, access: R) -> Self {
-        let metadata = std::ptr::metadata(slot.item().get());
-        Self {
-            metadata,
-            slot,
-            access,
-        }
-    }
-
     pub fn any(self) -> Slot<'a, R> {
-        // SAFETY: We have the same access to the slot.
-        unsafe { Slot::new_any(self.slot.any(), self.access) }
+        Slot {
+            slot: self.slot.any(),
+            access: self.access,
+        }
     }
 }
 
@@ -158,7 +135,7 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, R, T> {
 impl<'a, T: Item> Slot<'a, permit::Ref, T> {
     pub fn to_item(&self) -> &'a T {
         // SAFETY: We have read access to the item for lifetime of 'a.
-        unsafe { &*self.slot.item().get() }
+        unsafe { &*self.slot.item() }
     }
 }
 
@@ -290,45 +267,27 @@ impl<'a, R, T: Item> std::hash::Hash for Slot<'a, R, T> {
 
 impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Slot<'a, R, T> {
     pub fn item(&self) -> &T {
-        unsafe {
-            let ptr = self.slot.item().get();
-
-            // SAFETY: During construction we checked that the type of the item matches the type of the key.
-            let ptr = std::ptr::from_raw_parts(ptr as *const (), self.metadata);
-
-            // SAFETY: We have at least read access to the item. R
-            &*ptr
-        }
+        // SAFETY: We have at least read access to the item. R
+        unsafe { &*self.slot.item() }
     }
 }
 
 impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Mut, T> {
     pub fn item_mut(&mut self) -> &mut T {
-        unsafe {
-            let ptr = self.slot.item().get();
-
-            // SAFETY: During construction we checked that the type of the item matches the type of the key.
-            let ptr = std::ptr::from_raw_parts_mut(ptr as *mut (), self.metadata);
-
-            // SAFETY: We have mut access to the item.
-            &mut *ptr
-        }
+        // SAFETY: We have mut access to the item.
+        unsafe { &mut *self.slot.item_mut() }
     }
 
     pub fn any_item_mut(&mut self) -> &mut dyn AnyItem {
-        unsafe {
-            let ptr = self.slot.item_as_any().get();
-
-            // SAFETY: We have mut access to the item.
-            &mut *ptr
-        }
+        // SAFETY: We have mut access to the item.
+        unsafe { &mut *self.slot.item_as_any().get() }
     }
 
     pub fn any_localized<R>(
         &mut self,
         func: impl FnOnce(&mut dyn AnyItem, ItemLocality<'a>) -> R,
     ) -> R {
-        let locality = self.locality().any_universal();
+        let locality = self.locality().any();
         func(self.any_item_mut(), locality)
     }
 
@@ -366,12 +325,8 @@ impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Mut, T> {
 
 impl<'a, R: Into<permit::Ref>, T: AnyDynItem + ?Sized> Slot<'a, R, T> {
     pub fn any_item(&self) -> &dyn AnyItem {
-        unsafe {
-            let ptr = self.slot.item().get();
-
-            // SAFETY: We have at least read access to the item. R
-            &*ptr
-        }
+        // SAFETY: We have at least read access to the item. R
+        unsafe { &*self.slot.item_as_any().get() }
     }
 
     pub fn item_downcast<D: Item>(&self) -> Option<&D> {
@@ -383,7 +338,7 @@ impl<'a, R: Into<permit::Ref>, T: AnyDynItem + ?Sized> Slot<'a, R, T> {
         side: Option<Side>,
     ) -> impl Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_ {
         self.any_item()
-            .any_iter_edges(self.locality().any_universal(), side)
+            .any_iter_edges(self.locality().any(), side)
             .into_iter()
             .flatten()
     }
@@ -421,7 +376,6 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            metadata: self.metadata,
             slot: self.slot,
             access: self.access.clone(),
         }

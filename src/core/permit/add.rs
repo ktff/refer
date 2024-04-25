@@ -111,7 +111,7 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
                 //         this subject needs to be notified. This ensures that edge in subject is
                 //         valid for it's lifetime.
                 let source = unsafe { Key::<_, T>::new_owned(subject.key().index()) };
-                let mut drain = drain.get_dyn();
+                let mut drain = drain.get();
                 let excess_key = match drain.any_localized(|item, locality| {
                     item.any_add_drain_edge(locality, source.any())
                 }){

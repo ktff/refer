@@ -21,13 +21,15 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, All> {
     pub fn types_split(self) -> Access<'a, C, R, Not<Types>, All> {
         self.type_transition(|()| Types::default())
     }
+}
 
+impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit> Access<'a, C, R, TP, All> {
     pub fn key<K: Clone, T: DynItem + ?Sized>(
         self,
         key: Key<K, T>,
-    ) -> Access<'a, C, R, All, Key<K, T>>
+    ) -> Access<'a, C, R, TP, Key<K, T>>
     where
-        C: AnyContainer,
+        TP: Permits<T>,
     {
         self.key_transition(|()| key)
     }
@@ -36,15 +38,18 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, All> {
         self,
         key: Key<K, T>,
     ) -> (
-        Access<'a, C, R, All, Key<K, T>>,
-        Access<'a, C, R, All, Not<Key>>,
-    ) {
+        Access<'a, C, R, TP, Key<K, T>>,
+        Access<'a, C, R, TP, Not<Key>>,
+    )
+    where
+        TP: Permits<T>,
+    {
         // SAFETY: Key and Not<Key> are disjoint.
         let key_split = unsafe { self.unsafe_split(|this| this.key_transition(|()| key)) };
         (key_split, self.key_transition(|()| key.ptr().any()))
     }
 
-    pub fn keys_split(self) -> Access<'a, C, R, All, Keys> {
+    pub fn keys_split(self) -> Access<'a, C, R, TP, Keys> {
         self.key_transition(|()| Keys::default())
     }
 

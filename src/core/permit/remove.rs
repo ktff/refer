@@ -140,7 +140,7 @@ fn remove_edges(
             }
         }
         // Remove from object
-        else if let Some(mut object) = con.as_mut().key(edge.object.ptr()).get_dyn_try() {
+        else if let Some(mut object) = con.as_mut().key(edge.object.ptr()).get_try() {
             let edge_ptr = edge.ptr();
             let (object_key, rev_edge) = edge.reverse(subject);
             match object.remove_edges(object_key, rev_edge) {

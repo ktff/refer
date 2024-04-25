@@ -229,7 +229,7 @@ mod tests {
         let key = access.add(&SpaceId(item), item).unwrap();
 
         assert_eq!(
-            (access.as_ref().key(key.any()).get_dyn().item() as &dyn Any).downcast_ref::<usize>(),
+            (access.as_ref().key(key.any()).get().item() as &dyn Any).downcast_ref::<usize>(),
             Some(&item)
         );
     }

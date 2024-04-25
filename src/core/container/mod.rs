@@ -10,9 +10,10 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    Item, ItemLocality, ItemTraits, Key, KeyPath, LocalityKey, LocalityPath, LocalityRef, Owned,
-    PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
+    DynItem, Item, ItemLocality, ItemTraits, Key, KeyPath, LocalityKey, LocalityPath, LocalityRef,
+    Owned, PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
 };
+use log::warn;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
@@ -115,4 +116,35 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
     /// Panics if item is edgeless referenced.
     /// Caller should properly dispose of the edges.
     fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>;
+}
+
+/// Abstracts over getting slots from Container and AnyContainer for all DynItem.
+pub trait DynContainer<T: DynItem + ?Sized>: AnyContainer {
+    /// Implementations should have #[inline(always)]
+    /// SAFETY: Bijection between keys and slots MUST be enforced.
+    fn unified_get_slot(&self, key: Key<Ptr, T>) -> Option<UnsafeSlot<T>>;
+}
+
+impl<C: AnyContainer + ?Sized, T: DynItem + ?Sized> DynContainer<T> for C {
+    default fn unified_get_slot(&self, key: Key<Ptr, T>) -> Option<UnsafeSlot<T>> {
+        self.any_get_slot(key.any())
+            .and_then(|slot| match slot.anycast() {
+                None => {
+                    warn!(
+                        "Item at {:?}:{} is not {:?} which was assumed to be true.",
+                        slot.locality().path(),
+                        slot.item_type_name(),
+                        std::any::type_name::<T>()
+                    );
+                    None
+                }
+                slot => slot,
+            })
+    }
+}
+
+impl<C: Container<T> + ?Sized, T: Item> DynContainer<T> for C {
+    fn unified_get_slot(&self, key: Key<Ptr, T>) -> Option<UnsafeSlot<T>> {
+        self.get_slot(key)
+    }
 }

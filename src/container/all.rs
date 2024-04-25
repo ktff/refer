@@ -157,7 +157,7 @@ mod tests {
             (container
                 .as_mut()
                 .key(key_a.any())
-                .get_dyn_try()
+                .get_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -167,7 +167,7 @@ mod tests {
             (container
                 .as_mut()
                 .key(key_b.any())
-                .get_dyn_try()
+                .get_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -177,7 +177,7 @@ mod tests {
             (container
                 .as_mut()
                 .key(key_c.any())
-                .get_dyn_try()
+                .get_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),

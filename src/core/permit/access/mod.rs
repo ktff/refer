@@ -13,7 +13,8 @@ pub use type_permit::*;
 use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
 
 use crate::core::{
-    permit, AnyContainer, AnyDynItem, Container, DynItem, Item, Key, Path, Ptr, Ref, Slot, 
+    permit, AnyContainer, AnyDynItem, Container, DynContainer, DynItem, Item, Key, Path, Ptr, Ref,
+    Slot,
 };
 
 use super::{Mut, Permit};
@@ -120,11 +121,8 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
         map: impl FnOnce(T::State) -> P::State,
     ) -> Access<'a, C, R, P, K> {
         Access {
-            container: self.container,
-            permit: self.permit,
             type_state: map(self.type_state),
-            key_state: self.key_state,
-            _marker: self._marker,
+            ..self
         }
     }
 
@@ -133,11 +131,8 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
         map: impl FnOnce(K::State) -> P::State,
     ) -> Access<'a, C, R, T, P> {
         Access {
-            container: self.container,
-            permit: self.permit,
-            type_state: self.type_state,
             key_state: map(self.key_state),
-            _marker: self._marker,
+            ..self
         }
     }
 
