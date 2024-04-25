@@ -11,6 +11,11 @@ use radix_heap::Radix;
 use start::Start;
 use std::{collections::VecDeque, marker::PhantomData};
 
+// TODO: Various DAG algorithms on top of this:
+// TODO  * A*
+// TODO  * Dijkstra
+// TODO  * Tarjan (strongly connected components)
+
 /// Iteration of directed acyclic graph
 pub struct IterDag<
     'a,
