@@ -32,7 +32,7 @@ pub type ObjectAccess<'a, C, T> = Access<'a, C, permit::Mut, T, permit::Not<Key<
 
 pub type RefSlot<'a, T> = Slot<'a, permit::Ref, T>;
 pub type MutSlot<'a, T> = Slot<'a, permit::Mut, T>;
-pub type DynMutSlot<'a, T: ?Sized> = DynSlot<'a, permit::Mut, T>;
+pub type DynMutSlot<'a, T: ?Sized> = Slot<'a, permit::Mut, T>;
 
 //************************************* CONVENIENT ACCESS ************************************//
 
@@ -302,14 +302,14 @@ impl<'a, 'b: 'a, T: Item, C: Container<T>> KeyAccess<'a, C, permit::Ref, &'a Add
 /// Enables key.get(permit) access when known Item is guaranteed to exist.
 pub trait DynKeyAccess<'a, C, R, A> {
     type T: DynItem + ?Sized;
-    fn get_dyn(&self, access: A) -> DynSlot<'a, R, Self::T>;
+    fn get_dyn(&self, access: A) -> Slot<'a, R, Self::T>;
 }
 
 impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Ref, Access<'a, C>>
     for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get_dyn(&self, access: Access<'a, C>) -> DynSlot<'a, permit::Ref, Self::T> {
+    fn get_dyn(&self, access: Access<'a, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.key(*self).get_dyn()
     }
 }
@@ -318,7 +318,7 @@ impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mu
     for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get_dyn(&self, access: MutAccess<'a, C>) -> DynSlot<'a, permit::Mut, Self::T> {
+    fn get_dyn(&self, access: MutAccess<'a, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.key(*self).get_dyn()
     }
 }
@@ -327,7 +327,7 @@ impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mu
     for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'a mut C) -> DynSlot<'a, permit::Mut, Self::T> {
+    fn get_dyn(&self, access: &'a mut C) -> Slot<'a, permit::Mut, Self::T> {
         access.as_mut().key(*self).get_dyn()
     }
 }
@@ -336,7 +336,7 @@ impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Re
     for Key<Owned, T>
 {
     type T = T;
-    fn get_dyn(&self, access: Access<'a, C>) -> DynSlot<'a, permit::Ref, Self::T> {
+    fn get_dyn(&self, access: Access<'a, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.key(self.borrow()).get_dyn()
     }
 }
@@ -345,7 +345,7 @@ impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mu
     for Key<Owned, T>
 {
     type T = T;
-    fn get_dyn(&self, access: MutAccess<'a, C>) -> DynSlot<'a, permit::Mut, Self::T> {
+    fn get_dyn(&self, access: MutAccess<'a, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.key(self.borrow()).get_dyn()
     }
 }
@@ -354,7 +354,7 @@ impl<'a, T: AnyDynItem + ?Sized, C: AnyContainer> DynKeyAccess<'a, C, permit::Mu
     for Key<Owned, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'a mut C) -> DynSlot<'a, permit::Mut, Self::T> {
+    fn get_dyn(&self, access: &'a mut C) -> Slot<'a, permit::Mut, Self::T> {
         access.as_mut().key(self.borrow()).get_dyn()
     }
 }
@@ -363,7 +363,7 @@ impl<'a: 'b, 'b, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'b Access<'a, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'b Access<'a, C>) -> DynSlot<'a, permit::Ref, Self::T> {
+    fn get_dyn(&self, access: &'b Access<'a, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.key(*self).get_dyn()
     }
 }
@@ -372,7 +372,7 @@ impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Mut, &'a mut MutAccess<'b, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'a mut MutAccess<'b, C>) -> DynSlot<'a, permit::Mut, Self::T> {
+    fn get_dyn(&self, access: &'a mut MutAccess<'b, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.borrow_mut().key(*self).get_dyn()
     }
 }
@@ -381,7 +381,7 @@ impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'a MutAccess<'b, C>> for Key<Ref<'a>, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'a MutAccess<'b, C>) -> DynSlot<'a, permit::Ref, Self::T> {
+    fn get_dyn(&self, access: &'a MutAccess<'b, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.as_ref().key(*self).get_dyn()
     }
 }
@@ -390,7 +390,7 @@ impl<'a: 'b, 'b, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'b Access<'a, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'b Access<'a, C>) -> DynSlot<'a, permit::Ref, Self::T> {
+    fn get_dyn(&self, access: &'b Access<'a, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.key(self.borrow()).get_dyn()
     }
 }
@@ -399,7 +399,7 @@ impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Mut, &'a mut MutAccess<'b, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'a mut MutAccess<'b, C>) -> DynSlot<'a, permit::Mut, Self::T> {
+    fn get_dyn(&self, access: &'a mut MutAccess<'b, C>) -> Slot<'a, permit::Mut, Self::T> {
         access.borrow_mut().key(self.borrow()).get_dyn()
     }
 }
@@ -408,7 +408,7 @@ impl<'a, 'b: 'a, T: AnyDynItem + ?Sized, C: AnyContainer>
     DynKeyAccess<'a, C, permit::Ref, &'a MutAccess<'b, C>> for Key<Owned, T>
 {
     type T = T;
-    fn get_dyn(&self, access: &'a MutAccess<'b, C>) -> DynSlot<'a, permit::Ref, Self::T> {
+    fn get_dyn(&self, access: &'a MutAccess<'b, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.as_ref().key(self.borrow()).get_dyn()
     }
 }

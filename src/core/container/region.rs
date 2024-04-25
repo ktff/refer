@@ -97,7 +97,7 @@ macro_rules! region_container {
         }
 
         #[inline(always)]
-        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot> {
+        fn any_get_slot(&self, key: Key) -> Option<UnsafeSlot> {
             let index = self.region().index_of(key);
             self.get(index)?.any_get_slot(key)
         }

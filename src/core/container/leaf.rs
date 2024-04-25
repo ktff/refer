@@ -133,7 +133,7 @@ macro_rules! leaf_container {
         }
 
         #[inline(always)]
-        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot>{
+        fn any_get_slot(&self, key: Key) -> Option<UnsafeSlot>{
             self.get_slot(key.assume()).map(|slot| slot.any())
         }
 

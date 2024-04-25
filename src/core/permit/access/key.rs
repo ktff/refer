@@ -19,7 +19,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
     Access<'a, C, R, All, Key<Ptr, T>>
 {
     /// None if doesn't exist as such type.
-    pub fn get_dyn_try(self) -> Option<DynSlot<'a, R, T>>
+    pub fn get_dyn_try(self) -> Option<Slot<'a, R, T>>
     where
         T: AnyDynItem,
     {
@@ -33,7 +33,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
             .any_get_slot(key.any())
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .and_then(|slot| {
-                unsafe { DynSlot::new_any(slot, permit) }
+                unsafe { Slot::new_any(slot, permit) }
                     .sidecast()
                     .map_err(|slot| {
                         warn!(
@@ -74,7 +74,7 @@ impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, Key<P
 impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
     Access<'a, C, R, All, Key<Ref<'a>, T>>
 {
-    pub fn get_dyn(self) -> DynSlot<'a, R, T>
+    pub fn get_dyn(self) -> Slot<'a, R, T>
     where
         T: AnyDynItem,
     {

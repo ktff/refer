@@ -10,8 +10,8 @@ pub use region::*;
 pub use ty::*;
 
 use super::{
-    AnyContainerLocality, AnyUnsafeSlot, ContainerLocality, Item, ItemLocality, ItemTraits, Key,
-    KeyPath, LocalityKey, LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
+    AnyContainerLocality, ContainerLocality, Item, ItemLocality, ItemTraits, Key, KeyPath,
+    LocalityKey, LocalityPath, Owned, PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
 };
 use std::{
     any::{Any, TypeId},
@@ -92,7 +92,7 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
 
     /// Implementations should have #[inline(always)]
     /// SAFETY: Bijection between keys and slots MUST be enforced.
-    fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot>;
+    fn any_get_slot(&self, key: Key) -> Option<UnsafeSlot>;
 
     /// None if there is no locality for given type under given key.
     fn any_get_locality(&self, key: &dyn LocalityPath, ty: TypeId) -> Option<AnyContainerLocality>;

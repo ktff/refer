@@ -1,7 +1,6 @@
 use super::{
     cast_as_eq_type, permit, AnyAlloc, AnyDynItem, AnyItem, AnyLocalityData, BiItem, DrainItem,
-    DynItem, DynSlot, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath, Owned, Path, Ref,
-    Slot,
+    DynItem, Item, Key, KeyPath, LeafPath, LocalityKey, LocalityPath, Owned, Path, Ref, Slot, 
 };
 use getset::{CopyGetters, Getters};
 use std::num::NonZeroUsize;
@@ -118,7 +117,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     #[must_use]
     pub unsafe fn add_dyn_drain<D: DynItem + ?Sized>(
         &self,
-        drain: &mut DynSlot<permit::Mut, D>,
+        drain: &mut Slot<permit::Mut, D>,
     ) -> Option<Key<Owned, D>> {
         drain
             .any_localized(|item, locality| {

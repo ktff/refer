@@ -78,7 +78,7 @@ macro_rules! single_type_container {
     };
     (impl AnyContainer<$t:ty>) => {
         #[inline(always)]
-        fn any_get_slot(&self, key: $crate::core::Key) -> Option<$crate::core::AnyUnsafeSlot> {
+        fn any_get_slot(&self, key: $crate::core::Key) -> Option<$crate::core::UnsafeSlot> {
             $crate::core::container::TypeContainer::<$t>::step_down(self)?.any_get_slot(key)
         }
 
@@ -214,7 +214,7 @@ macro_rules! multi_type_container {
         }
 
         #[inline(always)]
-        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot> {
+        fn any_get_slot(&self, key: Key) -> Option<UnsafeSlot> {
             self.get_any(key)?.any_get_slot(key)
         }
 

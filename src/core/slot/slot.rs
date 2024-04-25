@@ -1,10 +1,8 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyDynItem, AnyItem, AnyUnsafeSlot, BiItem, DrainItem, DynItem, Found, Grc, Item, Key,
-    MultiOwned, Owned, PartialEdge, Ptr, Ref, Side, StandaloneItem, UniversalItemLocality,
-    UnsafeSlot,
+    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Found, Grc, Item, Key, MultiOwned, Owned,
+    PartialEdge, Ptr, Ref, Side, StandaloneItem, UniversalItemLocality, UnsafeSlot,
 };
-use log::*;
 use std::{
     any::Any,
     ops::{Deref, DerefMut},
@@ -18,7 +16,7 @@ pub struct Slot<'a, R, T: DynItem + ?Sized = dyn AnyItem> {
 
 impl<'a, R> Slot<'a, R> {
     /// SAFETY: Caller must ensure that it has the correct access to the slot for the given 'a.    
-    pub unsafe fn new_any(slot: AnyUnsafeSlot<'a>, access: R) -> Self {
+    pub unsafe fn new_any(slot: UnsafeSlot<'a>, access: R) -> Self {
         let metadata = std::ptr::metadata(slot.item().get());
         Self {
             metadata,

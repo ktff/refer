@@ -9,16 +9,14 @@ use std::{
     ptr::{DynMetadata, Pointee},
 };
 
-use super::UnsafeSlot;
-
 #[derive(CopyGetters)]
 #[getset(get_copy = "pub")]
-pub struct AnyUnsafeSlot<'a, T: DynItem + ?Sized = dyn AnyItem> {
+pub struct UnsafeSlot<'a, T: DynItem + ?Sized = dyn AnyItem> {
     locality: UniversalItemLocality<'a, T>,
     item: &'a SyncUnsafeCell<T::AnyType>,
 }
 
-impl<'a, T: DynItem + ?Sized> AnyUnsafeSlot<'a, T> {
+impl<'a, T: DynItem + ?Sized> UnsafeSlot<'a, T> {
     pub fn new(
         locality: UniversalItemLocality<'a, T>,
         item: &'a SyncUnsafeCell<T::AnyType>,
@@ -39,7 +37,7 @@ impl<'a, T: DynItem + ?Sized> AnyUnsafeSlot<'a, T> {
     }
 }
 
-impl<'a, T: AnyDynItem + ?Sized> AnyUnsafeSlot<'a, T> {
+impl<'a, T: AnyDynItem + ?Sized> UnsafeSlot<'a, T> {
     pub fn downcast<D: Item>(self) -> Option<UnsafeSlot<'a, D>> {
         if TypeId::of::<D>() == self.item_type_id() {
             // SAFETY: We know that the item is of type D, so we can safely cast it.
@@ -65,15 +63,15 @@ impl<'a, T: AnyDynItem + ?Sized> AnyUnsafeSlot<'a, T> {
     }
 }
 
-impl<'a, T: Item> AnyUnsafeSlot<'a, T> {
-    pub fn any(self) -> AnyUnsafeSlot<'a> {
-        AnyUnsafeSlot::new(self.locality.any_universal(), T::as_any_type(self.item))
+impl<'a, T: Item> UnsafeSlot<'a, T> {
+    pub fn any(self) -> UnsafeSlot<'a> {
+        UnsafeSlot::new(self.locality.any_universal(), T::as_any_type(self.item))
     }
 }
 
-impl<'a, T: DynItem + ?Sized> Copy for AnyUnsafeSlot<'a, T> {}
+impl<'a, T: DynItem + ?Sized> Copy for UnsafeSlot<'a, T> {}
 
-impl<'a, T: DynItem + ?Sized> Clone for AnyUnsafeSlot<'a, T> {
+impl<'a, T: DynItem + ?Sized> Clone for UnsafeSlot<'a, T> {
     fn clone(&self) -> Self {
         Self {
             locality: self.locality,
@@ -83,7 +81,7 @@ impl<'a, T: DynItem + ?Sized> Clone for AnyUnsafeSlot<'a, T> {
 }
 
 // Deref to locality
-impl<'a, T: DynItem + ?Sized> std::ops::Deref for AnyUnsafeSlot<'a, T> {
+impl<'a, T: DynItem + ?Sized> std::ops::Deref for UnsafeSlot<'a, T> {
     type Target = UniversalItemLocality<'a, T>;
 
     fn deref(&self) -> &Self::Target {
@@ -95,7 +93,7 @@ trait PointeeMetadata<M> {
     fn any_metadata(&self, type_id: TypeId) -> Option<M>;
 }
 
-impl<'a, T: DynItem + ?Sized, D> PointeeMetadata<D> for AnyUnsafeSlot<'a, T> {
+impl<'a, T: DynItem + ?Sized, D> PointeeMetadata<D> for UnsafeSlot<'a, T> {
     default fn any_metadata(&self, _: TypeId) -> Option<D> {
         None
     }
@@ -106,7 +104,7 @@ impl<
         T: DynItem<AnyType = dyn AnyItem, AnyAlloc = AnyAlloc, AnyLocalityData = AnyLocalityData>
             + ?Sized,
         D: Pointee<Metadata = DynMetadata<D>> + ?Sized + 'static,
-    > PointeeMetadata<DynMetadata<D>> for AnyUnsafeSlot<'a, T>
+    > PointeeMetadata<DynMetadata<D>> for UnsafeSlot<'a, T>
 {
     default fn any_metadata(&self, type_id: TypeId) -> Option<DynMetadata<D>> {
         let metadata = self.item.get().trait_metadata(type_id)?;
@@ -118,14 +116,14 @@ impl<
         'a,
         T: DynItem<AnyType = dyn AnyItem, AnyAlloc = AnyAlloc, AnyLocalityData = AnyLocalityData>
             + ?Sized,
-    > PointeeMetadata<DynMetadata<dyn AnyItem>> for AnyUnsafeSlot<'a, T>
+    > PointeeMetadata<DynMetadata<dyn AnyItem>> for UnsafeSlot<'a, T>
 {
     fn any_metadata(&self, _: TypeId) -> Option<DynMetadata<dyn AnyItem>> {
         Some(std::ptr::metadata(self.item.get()))
     }
 }
 
-impl<'a, T: DynItem + ?Sized> PointeeMetadata<()> for AnyUnsafeSlot<'a, T> {
+impl<'a, T: DynItem + ?Sized> PointeeMetadata<()> for UnsafeSlot<'a, T> {
     fn any_metadata(&self, type_id: TypeId) -> Option<()> {
         if type_id == self.item_type_id() {
             Some(())
