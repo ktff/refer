@@ -16,8 +16,8 @@ impl<'a, C: Container<T> + ?Sized, R: Permit, K: Clone, T: Item> Access<'a, C, R
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized>
-    Access<'a, C, R, TP, Key<Ptr, T>>
+impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized, K: Clone>
+    Access<'a, C, R, TP, Key<K, T>>
 {
     pub fn get_try(self) -> Option<Slot<'a, R, T>> {
         let Self {
@@ -27,7 +27,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Size
             ..
         } = self;
         container
-            .unified_get_slot(key)
+            .unified_get_slot(key.ptr())
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { Slot::new(slot, permit) })
     }

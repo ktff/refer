@@ -31,64 +31,122 @@ impl Default for Keys {
     }
 }
 
-pub trait KeyPermit {
-    type State: Clone;
+/// All keys bellow and including the top are contained.
+#[derive(Clone, Copy)]
+pub struct TopKey(IndexBase);
 
-    fn allowed<K: Clone, T: DynItem + ?Sized>(state: &Self::State, key: Key<K, T>) -> bool;
+impl TopKey {
+    pub fn new<K, T: DynItem + ?Sized>(top: Key<K, T>) -> Self {
+        Self(top.index().get())
+    }
+
+    pub fn top(&self) -> IndexBase {
+        self.0
+    }
+
+    pub fn key(&self) -> Option<Key> {
+        Index::new(self.0).map(Key::new_any)
+    }
+
+    /// True if key wasn't present
+    pub fn insert<K, T: DynItem + ?Sized>(&mut self, key: Key<K, T>) -> bool {
+        if self.0 < key.index().get() {
+            self.0 = key.index().get();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn contains<K, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool {
+        key.index().get() <= self.0
+    }
+}
+
+impl Default for TopKey {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+pub trait KeyPermit: Clone {
+    fn allowed<K: Clone, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool;
 }
 
 impl KeyPermit for All {
-    type State = ();
-
-    fn allowed<K: Clone, T: DynItem + ?Sized>(_: &Self::State, _: Key<K, T>) -> bool {
+    fn allowed<K: Clone, T: DynItem + ?Sized>(&self, _: Key<K, T>) -> bool {
         true
     }
 }
 
 impl KeyPermit for Path {
-    type State = Path;
-
-    fn allowed<K: Clone, T: DynItem + ?Sized>(state: &Self::State, key: Key<K, T>) -> bool {
-        state.contains(key.path())
+    fn allowed<K: Clone, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool {
+        self.contains(key.path())
     }
 }
 
 impl<K: Clone, T: DynItem + ?Sized> KeyPermit for Key<K, T> {
-    type State = Key<K, T>;
-
-    fn allowed<K2: Clone, T2: DynItem + ?Sized>(state: &Self::State, key: Key<K2, T2>) -> bool {
-        *state == key
+    fn allowed<K2: Clone, T2: DynItem + ?Sized>(&self, key: Key<K2, T2>) -> bool {
+        *self == key
     }
 }
 
 impl KeyPermit for Keys {
-    type State = Keys;
+    fn allowed<K: Clone, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool {
+        !self.contains(key)
+    }
+}
 
-    fn allowed<K: Clone, T: DynItem + ?Sized>(state: &Self::State, key: Key<K, T>) -> bool {
-        !state.contains(key)
+impl KeyPermit for TopKey {
+    fn allowed<K: Clone, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool {
+        !self.contains(key)
     }
 }
 
 impl<T: KeyPermit> KeyPermit for Not<T> {
-    type State = T::State;
-
-    fn allowed<K: Clone, T2: DynItem + ?Sized>(state: &Self::State, key: Key<K, T2>) -> bool {
-        !T::allowed(state, key)
+    fn allowed<K: Clone, T2: DynItem + ?Sized>(&self, key: Key<K, T2>) -> bool {
+        !self.0.allowed(key)
     }
 }
 
 pub trait PathPermit<C: AnyContainer + ?Sized>: KeyPermit + 'static {
-    fn path(state: &Self::State, container: &C) -> Path;
+    fn path(&self, container: &C) -> Path;
 }
 
 impl<C: AnyContainer + ?Sized> PathPermit<C> for All {
-    fn path(_: &Self::State, container: &C) -> Path {
+    fn path(&self, container: &C) -> Path {
         container.container_path()
     }
 }
 
 impl<C: AnyContainer + ?Sized> PathPermit<C> for Path {
-    fn path(state: &Self::State, _: &C) -> Path {
-        *state
+    fn path(&self, _: &C) -> Path {
+        *self
+    }
+}
+
+pub trait KeySet {
+    fn try_insert<K, T: DynItem + ?Sized>(&mut self, key: Key<K, T>) -> bool;
+
+    fn contains<K, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool;
+}
+
+impl KeySet for Keys {
+    fn try_insert<K, T: DynItem + ?Sized>(&mut self, key: Key<K, T>) -> bool {
+        self.0.replace(key.any().ptr()).is_none()
+    }
+
+    fn contains<K, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool {
+        self.0.contains(&key.any().ptr())
+    }
+}
+
+impl KeySet for TopKey {
+    fn try_insert<K, T: DynItem + ?Sized>(&mut self, key: Key<K, T>) -> bool {
+        self.insert(key)
+    }
+
+    fn contains<K, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool {
+        self.contains(key)
     }
 }

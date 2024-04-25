@@ -11,27 +11,15 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: Item, K: KeyPermit> Access<'a, 
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, Keys> {
+impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit, KEYS: KeyPermit + KeySet>
+    Access<'a, C, R, TP, KEYS>
+{
     pub fn take_key<K: Copy, T: DynItem + ?Sized>(
         &mut self,
         key: Key<K, T>,
-    ) -> Option<Access<'a, C, R, All, Key<K, T>>>
+    ) -> Option<Access<'a, C, R, TP, Key<K, T>>>
     where
-        C: AnyContainer,
-    {
-        if self.key_state.try_insert(key) {
-            // SAFETY: We just checked that the key is not splitted.
-            Some(unsafe { self.unsafe_key_split(key) })
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a, C: AnyContainer + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, Keys> {
-    pub fn take_key<K: Copy>(&mut self, key: Key<K, T>) -> Option<Access<'a, C, R, T, Key<K, T>>>
-    where
-        C: AnyContainer,
+        TP: Permits<T>,
     {
         if self.key_state.try_insert(key) {
             // SAFETY: We just checked that the key is not splitted.
@@ -41,10 +29,13 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, Keys>
         }
     }
 
-    pub fn borrow_key<'b, K: Copy>(
+    pub fn borrow_key<'b, K: Copy, T: DynItem + ?Sized>(
         &'b self,
         key: Key<K, T>,
-    ) -> Option<Access<'b, C, R, T, Key<K, T>>> {
+    ) -> Option<Access<'b, C, R, TP, Key<K, T>>>
+    where
+        TP: Permits<T>,
+    {
         if self.key_state.contains(key) {
             None
         } else {

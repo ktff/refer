@@ -14,14 +14,16 @@ pub use type_permit::*;
 use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
 
 use crate::core::{
-    permit, AnyContainer, AnyDynItem, Container, DynContainer, DynItem, Item, Key, Path, Ptr, Ref,
-    Slot,
+    permit, AnyContainer, Container, DynContainer, DynItem, Index, IndexBase, Item, Key, Path, Ptr,
+    Ref, Slot,
 };
 
 use super::{Mut, Permit};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct All;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Not<T>(T);
 
 /// 'a - Lifetime
@@ -33,7 +35,7 @@ pub struct Access<'a, C: AnyContainer + ?Sized, P: Permit, T: TypePermit, K: Key
     container: &'a C,
     permit: P,
     type_state: T::State,
-    key_state: K::State,
+    key_state: K,
     _marker: PhantomData<Key<Ref<'a>>>,
 }
 
@@ -107,7 +109,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
 
     /// UNSAFE: Caller must ensure key division between jurisdictions of the two permits.
     #[inline(always)]
-    unsafe fn unsafe_key_split<P: KeyPermit>(&self, key_state: P::State) -> Access<'a, C, R, T, P> {
+    unsafe fn unsafe_key_split<P: KeyPermit>(&self, key_state: P) -> Access<'a, C, R, T, P> {
         Access {
             container: self.container,
             permit: self.permit.copy(),
@@ -127,10 +129,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
         }
     }
 
-    fn key_transition<P: KeyPermit>(
-        self,
-        map: impl FnOnce(K::State) -> P::State,
-    ) -> Access<'a, C, R, T, P> {
+    fn key_transition<P: KeyPermit>(self, map: impl FnOnce(K) -> P) -> Access<'a, C, R, T, P> {
         Access {
             key_state: map(self.key_state),
             ..self
@@ -344,11 +343,10 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Deref
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Copy
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Copy> Copy
     for Access<'a, C, permit::Ref, T, K>
 where
     T::State: Copy,
-    K::State: Copy,
 {
 }
 

@@ -6,6 +6,7 @@ mod edge;
 mod locality;
 #[macro_use]
 mod item;
+#[cfg(feature = "dag")]
 pub mod iter;
 mod key;
 pub mod permit;
