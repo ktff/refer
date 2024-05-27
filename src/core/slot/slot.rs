@@ -203,7 +203,7 @@ impl<'a, T: DrainItem> Slot<'a, permit::Mut, T> {
         other: Key<Ptr, F>,
     ) -> Result<(), Key<Owned, T>> {
         if let Some(other) =
-            self.localized(|item, locality| item.try_remove_drain_edge(locality, other))
+            self.localized(|item, locality| item.try_remove_drain_edge(locality, other.any()))
         {
             std::mem::forget(other);
             std::mem::forget(this);

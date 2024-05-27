@@ -18,6 +18,7 @@
 #![feature(extract_if)]
 #![feature(type_changing_struct_update)]
 #![feature(trait_alias)]
+#![feature(associated_type_defaults)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs

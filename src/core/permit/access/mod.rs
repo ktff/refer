@@ -14,8 +14,8 @@ pub use type_permit::*;
 use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
 
 use crate::core::{
-    permit, AnyContainer, Container, DynContainer, DynItem, Index, IndexBase, Item, Key, Path, Ptr,
-    Ref, Slot,
+    permit, AnyContainer, Container, DynContainer, DynItem, Index, IndexBase, Item, Key, Path, Ref,
+    Slot,
 };
 
 use super::{Mut, Permit};

@@ -156,26 +156,22 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
 unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Vertice<T, E> {
     /// SAFETY: add_drain_edge MUST ensure to add PartialEdge{object: source,side: Side::Drain} to edges of self.
     #[must_use]
-    fn add_drain_edge<D: DynItem + ?Sized>(
-        &mut self,
-        _: ItemLocality<'_, Self>,
-        source: Key<Owned, D>,
-    ) {
-        self.sources.push(source.any());
+    fn add_drain_edge(&mut self, _: ItemLocality<'_, Self>, source: Key<Owned>) {
+        self.sources.push(source);
     }
 
     /// Removes drain edge and returns object ref.
     /// Ok success.
     /// Err if doesn't exist.
     #[must_use]
-    fn try_remove_drain_edge<D: DynItem + ?Sized>(
+    fn try_remove_drain_edge(
         &mut self,
         _: ItemLocality<'_, Self>,
-        source: Key<Ptr, D>,
-    ) -> Option<Key<Owned, D>> {
+        source: Key<Ptr>,
+    ) -> Option<Key<Owned>> {
         // Find first occurrence of source in sources and remove it
-        let index = self.sources.iter().position(|s| *s == source.any())?;
-        Some(self.sources.remove(index).assume())
+        let index = self.sources.iter().position(|s| *s == source)?;
+        Some(self.sources.remove(index))
     }
 }
 

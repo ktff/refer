@@ -90,7 +90,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         &self,
         drain: &mut Slot<permit::Mut, D>,
     ) -> Key<Owned, D> {
-        drain.localized(|item, locality| item.add_drain_edge(locality, self.owned_key()));
+        drain.localized(|item, locality| item.add_drain_edge(locality, self.owned_key().any()));
         drain.locality().owned_key()
     }
 

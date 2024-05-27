@@ -64,6 +64,15 @@ impl<T: DynItem + ?Sized> MultiOwned<T> {
             )
         }
     }
+
+    pub fn fold(init: Option<Self>, key: Key<Owned, T>) -> Option<Self> {
+        if let Some(mut init) = init {
+            init.add(key);
+            Some(init)
+        } else {
+            Some(key.into())
+        }
+    }
 }
 
 impl MultiOwned {
