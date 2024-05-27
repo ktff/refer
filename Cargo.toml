@@ -25,6 +25,7 @@ rand = "*"
 
 [features]
 base_u128 = []
+base_u32 = []
 base_u64 = []
 dag = ["radix-heap"]
 default = ["base_u64", "shard", "items", "models", "dag"]
