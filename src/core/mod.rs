@@ -106,7 +106,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer, P: Permit, TP: Permits<T>>
 {
     type T = T;
     fn get(&self, access: Access<'a, C, P, TP>) -> Slot<'a, P, Self::T> {
-        access.key(*self).get()
+        access.key(*self).fetch()
     }
 }
 
@@ -115,7 +115,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> KeyAccess<'a, C, permit::Mut, All
 {
     type T = T;
     fn get(&self, access: &'a mut C) -> Slot<'a, permit::Mut, Self::T> {
-        access.as_mut().key(*self).get()
+        access.as_mut().key(*self).fetch()
     }
 }
 
@@ -124,7 +124,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer, P: Permit, TP: Permits<T>>
 {
     type T = T;
     fn get(&self, access: Access<'a, C, P, TP>) -> Slot<'a, P, Self::T> {
-        access.key(self.borrow()).get()
+        access.key(self.borrow()).fetch()
     }
 }
 
@@ -133,7 +133,7 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> KeyAccess<'a, C, permit::Mut, All
 {
     type T = T;
     fn get(&self, access: &'a mut C) -> Slot<'a, permit::Mut, Self::T> {
-        access.as_mut().key(self.borrow()).get()
+        access.as_mut().key(self.borrow()).fetch()
     }
 }
 
@@ -142,7 +142,7 @@ impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer, TP: Permits<T>>
 {
     type T = T;
     fn get(&self, access: &'b Access<'a, C, permit::Ref, TP>) -> Slot<'a, permit::Ref, Self::T> {
-        access.borrow().key(*self).get()
+        access.borrow().key(*self).fetch()
     }
 }
 
@@ -154,7 +154,7 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
         &self,
         access: &'a mut Access<'b, C, permit::Mut, TP>,
     ) -> Slot<'a, permit::Mut, Self::T> {
-        access.borrow_mut().key(*self).get()
+        access.borrow_mut().key(*self).fetch()
     }
 }
 
@@ -163,7 +163,7 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
 {
     type T = T;
     fn get(&self, access: &'a Access<'b, C, permit::Mut, TP>) -> Slot<'a, permit::Ref, Self::T> {
-        access.as_ref().key(*self).get()
+        access.as_ref().key(*self).fetch()
     }
 }
 
@@ -172,7 +172,7 @@ impl<'a: 'b, 'b, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
 {
     type T = T;
     fn get(&self, access: &'b Access<'a, C, permit::Ref, TP>) -> Slot<'a, permit::Ref, Self::T> {
-        access.borrow().key(self.borrow()).get()
+        access.borrow().key(self.borrow()).fetch()
     }
 }
 
@@ -184,7 +184,7 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
         &self,
         access: &'a mut Access<'b, C, permit::Mut, TP>,
     ) -> Slot<'a, permit::Mut, Self::T> {
-        access.borrow_mut().key(self.borrow()).get()
+        access.borrow_mut().key(self.borrow()).fetch()
     }
 }
 
@@ -193,7 +193,7 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
 {
     type T = T;
     fn get(&self, access: &'a Access<'b, C, permit::Mut, TP>) -> Slot<'a, permit::Ref, Self::T> {
-        access.as_ref().key(self.borrow()).get()
+        access.as_ref().key(self.borrow()).fetch()
     }
 }
 
@@ -202,6 +202,6 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
 {
     type T = T;
     fn get(&self, access: &'a Add<'b, C>) -> Slot<'a, permit::Ref, Self::T> {
-        access.as_ref().key(self.borrow()).get()
+        access.as_ref().key(self.borrow()).fetch()
     }
 }

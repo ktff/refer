@@ -40,7 +40,7 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Vertice<T, E> {
             &mut drains
                 .key_try(drain.borrow())
                 .expect("Should have access to everything but source")
-                .get(),
+                .fetch(),
             drain,
         );
 

@@ -28,7 +28,11 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit, KEYS: KeyPermit + 
             None
         }
     }
+}
 
+impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit, KEYS: KeyPermit>
+    Access<'a, C, R, TP, KEYS>
+{
     pub fn borrow_key<'b, K: Copy, T: DynItem + ?Sized>(
         &'b self,
         key: Key<K, T>,
@@ -36,11 +40,11 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit, KEYS: KeyPermit + 
     where
         TP: Permits<T>,
     {
-        if self.key_state.contains(key) {
-            None
-        } else {
+        if self.key_state.allowed(key) {
             // SAFETY: We just checked that the key is not splitted and we are allowing it to live only for the lifetime of self.
             Some(unsafe { self.unsafe_key_split(key) })
+        } else {
+            None
         }
     }
 }

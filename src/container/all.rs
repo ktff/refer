@@ -134,13 +134,16 @@ mod tests {
         let key_b = container.fill_slot(&(), true).unwrap().ptr();
         let key_c = container.fill_slot(&(), "Hello").unwrap().ptr();
 
-        assert_eq!(container.as_mut().key(key_a).get_try().unwrap().item(), &42);
         assert_eq!(
-            container.as_mut().key(key_b).get_try().unwrap().item(),
+            container.as_mut().key(key_a).fetch_try().unwrap().item(),
+            &42
+        );
+        assert_eq!(
+            container.as_mut().key(key_b).fetch_try().unwrap().item(),
             &true
         );
         assert_eq!(
-            container.as_mut().key(key_c).get_try().unwrap().item(),
+            container.as_mut().key(key_c).fetch_try().unwrap().item(),
             &"Hello"
         );
     }
@@ -157,7 +160,7 @@ mod tests {
             (container
                 .as_mut()
                 .key(key_a.any())
-                .get_try()
+                .fetch_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -167,7 +170,7 @@ mod tests {
             (container
                 .as_mut()
                 .key(key_b.any())
-                .get_try()
+                .fetch_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),
@@ -177,7 +180,7 @@ mod tests {
             (container
                 .as_mut()
                 .key(key_c.any())
-                .get_try()
+                .fetch_try()
                 .unwrap()
                 .item() as &dyn Any)
                 .downcast_ref(),

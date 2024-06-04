@@ -19,7 +19,7 @@ impl<'a, C: Container<T> + ?Sized, R: Permit, K: Clone, T: Item> Access<'a, C, R
 impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized, K: Clone>
     Access<'a, C, R, TP, Key<K, T>>
 {
-    pub fn get_try(self) -> Option<Slot<'a, R, T>> {
+    pub fn fetch_try(self) -> Option<Slot<'a, R, T>> {
         let Self {
             container,
             key_state: key,
@@ -36,9 +36,9 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Size
 impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized>
     Access<'a, C, R, TP, Key<Ref<'a>, T>>
 {
-    pub fn get(self) -> Slot<'a, R, T> {
+    pub fn fetch(self) -> Slot<'a, R, T> {
         self.key_transition(|key| key.ptr())
-            .get_try()
+            .fetch_try()
             .expect("Reference is invalid for given container.")
     }
 

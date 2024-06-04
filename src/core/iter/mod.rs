@@ -246,14 +246,14 @@ impl<
         if let Some(mut slot) = self
             .access
             .borrow_key(node)
-            .and_then(|access| access.get_try())
+            .and_then(|access| access.fetch_try())
         {
             if let Some(output) = (self.config.node_processor)(&input, &mut slot) {
                 let mut slot = self
                     .access
                     .take_key(node)
                     .expect("Should be accessable")
-                    .get();
+                    .fetch();
                 let expansion = (self.config.edge_processor)(&output, &mut slot);
 
                 for (input, key) in expansion {

@@ -68,7 +68,7 @@ pub trait ContainerExt: AnyContainer {
 
             // Standalone check
             if T::IS_STANDALONE {
-                if self.as_ref().key(key).get_try()?.has_owners() {
+                if self.as_ref().key(key).fetch_try()?.has_owners() {
                     // There are owned keys
                     return Some(false);
                 }
@@ -93,7 +93,7 @@ pub trait ContainerExt: AnyContainer {
             Some(true)
         } else {
             // Item
-            let item = self.as_ref().key(key).get_try()?;
+            let item = self.as_ref().key(key).fetch_try()?;
             if item.has_owners() {
                 // There are owned keys
                 return Some(false);
@@ -140,7 +140,7 @@ fn remove_edges(
             }
         }
         // Remove from object
-        else if let Some(mut object) = con.as_mut().key(edge.object.ptr()).get_try() {
+        else if let Some(mut object) = con.as_mut().key(edge.object.ptr()).fetch_try() {
             let edge_ptr = edge.ptr();
             let (object_key, rev_edge) = edge.reverse(subject);
             match object.remove_edges(object_key, rev_edge) {
