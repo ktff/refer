@@ -33,8 +33,8 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Size
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized>
-    Access<'a, C, R, TP, Key<Ref<'a>, T>>
+impl<'a: 'b, 'b, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized>
+    Access<'a, C, R, TP, Key<Ref<'b>, T>>
 {
     pub fn fetch(self) -> Slot<'a, R, T> {
         self.key_transition(|key| key.ptr())
@@ -43,11 +43,9 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Size
     }
 
     pub fn slot_access(self) -> SlotAccess<'a, C, R, T> {
+        let key = self.extend(self.key_state);
         let Self {
-            container,
-            key_state: key,
-            permit,
-            ..
+            container, permit, ..
         } = self;
         SlotAccess {
             container,

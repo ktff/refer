@@ -101,8 +101,8 @@ pub trait KeyAccess<'a, C, R, TP, A> {
     fn get(&self, access: A) -> Slot<'a, R, Self::T>;
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer, P: Permit, TP: Permits<T>>
-    KeyAccess<'a, C, P, TP, Access<'a, C, P, TP>> for Key<Ref<'a>, T>
+impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer, P: Permit, TP: Permits<T>>
+    KeyAccess<'a, C, P, TP, Access<'a, C, P, TP>> for Key<Ref<'b>, T>
 {
     type T = T;
     fn get(&self, access: Access<'a, C, P, TP>) -> Slot<'a, P, Self::T> {
@@ -110,8 +110,8 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer, P: Permit, TP: Permits<T>>
     }
 }
 
-impl<'a, T: DynItem + ?Sized, C: AnyContainer> KeyAccess<'a, C, permit::Mut, All, &'a mut C>
-    for Key<Ref<'a>, T>
+impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer> KeyAccess<'a, C, permit::Mut, All, &'a mut C>
+    for Key<Ref<'b>, T>
 {
     type T = T;
     fn get(&self, access: &'a mut C) -> Slot<'a, permit::Mut, Self::T> {
@@ -137,8 +137,8 @@ impl<'a, T: DynItem + ?Sized, C: AnyContainer> KeyAccess<'a, C, permit::Mut, All
     }
 }
 
-impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer, TP: Permits<T>>
-    KeyAccess<'a, C, permit::Ref, TP, &'b Access<'a, C, permit::Ref, TP>> for Key<Ref<'a>, T>
+impl<'a: 'b + 'c, 'b, 'c, T: DynItem + ?Sized, C: AnyContainer, TP: Permits<T>>
+    KeyAccess<'a, C, permit::Ref, TP, &'b Access<'a, C, permit::Ref, TP>> for Key<Ref<'c>, T>
 {
     type T = T;
     fn get(&self, access: &'b Access<'a, C, permit::Ref, TP>) -> Slot<'a, permit::Ref, Self::T> {
@@ -146,8 +146,8 @@ impl<'a: 'b, 'b, T: DynItem + ?Sized, C: AnyContainer, TP: Permits<T>>
     }
 }
 
-impl<'a, 'b: 'a, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
-    KeyAccess<'a, C, permit::Mut, TP, &'a mut Access<'b, C, permit::Mut, TP>> for Key<Ref<'a>, T>
+impl<'a, 'b: 'a + 'c, 'c, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
+    KeyAccess<'a, C, permit::Mut, TP, &'a mut Access<'b, C, permit::Mut, TP>> for Key<Ref<'c>, T>
 {
     type T = T;
     fn get(
@@ -158,8 +158,8 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
     }
 }
 
-impl<'a, 'b: 'a, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
-    KeyAccess<'a, C, permit::Ref, TP, &'a Access<'b, C, permit::Mut, TP>> for Key<Ref<'a>, T>
+impl<'a, 'b: 'a + 'c, 'c, T: DynItem + ?Sized, TP: Permits<T>, C: AnyContainer>
+    KeyAccess<'a, C, permit::Ref, TP, &'a Access<'b, C, permit::Mut, TP>> for Key<Ref<'c>, T>
 {
     type T = T;
     fn get(&self, access: &'a Access<'b, C, permit::Mut, TP>) -> Slot<'a, permit::Ref, Self::T> {
@@ -203,5 +203,55 @@ impl<'a, 'b: 'a, T: DynItem + ?Sized, C: AnyContainer>
     type T = T;
     fn get(&self, access: &'a Add<'b, C>) -> Slot<'a, permit::Ref, Self::T> {
         access.as_ref().key(self.borrow()).fetch()
+    }
+}
+
+pub trait GraphAccess<'a, T: DynItem + ?Sized> {
+    fn slot(self, key: Key<Ref, T>) -> Slot<'a, permit::Ref, T>;
+}
+
+impl<'a, T: Item, C: Container<T>> GraphAccess<'a, T> for &'a mut C {
+    fn slot(self, key: Key<Ref, T>) -> Slot<'a, permit::Ref, T> {
+        key.get(self.as_ref())
+    }
+}
+
+impl<'a: 'b, 'b, T: Item, C: Container<T>> GraphAccess<'b, T> for &'b Add<'a, C> {
+    fn slot(self, key: Key<Ref, T>) -> Slot<'b, permit::Ref, T> {
+        key.get(self.as_ref())
+    }
+}
+
+impl<'a: 'b, 'b, T: Item, C: Container<T>, TP: Permits<T>> GraphAccess<'b, T>
+    for &'b Access<'a, C, permit::Mut, TP>
+{
+    fn slot(self, key: Key<Ref, T>) -> Slot<'b, permit::Ref, T> {
+        key.get(self.as_ref())
+    }
+}
+
+impl<'a: 'b, 'b, C: Container<T>, TP: Permits<T>, T: Item> GraphAccess<'a, T>
+    for &'b Access<'a, C, permit::Ref, TP>
+{
+    fn slot(self, key: Key<Ref, T>) -> Slot<'a, permit::Ref, T> {
+        key.get(self)
+    }
+}
+
+pub trait MutGraphAccess<'a, T: DynItem + ?Sized> {
+    fn slot_mut(self, key: Key<Ref, T>) -> Slot<'a, permit::Mut, T>;
+}
+
+impl<'a: 'b, 'b, T: Item, C: Container<T>> MutGraphAccess<'b, T> for &'b mut Add<'a, C> {
+    fn slot_mut(self, key: Key<Ref, T>) -> Slot<'b, permit::Mut, T> {
+        key.get(self.as_mut())
+    }
+}
+
+impl<'a: 'b, 'b, T: Item, C: Container<T>, TP: Permits<T>> MutGraphAccess<'b, T>
+    for &'b mut Access<'a, C, permit::Mut, TP>
+{
+    fn slot_mut(self, key: Key<Ref, T>) -> Slot<'b, permit::Mut, T> {
+        key.get(self)
     }
 }
