@@ -56,6 +56,7 @@ impl<'a, C: ?Sized> IterDag<'a, C> {
         }
     }
 
+    /// Star from multiple root nodes
     pub fn subset<T: DynItem + ?Sized>(
         start: Vec<Key<Ref<'a>, T>>,
     ) -> IterDag<'a, C, start::Subset<'a, T>, permit::Ref> {
@@ -66,6 +67,7 @@ impl<'a, C: ?Sized> IterDag<'a, C> {
         }
     }
 
+    /// Star from a single root node
     pub fn rooted<T: DynItem + ?Sized>(
         start: Key<Ref<'a>, T>,
     ) -> IterDag<'a, C, start::Root<T>, permit::Ref> {
@@ -78,6 +80,7 @@ impl<'a, C: ?Sized> IterDag<'a, C> {
 }
 
 impl<'a, C: ?Sized, S: Start<'a>> IterDag<'a, C, S, permit::Ref> {
+    /// Enable mutation
     pub fn mutate(self) -> IterDag<'a, C, S, permit::Mut> {
         IterDag {
             permit: PhantomData,
@@ -87,8 +90,13 @@ impl<'a, C: ?Sized, S: Start<'a>> IterDag<'a, C, S, permit::Ref> {
 }
 
 impl<'a, C: ?Sized, S: Start<'a>, P: Permit> IterDag<'a, C, S, P> {
-    /// Lowest same order inputs are passed to the processor.
-    pub fn filter_map<NI: 'a, NP: FnMut(&[NI], &mut Slot<P, S::T>) -> Option<NO> + 'a, NO: 'a>(
+    /// Node processor.
+    ///
+    /// Filter nodes based on incoming connections and node itself.
+    /// Returned value is passed to edge processor.
+    ///
+    /// Lowest same order inputs are passed to the processor.???
+    pub fn node_map<NI: 'a, NP: FnMut(&[NI], &mut Slot<P, S::T>) -> Option<NO> + 'a, NO: 'a>(
         self,
         node_processor: NP,
     ) -> IterDag<'a, C, S, P, NI, NP, NO> {
@@ -335,7 +343,7 @@ impl<
 fn example<T>(access: Access<impl Container<()>, permit::Mut, All, All>) {
     for _work_slot in IterDag::rooted(unsafe { Key::<_, ()>::new_ref(Index::new(1).unwrap()) })
         // .mutate()
-        .filter_map(|_, _| Some(2))
+        .node_map(|_, _| Some(2))
         .edges_map(|_, _| Vec::<(bool, _)>::new().into_iter())
         // .depth()
         .topological(|_, _| Some(3))
