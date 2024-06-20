@@ -111,6 +111,13 @@ impl<'a, T: DynItem + ?Sized, R> Slot<'a, R, T> {
     }
 }
 
+impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Ref, T> {
+    pub fn to_item(&self) -> &'a T {
+        // SAFETY: We have read access to the item for lifetime of 'a.
+        unsafe { &*self.slot.item() }
+    }
+}
+
 impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, R, T> {
     pub fn iter_drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
         self.iter_edges(Some(crate::core::Side::Source))
@@ -129,13 +136,6 @@ impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, R, T> {
 
     pub fn has_owners(&self) -> bool {
         self.item().any_has_owner(self.locality().any())
-    }
-}
-
-impl<'a, T: Item> Slot<'a, permit::Ref, T> {
-    pub fn to_item(&self) -> &'a T {
-        // SAFETY: We have read access to the item for lifetime of 'a.
-        unsafe { &*self.slot.item() }
     }
 }
 
@@ -258,7 +258,7 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Slot<'a, R, T> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Mut, T> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Mut> + Into<permit::Ref>> Slot<'a, R, T> {
     pub fn item_mut(&mut self) -> &mut T {
         // SAFETY: We have mut access to the item.
         unsafe { &mut *self.slot.item_mut() }
@@ -269,10 +269,10 @@ impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Mut, T> {
         unsafe { &mut *self.slot.item_as_any().get() }
     }
 
-    pub fn any_localized<R>(
+    pub fn any_localized<O>(
         &mut self,
-        func: impl FnOnce(&mut dyn AnyItem, ItemLocality<'a>) -> R,
-    ) -> R {
+        func: impl FnOnce(&mut dyn AnyItem, ItemLocality<'a>) -> O,
+    ) -> O {
         let locality = self.locality().any();
         func(self.any_item_mut(), locality)
     }
@@ -281,7 +281,7 @@ impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Mut, T> {
         (self.any_item_mut() as &mut dyn Any).downcast_mut::<U>()
     }
 
-    pub fn localized<R>(&mut self, func: impl FnOnce(&mut T, ItemLocality<'a, T>) -> R) -> R {
+    pub fn localized<O>(&mut self, func: impl FnOnce(&mut T, ItemLocality<'a, T>) -> O) -> O {
         let locality = self.locality();
         func(self.item_mut(), locality)
     }
@@ -376,7 +376,9 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Ref>> Deref for Slot<'a, R, T> {
     }
 }
 
-impl<'a, T: DynItem + ?Sized> DerefMut for Slot<'a, permit::Mut, T> {
+impl<'a, T: DynItem + ?Sized, R: Into<permit::Mut> + Into<permit::Ref>> DerefMut
+    for Slot<'a, R, T>
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.item_mut()
     }
