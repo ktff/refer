@@ -172,7 +172,7 @@ where
 
         // Check key range
         let max_key = (table_index + 1) * slots_len::<T, S>();
-        if max_key.checked_shr(self.key_len).unwrap_or(0) >= 1 {
+        if !self.tables.is_empty() && max_key.checked_shr(self.key_len).unwrap_or(0) >= 1 {
             // Out of keys
             return None;
         }
@@ -448,7 +448,7 @@ where
         let table = unsafe {
             // This is safe since we are constructing a Unsized with a slice.
             let new_layout = {
-                let ptr: *const Table<T, S> = std::ptr::from_raw_parts(std::ptr::null(), len);
+                let ptr: *const Table<T, S> = std::ptr::from_raw_parts(std::ptr::null::<()>(), len);
                 Layout::for_value_raw(ptr)
             };
             let ptr = allocator.allocate(new_layout).expect("Failed to allocate");
@@ -478,7 +478,7 @@ where
         unsafe {
             // This is safe since we are constructing a Unsized with a slice.
             let new_layout = {
-                let ptr: *const Table<T, S> = std::ptr::from_raw_parts(std::ptr::null(), len);
+                let ptr: *const Table<T, S> = std::ptr::from_raw_parts(std::ptr::null::<()>(), len);
                 Layout::for_value_raw(ptr)
             };
             let layout = Layout::for_value::<Table<T, S>>(self.pointer.as_ref());

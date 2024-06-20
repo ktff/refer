@@ -373,7 +373,7 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
         // This is safe since we are constructing a UnSized with a slice.
         let new_layout = unsafe {
             let ptr: *const HeapPayload<T> =
-                std::ptr::from_raw_parts(std::ptr::null(), new_capacity);
+                std::ptr::from_raw_parts(std::ptr::null::<()>(), new_capacity);
             Layout::for_value_raw(ptr)
         };
         let ptr: NonNull<[u8]> = match self.state() {

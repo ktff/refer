@@ -368,7 +368,7 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> ItemsMut<T> for AccessItemsMut<'
 impl<'c, C: Container<T> + 'static, T: AnyItem> Items<T> for AccessItemsMut<'c, C> {
     type GroupItem = <C as Container<T>>::GroupItem;
 
-    type Iter<'a> = ItemIter<'a,C, T> where Self:'a;
+    type Iter<'a> = <AccessItems<'c,C> as Items<T>>::Iter<'a> where Self:'a;
 
     fn get(&self, key: Key<T>) -> Option<(&T, &Self::GroupItem)> {
         self.0.get(key)
@@ -515,7 +515,7 @@ impl<'c, C: Container<T> + 'static, T: AnyItem> ShellsMut<T> for AccessShellsMut
 impl<'c, C: Container<T> + 'static, T: AnyItem> Shells<T> for AccessShellsMut<'c, C> {
     type Shell = <C as Container<T>>::Shell;
 
-    type Iter<'a> = ShellsIter<'a,C, T> where Self:'a;
+    type Iter<'a> = <AccessShells<'c,C> as Shells<T>>::Iter<'a> where Self:'a;
 
     fn get(&self, key: Key<T>) -> Option<&Self::Shell> {
         self.0.get(key)
