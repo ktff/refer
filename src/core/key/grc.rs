@@ -2,7 +2,7 @@ use super::*;
 use crate::core::{
     AnyContainer, AnyItem, Container, DynItem, KeyAccess, MutAccess, MutTypeAccess, StandaloneItem,
 };
-use std::{marker::Unsize, ops::Deref};
+use std::{borrow::Borrow, marker::Unsize, ops::Deref};
 
 /// Edgeless reference.
 /// Dropping this will cause item leak, release instead.
@@ -23,6 +23,10 @@ impl<T: DynItem + ?Sized> Grc<T> {
 
     pub fn any(self) -> Grc {
         Grc(self.into_owned_key().any())
+    }
+
+    pub fn as_ref(&self) -> Key<Ref, T> {
+        self.0.borrow()
     }
 
     /// Proper way of dropping this.

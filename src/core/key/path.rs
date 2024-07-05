@@ -39,6 +39,20 @@ impl Path {
         self.0.get() == 0
     }
 
+    /// First included index
+    pub fn start(self) -> Index {
+        let top = self.top();
+        Index::new(top).unwrap_or_else(|| Index::new(top + 1).expect("0+1 should be non 0"))
+    }
+
+    /// Last included index
+    pub fn end(self) -> Index {
+        let bit = self.bit();
+        let top = self.0.get() ^ bit;
+        let last = top + (2 * bit - 1);
+        Index::new(last).unwrap_or_else(|| Index::new(last + 1).expect("0+1 should be non 0"))
+    }
+
     #[cfg(test)]
     fn bottom(self) -> IndexBase {
         self.top().rotate_left(self.level())
@@ -377,6 +391,30 @@ mod tests {
         let path = Path::new_bottom(0b1010, INDEX_BASE_BITS.get());
         assert_eq!(path.level(), INDEX_BASE_BITS.get() - 1);
         assert_eq!(path.bottom(), 0b101);
+    }
+
+    #[test]
+    fn start() {
+        let path = Path::new_bottom(0b1010, INDEX_BASE_BITS.get() - 3);
+        assert_eq!(path.start(), Index::new(0b1010000).unwrap());
+    }
+
+    #[test]
+    fn start_0() {
+        let path = Path::new_top(0, INDEX_BASE_BITS.get() - 1);
+        assert_eq!(path.start(), Index::new(1).unwrap());
+    }
+
+    #[test]
+    fn end() {
+        let path = Path::new_bottom(0b1010, INDEX_BASE_BITS.get() - 2);
+        assert_eq!(path.end(), Index::new(0b101011).unwrap());
+    }
+
+    #[test]
+    fn end_0() {
+        let path = Path::new_top(0, INDEX_BASE_BITS.get() - 1);
+        assert_eq!(path.end(), Index::new(1).unwrap());
     }
 
     #[test]

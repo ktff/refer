@@ -1,6 +1,7 @@
 use super::{
-    permit, AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Item, Key, KeyPath, LeafPath,
-    LocalityKey, LocalityPath, Owned, Path, Ref, Slot,
+    permit::{self, All},
+    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Item, Key, KeyPath, LeafPath, LocalityKey,
+    LocalityPath, Owned, Path, Ref, Slot,
 };
 use getset::{CopyGetters, Getters};
 use std::num::NonZeroUsize;
@@ -267,6 +268,18 @@ impl<'a, T: AnyDynItem + ?Sized> LocalityRef<'a, Path, T> {
             })
         } else {
             None
+        }
+    }
+}
+
+impl<'a, T: Item> ItemLocality<'a, T> {
+    /// Casting for a sub struct of this item.
+    pub fn sub_cast<D: Item<Alloc = T::Alloc, LocalityData = T::LocalityData>>(
+        self,
+    ) -> ItemLocality<'a, D> {
+        ItemLocality {
+            path: self.path.any().assume(),
+            ..self
         }
     }
 }
