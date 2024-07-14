@@ -9,6 +9,8 @@ use std::{
     },
 };
 
+use log::debug;
+
 /* Notes:
 - Lock free is good enough.
 - Happy paths.
@@ -300,7 +302,90 @@ unsafe impl Allocator for MiniAllocator {
     // ) -> Result<NonNull<[u8]>, AllocError> { ... }
 }
 
-// TODO: Impl Drop for MiniAllocator by reconstructing pages and then deallocating them. Logging any leaked unconstructed pages.
+// Impl Drop for MiniAllocator by reconstructing pages and then deallocating them. Logging any leaked unconstructed pages.
+impl Drop for MiniAllocator {
+    fn drop(&mut self) {
+        // Deallocate all pages
+        let mut level = 0;
+        let mut blocks = Vec::new();
+        let mut next_level_blocks = Vec::new();
+        while let Some((block, block_level)) = self.select(0) {
+            while level < block_level {
+                blocks.sort();
+                let mut maybe_later = None;
+                while let Some(before) = blocks.pop() {
+                    if let Some(later) = maybe_later.take() {
+                        if before + (16 << level) == later
+                            && before & ((16 << (level + 1)) - 1) == 0
+                        {
+                            // Coalesce
+                            debug!(
+                                "Coalesced block {before:0b} and {later:0b} of size {}",
+                                16 << level
+                            );
+                            next_level_blocks.push(before);
+                        } else {
+                            debug!("Leaked block {later:0b} of size {}", 16 << level);
+                            maybe_later = Some(before);
+                        }
+                    } else {
+                        maybe_later = Some(before);
+                    }
+                }
+
+                if let Some(later) = maybe_later {
+                    debug!("Leaked block {later:0b} of size {}", 16 << level);
+                }
+
+                std::mem::swap(&mut blocks, &mut next_level_blocks);
+                level += 1;
+            }
+
+            blocks.push(block.as_ptr() as usize);
+        }
+
+        while level < 8 {
+            blocks.sort();
+            let mut maybe_later = None;
+            while let Some(before) = blocks.pop() {
+                if let Some(later) = maybe_later.take() {
+                    if before + (16 << level) == later && before & ((16 << (level + 1)) - 1) == 0 {
+                        // Coalesce
+                        debug!(
+                            "Coalesced block {before:0b} and {later:0b} of size {}",
+                            16 << level
+                        );
+                        next_level_blocks.push(before);
+                    } else {
+                        debug!("Leaked block {later:0b} of size {}", 16 << level);
+                        maybe_later = Some(before);
+                    }
+                } else {
+                    maybe_later = Some(before);
+                }
+            }
+
+            if let Some(later) = maybe_later {
+                debug!("Leaked block {later:0b} of size {}", 16 << level);
+            }
+
+            std::mem::swap(&mut blocks, &mut next_level_blocks);
+            level += 1;
+        }
+
+        // Free
+        for block in blocks {
+            debug!("Deallocating block {block:0b} of size {}", 16 << level);
+            // This is safe since we have exclusive access and we've reconstructed the blocks.
+            unsafe {
+                alloc::dealloc(
+                    block as *mut u8,
+                    Layout::from_size_align(BLOCK_SIZE, BLOCK_SIZE).expect("Shouldn't fail"),
+                );
+            }
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct SharedMiniAllocator(Arc<MiniAllocator>);
