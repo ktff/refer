@@ -10,6 +10,7 @@ use std::{
 };
 
 use log::debug;
+use parking_lot::Mutex;
 
 /* Notes:
 - Lock free is good enough.
@@ -70,6 +71,7 @@ pub struct MiniAllocator {
     /// [3] -> [[u64;2];8]
     /// ...
     lists: [AtomicPtr<[u64; 2]>; 8],
+    sub_blocks: Mutex<Vec<usize>>,
 
     allocated: std::sync::atomic::AtomicUsize,
 }
@@ -87,7 +89,7 @@ impl MiniAllocator {
                 AtomicPtr::new(std::ptr::null_mut()),
                 AtomicPtr::new(std::ptr::null_mut()),
             ],
-
+            sub_blocks: Mutex::new(Vec::new()),
             allocated: std::sync::atomic::AtomicUsize::new(0),
         }
     }
@@ -234,7 +236,7 @@ unsafe impl Allocator for MiniAllocator {
             None => {
                 // Allocate new block
                 let allocated = self.allocated.load(Ordering::Relaxed);
-                let (level, layout) = if allocated < BLOCK_SIZE {
+                let (level, layout, sub) = if allocated < BLOCK_SIZE {
                     // Allocate smaller block for now
                     let size = allocated.min(START_SIZE);
                     let j = Self::index(size, 1).max(i);
@@ -242,9 +244,10 @@ unsafe impl Allocator for MiniAllocator {
                     (
                         j,
                         Layout::from_size_align(size, size).expect("Shouldn't fail"),
+                        true,
                     )
                 } else {
-                    (self.lists.len(), PAGE_LAYOUT)
+                    (self.lists.len(), PAGE_LAYOUT, false)
                 };
 
                 // This is safe since layout is not zero sized, and alloc guarantees that the memory
@@ -254,6 +257,11 @@ unsafe impl Allocator for MiniAllocator {
                     .cast::<[u64; 2]>();
 
                 self.allocated.fetch_add(layout.size(), Ordering::Relaxed);
+
+                if sub {
+                    // We need to keep track of this block since it's smaller than the page.
+                    self.sub_blocks.lock().push(block.as_ptr() as usize + level);
+                }
 
                 (block, level)
             }
@@ -325,7 +333,24 @@ impl Drop for MiniAllocator {
                             );
                             next_level_blocks.push(before);
                         } else {
-                            debug!("Leaked block {later:0b} of size {}", 16 << level);
+                            // Search in sub blocks
+                            let mut sub_blocks = self.sub_blocks.lock();
+                            if let Some(at) =
+                                sub_blocks.iter().position(|&sub| sub == later + level)
+                            {
+                                sub_blocks.remove(at);
+                                let size = 16 << level;
+                                // This is safe since we have exclusive access and we've reconstructed the sub block.
+                                unsafe {
+                                    alloc::dealloc(
+                                        later as *mut u8,
+                                        Layout::from_size_align(size, size)
+                                            .expect("Shouldn't fail"),
+                                    );
+                                }
+                            } else {
+                                debug!("Leaked block {later:0b} of size {}", 16 << level);
+                            }
                             maybe_later = Some(before);
                         }
                     } else {
@@ -334,7 +359,21 @@ impl Drop for MiniAllocator {
                 }
 
                 if let Some(later) = maybe_later {
-                    debug!("Leaked block {later:0b} of size {}", 16 << level);
+                    // Search in sub blocks
+                    let mut sub_blocks = self.sub_blocks.lock();
+                    if let Some(at) = sub_blocks.iter().position(|&sub| sub == later + level) {
+                        sub_blocks.remove(at);
+                        let size = 16 << level;
+                        // This is safe since we have exclusive access and we've reconstructed the sub block.
+                        unsafe {
+                            alloc::dealloc(
+                                later as *mut u8,
+                                Layout::from_size_align(size, size).expect("Shouldn't fail"),
+                            );
+                        }
+                    } else {
+                        debug!("Leaked block {later:0b} of size {}", 16 << level);
+                    }
                 }
 
                 std::mem::swap(&mut blocks, &mut next_level_blocks);
@@ -357,7 +396,21 @@ impl Drop for MiniAllocator {
                         );
                         next_level_blocks.push(before);
                     } else {
-                        debug!("Leaked block {later:0b} of size {}", 16 << level);
+                        // Search in sub blocks
+                        let mut sub_blocks = self.sub_blocks.lock();
+                        if let Some(at) = sub_blocks.iter().position(|&sub| sub == later + level) {
+                            sub_blocks.remove(at);
+                            let size = 16 << level;
+                            // This is safe since we have exclusive access and we've reconstructed the sub block.
+                            unsafe {
+                                alloc::dealloc(
+                                    later as *mut u8,
+                                    Layout::from_size_align(size, size).expect("Shouldn't fail"),
+                                );
+                            }
+                        } else {
+                            debug!("Leaked block {later:0b} of size {}", 16 << level);
+                        }
                         maybe_later = Some(before);
                     }
                 } else {
@@ -366,7 +419,21 @@ impl Drop for MiniAllocator {
             }
 
             if let Some(later) = maybe_later {
-                debug!("Leaked block {later:0b} of size {}", 16 << level);
+                // Search in sub blocks
+                let mut sub_blocks = self.sub_blocks.lock();
+                if let Some(at) = sub_blocks.iter().position(|&sub| sub == later + level) {
+                    sub_blocks.remove(at);
+                    let size = 16 << level;
+                    // This is safe since we have exclusive access and we've reconstructed the sub block.
+                    unsafe {
+                        alloc::dealloc(
+                            later as *mut u8,
+                            Layout::from_size_align(size, size).expect("Shouldn't fail"),
+                        );
+                    }
+                } else {
+                    debug!("Leaked block {later:0b} of size {}", 16 << level);
+                }
             }
 
             std::mem::swap(&mut blocks, &mut next_level_blocks);

@@ -1,23 +1,24 @@
 [package]
-name = "refer"
-version = "0.1.0"
 authors = ["Kruno Tomola Fabro"]
-edition = "2021"
-publish = false
-description = "A foundational library for building graphs out of structs"
-keywords = ["graph", "container", "reference", "management"]
 categories = ["data-structures", "memory-management"]
-readme = "README.md"
+description = "A foundational library for building graphs out of structs"
+edition = "2021"
+keywords = ["graph", "container", "reference", "management"]
 license = "MIT"
+name = "refer"
+publish = false
+readme = "README.md"
 repository = "https://github.com/ktff/refer"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-log = "0.4.17"
 bitvec = "1.0.1"
-static_assertions = "1.1.0"
+log = "0.4.17"
 modular-bitfield = "0.11.2"
+parking_lot = "0.12.3"
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 rand = "*"
