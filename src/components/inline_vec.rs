@@ -381,7 +381,7 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
                 let ptr = allocator.allocate(new_layout).expect("Failed to grow");
 
                 // Init heap
-                let extra_capacity = (ptr.len() - new_layout.size()) / std::mem::size_of::<T>();
+                let extra_capacity = 0; //(ptr.len() - new_layout.size()) / std::mem::size_of::<T>();
                 let final_capacity = new_capacity + extra_capacity;
                 u16::try_from(final_capacity).expect("Too large capacity");
 
@@ -423,7 +423,7 @@ impl<T: Copy, const N: usize> InlineVec<T, N> {
                         )
                         .expect("Failed to grow");
                     // update capacity
-                    let extra_capacity = (ptr.len() - new_layout.size()) / std::mem::size_of::<T>();
+                    let extra_capacity = 0; //(ptr.len() - new_layout.size()) / std::mem::size_of::<T>();
                     let final_capacity = new_capacity + extra_capacity;
                     u16::try_from(final_capacity).expect("Too large capacity");
 
