@@ -223,6 +223,22 @@ impl<P: KeySign, T: DynItem + ?Sized> fmt::Display for Key<P, T> {
     }
 }
 
+pub trait KeyMeta {
+    fn is_owned(&self) -> bool;
+}
+
+default impl<K, T: DynItem + ?Sized> KeyMeta for Key<K, T> {
+    fn is_owned(&self) -> bool {
+        false
+    }
+}
+
+impl<T: DynItem + ?Sized> KeyMeta for Key<Owned, T> {
+    fn is_owned(&self) -> bool {
+        true
+    }
+}
+
 pub(super) trait KeySign {
     fn sign() -> &'static str;
 }

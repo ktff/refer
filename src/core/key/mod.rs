@@ -8,7 +8,7 @@ mod multi;
 mod path;
 
 pub use grc::Grc;
-pub use key::{Key, Owned, Ptr, Ref};
+pub use key::{Key, KeyMeta, Owned, Ptr, Ref};
 pub use key_path::*;
 pub use locality_key::*;
 pub use locality_path::*;
