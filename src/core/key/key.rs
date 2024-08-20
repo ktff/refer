@@ -227,13 +227,13 @@ pub trait KeyMeta {
     fn is_owned(&self) -> bool;
 }
 
-default impl<K, T: DynItem + ?Sized> KeyMeta for Key<K, T> {
+default impl<K, T: 'static + ?Sized> KeyMeta for Key<K, T> {
     fn is_owned(&self) -> bool {
         false
     }
 }
 
-impl<T: DynItem + ?Sized> KeyMeta for Key<Owned, T> {
+impl<T: 'static + ?Sized> KeyMeta for Key<Owned, T> {
     fn is_owned(&self) -> bool {
         true
     }
