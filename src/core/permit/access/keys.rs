@@ -14,6 +14,10 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: Item, K: KeyPermit> Access<'a, 
 impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit, KEYS: KeyPermit + KeySet>
     Access<'a, C, R, TP, KEYS>
 {
+    pub fn into_keys(self) -> KEYS {
+        self.key_state
+    }
+
     pub fn take_key<K: Copy, T: DynItem + ?Sized>(
         &mut self,
         key: Key<K, T>,
