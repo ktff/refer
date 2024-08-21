@@ -7,7 +7,7 @@ use super::{
     permit::{self, Permit},
     AnyContainer, Container, DynItem, Index, IndexBase, Key, Ref, Slot,
 };
-use isolate::Isolate;
+use isolate::{Isolate, RefIsolate};
 use order::*;
 use radix_heap::Radix;
 use start::{Start, Subset};
@@ -35,17 +35,16 @@ pub struct IterDag<
     _container: PhantomData<&'a C>,
     start: S,
     permit: PhantomData<P>,
-
+    isolate: PhantomData<I>,
     node_input: PhantomData<&'a NI>,
     node_processor: NP,
     node_output: PhantomData<&'a NO>,
     edge_processor: EP,
     edge_iterator: PhantomData<&'a EI>,
     order: O,
-    isolate: PhantomData<I>,
 }
 
-impl<'a, C: ?Sized> IterDag<'a, C> {
+impl<'a, C: AnyContainer + ?Sized> IterDag<'a, C> {
     fn new() -> Self {
         IterDag {
             _container: PhantomData,
@@ -61,24 +60,59 @@ impl<'a, C: ?Sized> IterDag<'a, C> {
         }
     }
 
-    /// Star from multiple root nodes
-    pub fn subset<T: DynItem + ?Sized>(
-        start: Vec<Key<Ref<'a>, T>>,
-    ) -> IterDag<'a, C, start::Subset<'a, T>, permit::Ref> {
+    /// Star from multiple root nodes where each of them belongs to a group.
+    /// Groups have isolated key space.
+    /// That means each node can be expanded multiple times, once by each group.
+    pub fn isolated<
+        T: DynItem + ?Sized,
+        TP: TypePermit + Permits<T>,
+        Keys: KeyPermit + KeySet + Default,
+    >(
+        groups: impl IntoIterator<Item = Vec<Key<Ref<'a>, T>>>,
+    ) -> IterDag<'a, C, start::Subset<'a, T, usize>, permit::Ref, RefIsolate<'a, C, TP, Keys>> {
         IterDag {
-            start: start::Subset(start.into()),
+            start: start::Subset(
+                groups
+                    .into_iter()
+                    .enumerate()
+                    .flat_map(|(i, group)| group.into_iter().map(move |key| (i, key)))
+                    .collect(),
+            ),
             permit: PhantomData,
+            isolate: PhantomData,
+            ..Self::new()
+        }
+    }
+
+    /// Star from multiple root nodes
+    pub fn subset<
+        T: DynItem + ?Sized,
+        TP: TypePermit + Permits<T>,
+        Keys: KeyPermit + KeySet + Default,
+    >(
+        start: Vec<Key<Ref<'a>, T>>,
+    ) -> IterDag<'a, C, start::Subset<'a, T, ()>, permit::Ref, Access<'a, C, permit::Ref, TP, Keys>>
+    {
+        IterDag {
+            start: start::Subset(start.into_iter().map(|key| ((), key)).collect()),
+            permit: PhantomData,
+            isolate: PhantomData,
             ..Self::new()
         }
     }
 
     /// Star from a single root node
-    pub fn rooted<T: DynItem + ?Sized>(
+    pub fn rooted<
+        T: DynItem + ?Sized,
+        TP: TypePermit + Permits<T>,
+        Keys: KeyPermit + KeySet + Default,
+    >(
         start: Key<Ref<'a>, T>,
-    ) -> IterDag<'a, C, start::Root<T>, permit::Ref> {
+    ) -> IterDag<'a, C, start::Root<T>, permit::Ref, Access<'a, C, permit::Ref, TP, Keys>> {
         IterDag {
             start: start::Root(Some(start)),
             permit: PhantomData,
+            isolate: PhantomData,
             ..Self::new()
         }
     }
@@ -90,28 +124,6 @@ impl<'a, C: AnyContainer + ?Sized, S: Start<'a>> IterDag<'a, C, S, permit::Ref> 
     pub fn mutate(self) -> IterDag<'a, C, S, permit::Mut> {
         IterDag {
             permit: PhantomData,
-            ..self
-        }
-    }
-
-    /// Roots have isolated key space.
-    /// That means each node can be expanded multiple times, once by each root.
-    pub fn isolated_space<TP: TypePermit + Permits<S::T>, Keys: KeyPermit + KeySet + Default>(
-        self,
-    ) -> IterDag<'a, C, S, permit::Ref, Access<'a, C, permit::Ref, TP, Keys>> {
-        IterDag {
-            isolate: PhantomData,
-            ..self
-        }
-    }
-
-    /// All roots share same access key space.
-    /// That means each node can only be expanded once.
-    pub fn shared_space<TP: TypePermit + Permits<S::T>, Keys: KeyPermit + KeySet + Default>(
-        self,
-    ) -> IterDag<'a, C, S, permit::Ref, Access<'a, C, permit::Ref, TP, Keys>> {
-        IterDag {
-            isolate: PhantomData,
             ..self
         }
     }
@@ -228,7 +240,7 @@ impl<
         C: AnyContainer + ?Sized,
         S: Start<'a>,
         P: Permit,
-        I: Isolate<'a, S::T, C = C, R = P> + 'a,
+        I: Isolate<'a, S::T, C = C, R = P, Group = S::K> + 'a,
         NI,
         NP: FnMut(&[NI], &mut Slot<P, S::T>) -> Option<NO> + 'a,
         NO,
@@ -242,8 +254,8 @@ impl<
         access: Access<'a, C, P, I::TP, All>,
     ) -> impl Iterator<Item = IterNode<'a, P, S::T, NI, NO>> + 'a {
         DAGIterator {
+            access: I::new(access, &self.start),
             config: self,
-            access: I::new(access),
             queue: O::Queue::default(),
             buffer: VecDeque::new(),
         }
@@ -270,7 +282,7 @@ pub struct DAGIterator<
     EP,
     EI,
     O: Order<NI, I::C, I::R, S::T, I::Group>,
-    I: Isolate<'a, S::T>,
+    I: Isolate<'a, S::T, Group = S::K>,
 > {
     config: IterDag<'a, I::C, S, I::R, I, NI, NP, NO, EP, EI, O>,
     access: I,
@@ -287,12 +299,40 @@ impl<
         EP: FnMut(&NO, &mut Slot<'a, I::R, T>) -> EI,
         EI: Iterator<Item = (NI, Key<Ref<'a>, T>)>,
         O: Order<NI, I::C, I::R, T, I::Group>,
-        I: Isolate<'a, T>,
-    > DAGIterator<'a, Subset<'a, T>, NI, NP, NO, EP, EI, O, I>
+        I: Isolate<'a, T, Group = usize>,
+    > DAGIterator<'a, Subset<'a, T, usize>, NI, NP, NO, EP, EI, O, I>
 {
-    /// Adds additional start to the back of start list.
-    pub fn push_start(&mut self, start: Key<Ref<'a>, T>) {
-        self.config.start.0.push_back(start);
+    /// Adds group of roots and returns their index.
+    pub fn add_group(&mut self, group: impl IntoIterator<Item = Key<Ref<'a>, T>>) -> usize {
+        let i = self.access.add_group();
+        self.config
+            .start
+            .0
+            .extend(group.into_iter().map(|key| (i, key)));
+        i
+    }
+
+    /// Group must exist
+    pub fn add_to_group(&mut self, group: usize, root: Key<Ref<'a>, T>) {
+        self.config.start.0.push_back((group, root));
+    }
+}
+
+impl<
+        'a,
+        T: DynItem + ?Sized,
+        NI,
+        NP: FnMut(&[NI], &mut Slot<I::R, T>) -> Option<NO> + 'a,
+        NO,
+        EP: FnMut(&NO, &mut Slot<'a, I::R, T>) -> EI,
+        EI: Iterator<Item = (NI, Key<Ref<'a>, T>)>,
+        O: Order<NI, I::C, I::R, T, I::Group>,
+        I: Isolate<'a, T, Group = ()>,
+    > DAGIterator<'a, Subset<'a, T, ()>, NI, NP, NO, EP, EI, O, I>
+{
+    /// Group must exist
+    pub fn add_root(&mut self, root: Key<Ref<'a>, T>) {
+        self.config.start.0.push_back(((), root));
     }
 }
 
@@ -305,7 +345,7 @@ impl<
         EP: FnMut(&NO, &mut Slot<'a, I::R, S::T>) -> EI,
         EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
         O: Order<NI, I::C, I::R, S::T, I::Group>,
-        I: Isolate<'a, S::T>,
+        I: Isolate<'a, S::T, Group = S::K>,
     > DAGIterator<'a, S, NI, NP, NO, EP, EI, O, I>
 {
     /// Reorders queue according to new order.
@@ -378,7 +418,7 @@ impl<
         EP: FnMut(&NO, &mut Slot<'a, I::R, S::T>) -> EI,
         EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
         O: Order<NI, I::C, I::R, S::T, I::Group>,
-        I: Isolate<'a, S::T>,
+        I: Isolate<'a, S::T, Group = S::K>,
     > Iterator for DAGIterator<'a, S, NI, NP, NO, EP, EI, O, I>
 {
     type Item = IterNode<'a, I::R, S::T, NI, NO>;
@@ -394,8 +434,7 @@ impl<
         }
 
         // Process starting nodes
-        if let Some(start) = self.config.start.pop() {
-            let group = self.access.add_root(start);
+        if let Some((group, start)) = self.config.start.pop() {
             return Some(self.process(group, Vec::new(), start));
         }
 
@@ -424,8 +463,6 @@ impl<
 fn example<T>(access: Access<impl Container<()>, permit::Mut, All, All>) {
     for _work_slot in IterDag::rooted(unsafe { Key::<_, ()>::new_ref(Index::new(1).unwrap()) })
         // .mutate()
-        .isolated_space()
-        // .shared_space()
         .node_map(|_, _| Some(2))
         .edges_map(|_, _| Vec::<(bool, _)>::new().into_iter())
         // .depth()

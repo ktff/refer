@@ -1,5 +1,5 @@
 use crate::core::*;
-use iter::{KeyPermit, KeySet, TypePermit};
+use iter::{start::Start, KeyPermit, KeySet, TypePermit};
 use radix_heap::Radix;
 
 pub trait Isolate<'a, T: DynItem + ?Sized> {
@@ -9,9 +9,12 @@ pub trait Isolate<'a, T: DynItem + ?Sized> {
     type TP: TypePermit + Permits<T>;
     type Keys: KeyPermit + KeySet + Default;
 
-    fn new(access: Access<'a, Self::C, Self::R, Self::TP, All>) -> Self;
+    fn new(
+        access: Access<'a, Self::C, Self::R, Self::TP, All>,
+        start: &impl Start<'a, T = T, K = Self::Group>,
+    ) -> Self;
 
-    fn add_root<K: Copy>(&mut self, key: Key<K, T>) -> Self::Group;
+    fn add_group(&mut self) -> Self::Group;
 
     fn take_key<K: Copy>(
         &mut self,
@@ -41,11 +44,11 @@ impl<
     type TP = TP;
     type Keys = KEYS;
 
-    fn new(access: Access<'a, C, R, TP, All>) -> Self {
+    fn new(access: Access<'a, C, R, TP, All>, _: &impl Start<'a, T = T, K = Self::Group>) -> Self {
         access.keys_split_with(KEYS::default())
     }
 
-    fn add_root<K: Copy>(&mut self, _: Key<K, T>) -> Self::Group {
+    fn add_group(&mut self) -> Self::Group {
         ()
     }
 
@@ -90,14 +93,24 @@ impl<
     type TP = TP;
     type Keys = KEYS;
 
-    fn new(access: Access<'a, C, permit::Ref, TP, All>) -> Self {
-        Self {
+    fn new(
+        access: Access<'a, C, permit::Ref, TP, All>,
+        start: &impl Start<'a, T = T, K = Self::Group>,
+    ) -> Self {
+        let mut this = Self {
             access,
             isolates: Vec::new(),
+        };
+        if let Some(n) = start.iter().map(|(g, _)| *g).max() {
+            while n >= this.isolates.len() {
+                this.add_group();
+            }
         }
+
+        this
     }
 
-    fn add_root<K: Copy>(&mut self, _: Key<K, T>) -> Self::Group {
+    fn add_group(&mut self) -> Self::Group {
         let group = self.isolates.len();
         self.isolates
             .push(self.access.clone().keys_split_with(KEYS::default()));
