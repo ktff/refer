@@ -1,3 +1,5 @@
+use log::trace;
+use parking_lot::Mutex;
 use std::{
     alloc::{self, AllocError, Allocator, Layout},
     borrow::Borrow,
@@ -8,9 +10,6 @@ use std::{
         Arc,
     },
 };
-
-use log::debug;
-use parking_lot::Mutex;
 
 /* Notes:
 - Lock free is good enough.
@@ -327,7 +326,7 @@ impl Drop for MiniAllocator {
                             && before & ((16 << (level + 1)) - 1) == 0
                         {
                             // Coalesce
-                            debug!(
+                            trace!(
                                 "Coalesced block {before:0b} and {later:0b} of size {}",
                                 16 << level
                             );
@@ -349,7 +348,7 @@ impl Drop for MiniAllocator {
                                     );
                                 }
                             } else {
-                                debug!("Leaked block {later:0b} of size {}", 16 << level);
+                                trace!("Leaked block {later:0b} of size {}", 16 << level);
                             }
                             maybe_later = Some(before);
                         }
@@ -372,7 +371,7 @@ impl Drop for MiniAllocator {
                             );
                         }
                     } else {
-                        debug!("Leaked block {later:0b} of size {}", 16 << level);
+                        trace!("Leaked block {later:0b} of size {}", 16 << level);
                     }
                 }
 
@@ -390,7 +389,7 @@ impl Drop for MiniAllocator {
                 if let Some(later) = maybe_later.take() {
                     if before + (16 << level) == later && before & ((16 << (level + 1)) - 1) == 0 {
                         // Coalesce
-                        debug!(
+                        trace!(
                             "Coalesced block {before:0b} and {later:0b} of size {}",
                             16 << level
                         );
@@ -409,7 +408,7 @@ impl Drop for MiniAllocator {
                                 );
                             }
                         } else {
-                            debug!("Leaked block {later:0b} of size {}", 16 << level);
+                            trace!("Leaked block {later:0b} of size {}", 16 << level);
                         }
                         maybe_later = Some(before);
                     }
@@ -432,7 +431,7 @@ impl Drop for MiniAllocator {
                         );
                     }
                 } else {
-                    debug!("Leaked block {later:0b} of size {}", 16 << level);
+                    trace!("Leaked block {later:0b} of size {}", 16 << level);
                 }
             }
 
@@ -442,7 +441,7 @@ impl Drop for MiniAllocator {
 
         // Free
         for block in blocks {
-            debug!("Deallocating block {block:0b} of size {}", 16 << level);
+            trace!("Deallocating block {block:0b} of size {}", 16 << level);
             // This is safe since we have exclusive access and we've reconstructed the blocks.
             unsafe {
                 alloc::dealloc(
