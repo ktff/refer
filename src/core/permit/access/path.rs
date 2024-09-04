@@ -93,9 +93,7 @@ impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item, P: PathPermit<C>> Access<
         {
             Box::new(
                 // SAFETY: We depend on iter_level returning disjoint paths.
-                iter.map(move |path| unsafe {
-                    self.unsafe_split(|this| this.key_transition(|_| path))
-                }),
+                iter.map(move |path| unsafe { self.unsafe_key_split(path) }),
             )
         } else {
             let path = self.path();

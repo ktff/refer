@@ -80,24 +80,27 @@ impl<'a, C: AnyContainer + ?Sized> Access<'a, C, permit::Ref, All, All> {
 }
 
 impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Access<'a, C, R, T, K> {
-    /// UNSAFE: Caller must ensure some kind of division between jurisdictions of the two permits.
-    #[inline(always)]
-    unsafe fn unsafe_split<P>(&self, map: impl FnOnce(Self) -> P) -> P {
-        map(Self {
-            container: self.container,
-            permit: self.permit.copy(),
-            type_state: self.type_state.clone(),
-            key_state: self.key_state.clone(),
-            _marker: PhantomData,
-        })
-    }
+    // /// UNSAFE: Caller must ensure some kind of division between jurisdictions of the two permits.
+    // #[inline(always)]
+    // unsafe fn unsafe_split<P>(&self, map: impl FnOnce(Self) -> P) -> P {
+    //     map(Self {
+    //         container: self.container,
+    //         permit: self.permit.copy(),
+    //         type_state: self.type_state.clone(),
+    //         key_state: self.key_state.clone(),
+    //         _marker: PhantomData,
+    //     })
+    // }
 
     /// UNSAFE: Caller must ensure type division between jurisdictions of the two permits.
     #[inline(always)]
     unsafe fn unsafe_type_split<P: TypePermit>(
         &self,
         type_state: P::State,
-    ) -> Access<'a, C, R, P, K> {
+    ) -> Access<'a, C, R, P, K>
+    where
+        K: Clone,
+    {
         Access {
             container: self.container,
             permit: self.permit.copy(),
@@ -304,13 +307,15 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
 //     }
 // }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Access<'a, C, permit::Ref, T, K> {
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Clone>
+    Access<'a, C, permit::Ref, T, K>
+{
     pub fn borrow(&self) -> Access<'a, C, permit::Ref, T, K> {
         self.clone()
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Access<'a, C, Mut, T, K> {
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Clone> Access<'a, C, Mut, T, K> {
     pub fn borrow_mut(&mut self) -> Access<'_, C, Mut, T, K> {
         Access {
             container: self.container,
@@ -350,7 +355,7 @@ where
 {
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Clone
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Clone> Clone
     for Access<'a, C, permit::Ref, T, K>
 {
     fn clone(&self) -> Self {

@@ -69,7 +69,7 @@ impl Default for TopKey {
     }
 }
 
-pub trait KeyPermit: Clone {
+pub trait KeyPermit {
     fn allowed<K: Clone, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool;
 }
 
@@ -106,6 +106,18 @@ impl KeyPermit for TopKey {
 impl<T: KeyPermit> KeyPermit for Not<T> {
     fn allowed<K: Clone, T2: DynItem + ?Sized>(&self, key: Key<K, T2>) -> bool {
         !self.0.allowed(key)
+    }
+}
+
+impl<'a, T: KeyPermit> KeyPermit for &'a T {
+    fn allowed<K: Clone, T2: DynItem + ?Sized>(&self, key: Key<K, T2>) -> bool {
+        (**self).allowed(key)
+    }
+}
+
+impl<'a, T: KeyPermit> KeyPermit for &'a mut T {
+    fn allowed<K: Clone, T2: DynItem + ?Sized>(&self, key: Key<K, T2>) -> bool {
+        (**self).allowed(key)
     }
 }
 
@@ -148,5 +160,15 @@ impl KeySet for TopKey {
 
     fn contains<K, T: DynItem + ?Sized>(&self, key: Key<K, T>) -> bool {
         self.contains(key)
+    }
+}
+
+impl<'a, T: KeySet> KeySet for &'a mut T {
+    fn try_insert<K, T2: DynItem + ?Sized>(&mut self, key: Key<K, T2>) -> bool {
+        (**self).try_insert(key)
+    }
+
+    fn contains<K, T2: DynItem + ?Sized>(&self, key: Key<K, T2>) -> bool {
+        (**self).contains(key)
     }
 }

@@ -1,5 +1,5 @@
 use super::{IndexBase, KeyPermit, KeySet, Keys, SlotAccess, TopKey};
-use crate::core::{AnyContainer, DynItem, Item, Permit};
+use crate::core::{AnyContainer, DynItem, Permit};
 use radix_heap::{Radix, RadixHeapMap};
 use std::{cmp::Reverse, collections::VecDeque, marker::PhantomData};
 
@@ -16,7 +16,7 @@ pub trait Order<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK
     type Key: Ord;
     type Queue<T>: Queue<(Self::Key, SK), T> + Default;
 
-    fn ordering(&mut self, input: &NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key>;
+    fn ordering(&mut self, group: SK, input: &NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key>;
 }
 
 impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK> Order<NI, C, P, I, SK>
@@ -26,7 +26,7 @@ impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK> Order<NI,
     type Key = ();
     type Queue<T> = LifoQueue<(Self::Key, SK), T>;
 
-    fn ordering(&mut self, _: &NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
+    fn ordering(&mut self, _: SK, _: &NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
         Some(())
     }
 }
@@ -38,13 +38,13 @@ impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK> Order<NI,
     type Key = ();
     type Queue<T> = FifoQueue<(Self::Key, SK), T>;
 
-    fn ordering(&mut self, _: &NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
+    fn ordering(&mut self, _: SK, _: &NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
         Some(())
     }
 }
 
 impl<
-        F: FnMut(&NI, SlotAccess<C, P, I>) -> Option<K>,
+        F: FnMut(SK, &NI, SlotAccess<C, P, I>) -> Option<K>,
         K: Radix + Ord + Copy,
         NI,
         C: AnyContainer + ?Sized,
@@ -58,8 +58,8 @@ impl<
     /// Min queue
     type Queue<T> = RadixHeapMap<Reverse<(K, SK)>, T>;
 
-    fn ordering(&mut self, input: &NI, slot: SlotAccess<C, P, I>) -> Option<K> {
-        (self.0)(input, slot)
+    fn ordering(&mut self, group: SK, input: &NI, slot: SlotAccess<C, P, I>) -> Option<K> {
+        (self.0)(group, input, slot)
     }
 }
 
@@ -71,7 +71,7 @@ impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK: Radix + O
     /// Min queue
     type Queue<T> = RadixHeapMap<Reverse<(IndexBase, SK)>, T>;
 
-    fn ordering(&mut self, _: &NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key> {
+    fn ordering(&mut self, _: SK, _: &NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key> {
         Some(slot.key().index().get())
     }
 }
@@ -85,6 +85,8 @@ pub trait Queue<K, T> {
     fn pop(&mut self) -> Option<(K, T)>;
 
     fn into_iter(self) -> impl Iterator<Item = (K, T)>;
+
+    // fn retain
 }
 
 pub struct LifoQueue<K, T> {

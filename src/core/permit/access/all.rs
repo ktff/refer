@@ -45,7 +45,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit> Access<'a, C, R, T
         TP: Permits<T>,
     {
         // SAFETY: Key and Not<Key> are disjoint.
-        let key_split = unsafe { self.unsafe_split(|this| this.key_transition(|All| key)) };
+        let key_split = unsafe { self.unsafe_key_split(key) };
         (key_split, self.key_transition(|_| Not(key.ptr().any())))
     }
 
