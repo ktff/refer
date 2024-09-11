@@ -1,8 +1,8 @@
-use std::marker::PhantomData;
-
+use super::GroupId;
 use crate::core::*;
 use iter::{start::Start, KeyPermit, KeySet, TypePermit};
 use radix_heap::Radix;
+use std::marker::PhantomData;
 
 pub trait IsolateTemplate<T: DynItem + ?Sized> {
     type Group: Radix + Ord + Copy;
@@ -100,11 +100,11 @@ pub struct Isolated<
 impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + Default>
     IsolateTemplate<T> for Isolated<T, C, Keys>
 {
-    type Group = usize;
+    type Group = GroupId;
     type C = C;
     type R = permit::Ref;
     type Keys = Keys;
-    type Paused = (Vec<Keys>, Vec<usize>);
+    type Paused = (Vec<Keys>, Vec<GroupId>);
     type B<'a, TP: 'a + TypePermit + Permits<T>> = RefIsolate<'a, C, TP, Keys>;
 
     fn new<'a, 's: 'a, TP: 'a + TypePermit + Permits<T>>(
@@ -116,7 +116,7 @@ impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + D
             isolates: Vec::new(),
             free_slots: Vec::new(),
         };
-        if let Some(n) = start.iter().map(|(g, _)| *g).max() {
+        if let Some(n) = start.iter().map(|(g, _)| *g as usize).max() {
             while n >= this.isolates.len() {
                 this.add_group();
             }
@@ -128,13 +128,13 @@ impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + D
     fn paused<'a, 's: 'a>(start: &impl Start<'s, T = T, K = Self::Group>) -> Self::Paused {
         let mut isolates = Vec::new();
         if let Some(n) = start.iter().map(|(g, _)| *g).max() {
-            isolates.resize_with(n + 1, Keys::default);
+            isolates.resize_with(n as usize + 1, Keys::default);
         }
         (isolates, Vec::new())
     }
 
     fn access_paused(paused: &mut Self::Paused, group: Self::Group) -> &mut Self::Keys {
-        &mut paused.0[group]
+        &mut paused.0[group as usize]
     }
 
     fn add_group_paused(paused: &mut Self::Paused) -> Self::Group {
@@ -143,12 +143,12 @@ impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + D
         }
         let group = paused.0.len();
         paused.0.push(Keys::default());
-        group
+        group as u32
     }
 
     fn remove_group_paused(paused: &mut Self::Paused, group: Self::Group) {
         paused.1.push(group);
-        paused.0[group] = Keys::default();
+        paused.0[group as usize] = Keys::default();
     }
 
     fn resume<'a, TP: 'a + TypePermit + Permits<T>>(
@@ -256,7 +256,7 @@ pub struct RefIsolate<
 > {
     access: Access<'a, C, permit::Ref, TP, All>,
     isolates: Vec<Access<'a, C, permit::Ref, TP, KEYS>>,
-    free_slots: Vec<usize>,
+    free_slots: Vec<GroupId>,
 }
 
 impl<
@@ -267,12 +267,12 @@ impl<
         KEYS: KeyPermit + KeySet + Default,
     > Isolate<'a, T> for RefIsolate<'a, C, TP, KEYS>
 {
-    type Group = usize;
+    type Group = GroupId;
     type C = C;
     type R = permit::Ref;
     type TP = TP;
     type Keys = KEYS;
-    type Paused = (Vec<KEYS>, Vec<usize>);
+    type Paused = (Vec<KEYS>, Vec<GroupId>);
 
     fn pause(self) -> Self::Paused {
         (
@@ -291,34 +291,34 @@ impl<
         let group = self.isolates.len();
         self.isolates
             .push(self.access.clone().keys_split_with(KEYS::default()));
-        group
+        group as u32
     }
 
     fn remove_group(&mut self, group: Self::Group) {
         self.free_slots.push(group);
-        self.isolates[group] = self.access.clone().keys_split_with(KEYS::default());
+        self.isolates[group as usize] = self.access.clone().keys_split_with(KEYS::default());
     }
 
     fn access_group(
         &mut self,
         group: Self::Group,
     ) -> &mut Access<'a, Self::C, Self::R, Self::TP, Self::Keys> {
-        &mut self.isolates[group]
+        &mut self.isolates[group as usize]
     }
 
     fn take_key<K: Copy>(
         &mut self,
-        group: usize,
+        group: GroupId,
         key: Key<K, T>,
     ) -> Option<Access<'a, Self::C, Self::R, Self::TP, Key<K, T>>> {
-        Access::take_key(&mut self.isolates[group], key)
+        Access::take_key(&mut self.isolates[group as usize], key)
     }
 
     fn borrow_key<'b, K: Copy>(
         &'b self,
-        group: usize,
+        group: GroupId,
         key: Key<K, T>,
     ) -> Option<Access<'b, Self::C, Self::R, Self::TP, Key<K, T>>> {
-        Access::borrow_key(&self.isolates[group], key)
+        Access::borrow_key(&self.isolates[group as usize], key)
     }
 }

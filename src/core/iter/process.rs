@@ -29,7 +29,7 @@ pub trait ProcessDAG<
         'a: 'b;
 }
 
-pub trait ProcessDAGGrouped<
+pub trait ProcessIsolatedDAG<
     'a,
     C: AnyContainer + ?Sized,
     P: Permit,
@@ -37,17 +37,21 @@ pub trait ProcessDAGGrouped<
     IN,
     T: DynItem + ?Sized,
     OUT,
+    O,
 >: ProcessDAG<'a, C, P, TP, IN, T, OUT>
 {
-    /// Adds group of roots and returns their index.
-    fn add_group(&mut self, group: &[Key<Ref<'a>, T>]) -> usize;
+    /// Adds group and returns their index.
+    fn add_group(&mut self) -> GroupId;
 
     /// Group must exist
-    fn add_to_group(&mut self, group: usize, root: Key<Ref<'a>, T>);
+    fn add_root_to_group(&mut self, group: GroupId, root: Key<Ref<'a>, T>);
+
+    /// Group must exist
+    fn add_input_to_group(&mut self, group: GroupId, order: O, input: IN, to: Key<Ref<'a>, T>);
 
     /// Removes group.
     /// It's index may be reused.
-    fn purge(&mut self, group: usize);
+    fn purge(&mut self, group: GroupId);
 }
 
 pub struct DAGProcess<
@@ -106,13 +110,12 @@ impl<
         NI,
         NP: FnMut((Option<O::Key>, I::Group), &[NI], &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<I::R, S::T>) -> EI,
-        EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
+        EP: FnMut(&NO, &mut Slot<I::R, S::T>, &mut dyn FnMut(NI, Key<Ref<'_>, S::T>)),
         O: Order<NI, I::C, I::R, S::T, S::K>,
         I: IsolateTemplate<S::T, Group = S::K>,
         TP: 'a + TypePermit + Permits<S::T>,
     > ProcessDAG<'a, I::C, I::R, TP, NI, S::T, NO>
-    for DAGProcess<'a, I::C, S, I::R, NI, NP, NO, EP, EI, O, I>
+    for DAGProcess<'a, I::C, S, I::R, NI, NP, NO, EP, (), O, I>
 {
     fn step<'b>(
         &mut self,
@@ -146,25 +149,32 @@ impl<
         NI,
         NP: FnMut((Option<O::Key>, I::Group), &[NI], &mut Slot<I::R, T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<I::R, T>) -> EI,
-        EI: Iterator<Item = (NI, Key<Ref<'a>, T>)>,
-        O: Order<NI, I::C, I::R, T, usize>,
-        I: IsolateTemplate<T, Group = usize>,
+        EP: FnMut(&NO, &mut Slot<I::R, T>, &mut dyn FnMut(NI, Key<Ref<'_>, T>)),
+        O: Order<NI, I::C, I::R, T, GroupId>,
+        I: IsolateTemplate<T, Group = GroupId>,
         TP: 'a + TypePermit + Permits<T>,
-    > ProcessDAGGrouped<'a, I::C, I::R, TP, NI, T, NO>
-    for DAGProcess<'a, I::C, Subset<'a, T, usize>, I::R, NI, NP, NO, EP, EI, O, I>
+    > ProcessIsolatedDAG<'a, I::C, I::R, TP, NI, T, NO, O::Key>
+    for DAGProcess<'a, I::C, Subset<'a, T, GroupId>, I::R, NI, NP, NO, EP, (), O, I>
 {
-    fn add_group(&mut self, group: &[Key<Ref<'a>, T>]) -> usize {
-        let i = I::add_group_paused(&mut self.access);
-        self.core.add_group(i, group.iter().copied());
-        i
+    fn add_group(&mut self) -> GroupId {
+        I::add_group_paused(&mut self.access)
     }
 
-    fn add_to_group(&mut self, group: usize, root: Key<Ref<'a>, T>) {
-        self.core.add_to_group(group, root);
+    fn add_root_to_group(&mut self, group: GroupId, root: Key<Ref<'a>, T>) {
+        self.core.add_root_to_group(group, root);
     }
 
-    fn purge(&mut self, group: usize) {
+    fn add_input_to_group(
+        &mut self,
+        group: GroupId,
+        order: O::Key,
+        input: NI,
+        to: Key<Ref<'a>, T>,
+    ) {
+        self.core.add_input_to_group(group, order, input, to);
+    }
+
+    fn purge(&mut self, group: GroupId) {
         I::remove_group_paused(&mut self.access, group);
         self.core.purge(group);
     }

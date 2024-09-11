@@ -18,7 +18,8 @@ auto_enums = {version = "0.8", optional = true}
 getset = "0.1.2"
 log = "0.4.17"
 modular-bitfield = {version = "0.11.2", optional = true}
-radix-heap = {git = "https://github.com/ktff/radix-heap.git", optional = true, branch = "peek"}
+ordered-float = {version = "2", optional = true}
+radix-heap = {git = "https://github.com/ktff/radix-heap.git", optional = true, branch = "peek", features = ["ordered-float"]}
 
 [dev-dependencies]
 rand = "*"
@@ -27,7 +28,7 @@ rand = "*"
 base_u128 = []
 base_u32 = []
 base_u64 = []
-dag = ["radix-heap"]
+dag = ["radix-heap", "ordered-float"]
 default = ["base_u64", "shard", "items", "models", "dag"]
 items = ["auto_enums"]
 models = []

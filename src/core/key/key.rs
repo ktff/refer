@@ -16,6 +16,10 @@ use crate::core::{AnyItem, Container, DynItem, Item, LocalityPath, LocalityRegio
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ptr;
 
+// Resolves to Ref if 'a can be proven.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Promise<'a>(PhantomData<&'a ()>);
+
 /// A reference equivalent Key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ref<'a>(PhantomData<&'a ()>);
@@ -62,9 +66,28 @@ impl<'a, T: DynItem + ?Sized> Key<Ref<'a>, T> {
         Self(index, PhantomData)
     }
 
-    /// UNSAFE: Caller must guarantee that it T will be alive for 'b lifetime.
+    /// UNSAFE: Caller must guarantee that T will be alive for 'b lifetime.
     pub unsafe fn extend<'b>(self) -> Key<Ref<'b>, T> {
         Key(self.0, PhantomData)
+    }
+
+    /// Item is guaranteed to be alive if you can later prove that 'b is valid.
+    pub fn promise<'b>(self) -> Key<Promise<'b>, T> {
+        Key(self.0, PhantomData)
+    }
+}
+
+impl<'a, T: DynItem + ?Sized> Key<Promise<'a>, T> {
+    /// UNSAFE: Caller must guarantee that 'a is a valid lifetime.
+    pub unsafe fn as_ref(self) -> Key<Ref<'a>, T> {
+        Key(self.0, PhantomData)
+    }
+
+    /// Fulfills promise by providing proof that 'b is a valid lifetime.
+    /// Caller must ensure that both keys belong to the same graph.
+    pub fn fulfill<D: DynItem + ?Sized>(self, _proof: Key<Ref<'a>, D>) -> Key<Ref<'a>, T> {
+        // SAFETY: We have proof of a key existing with 'b lifetime therefor we can use that lifetime.
+        unsafe { self.as_ref() }
     }
 }
 

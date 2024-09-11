@@ -4,7 +4,8 @@ pub mod order;
 pub mod process;
 pub mod start;
 
-pub use process::{ProcessDAG, ProcessDAGGrouped};
+pub use ordered_float::NotNan;
+pub use process::{ProcessDAG, ProcessIsolatedDAG};
 
 use super::{
     permit::{self, access::*, Permit},
@@ -16,12 +17,14 @@ use order::*;
 use process::DAGProcess;
 use radix_heap::Radix;
 use start::{Start, Subset};
-use std::{borrow::Borrow, collections::VecDeque, marker::PhantomData};
+use std::{collections::VecDeque, marker::PhantomData};
 
 // TODO: Various DAG algorithms on top of this:
 // TODO  * A*
 // TODO  * Dijkstra
 // TODO  * Tarjan (strongly connected components)
+
+pub type GroupId = u32;
 
 /// Iteration of directed acyclic graph
 pub struct VisitDAG<
@@ -70,13 +73,13 @@ impl<'a, C: AnyContainer + ?Sized> VisitDAG<'a, C> {
     /// That means each node can be expanded multiple times, once by each group.
     pub fn isolated_space<T: DynItem + ?Sized, Keys: KeyPermit + KeySet + Default>(
         groups: impl IntoIterator<Item = Vec<Key<Ref<'a>, T>>>,
-    ) -> VisitDAG<'a, C, start::Subset<'a, T, usize>, permit::Ref, Isolated<T, C, Keys>> {
+    ) -> VisitDAG<'a, C, start::Subset<'a, T, GroupId>, permit::Ref, Isolated<T, C, Keys>> {
         VisitDAG {
             start: start::Subset(
                 groups
                     .into_iter()
                     .enumerate()
-                    .flat_map(|(i, group)| group.into_iter().map(move |key| (i, key)))
+                    .flat_map(|(i, group)| group.into_iter().map(move |key| (i as GroupId, key)))
                     .collect(),
             ),
             permit: PhantomData,
@@ -150,7 +153,6 @@ impl<'a, C: ?Sized, S: Start<'a>, P: Permit, I: IsolateTemplate<S::T, C = C, R =
 
     /// Topological sort.
     /// Items with lower order are processed before items with higher order.
-    /// Orders less than the order of node are out of order.
     /// Order values [TO] should be unique, else [NI] will get fragmented.
     pub fn topological<
         NI,
@@ -194,7 +196,7 @@ impl<
     /// Returned value is passed to edge processor.
     ///
     /// Lowest same order inputs are passed to the processor.???
-    pub fn node_map<
+    pub fn reach<
         NI: 'a,
         NP: FnMut((Option<O::Key>, S::K), &[NI], &mut Slot<P, S::T>) -> Option<NO> + 'a,
         NO: 'a,
@@ -226,14 +228,10 @@ impl<
         O: Order<NI, C, P, S::T, I::Group, Keys = I::Keys>,
     > VisitDAG<'a, C, S, P, I, NI, NP, NO, (), (), O>
 {
-    pub fn edges_map<
-        EP: FnMut(&NO, &mut Slot<P, S::T>) -> EI,
-        // TODO: Enable borrowing from Slot for this iterator
-        EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
-    >(
+    pub fn expand<EP: FnMut(&NO, &mut Slot<P, S::T>, &mut dyn FnMut(NI, Key<Ref<'_>, S::T>))>(
         self,
         edge_processor: EP,
-    ) -> VisitDAG<'a, C, S, P, I, NI, NP, NO, EP, EI, O> {
+    ) -> VisitDAG<'a, C, S, P, I, NI, NP, NO, EP, (), O> {
         VisitDAG {
             edge_processor,
             edge_iterator: PhantomData,
@@ -251,15 +249,14 @@ impl<
         NI,
         NP: FnMut((Option<O::Key>, S::K), &[NI], &mut Slot<P, S::T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<P, S::T>) -> EI,
-        EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
+        EP: FnMut(&NO, &mut Slot<P, S::T>, &mut dyn FnMut(NI, Key<Ref<'_>, S::T>)),
         O: Order<NI, C, P, S::T, S::K, Keys = I::Keys> + 'a,
-    > VisitDAG<'a, C, S, P, I, NI, NP, NO, EP, EI, O>
+    > VisitDAG<'a, C, S, P, I, NI, NP, NO, EP, (), O>
 {
     pub fn into_iter<'b, TP: 'b + TypePermit + Permits<S::T>>(
         self,
         access: Access<'b, C, P, TP, All>,
-    ) -> DAGIterator<'a, 'b, C, S, P, NI, NP, NO, EP, EI, O, I, I::B<'b, TP>, TP>
+    ) -> DAGIterator<'a, 'b, C, S, P, NI, NP, NO, EP, (), O, I, I::B<'b, TP>, TP>
     where
         'a: 'b,
     {
@@ -273,7 +270,7 @@ impl<
         )
     }
 
-    pub fn into_process(self) -> DAGProcess<'a, C, S, P, NI, NP, NO, EP, EI, O, I> {
+    pub fn into_process(self) -> DAGProcess<'a, C, S, P, NI, NP, NO, EP, (), O, I> {
         DAGProcess::new(
             I::paused(&self.start),
             DAGCore {
@@ -330,11 +327,11 @@ impl<
         EP,
         EI,
         O: Order<NI, I::C, I::R, T, I::Group>,
-        I: IsolateTemplate<T, Group = usize>,
-    > DAGCore<'a, I::C, Subset<'a, T, usize>, I::R, NI, NP, NO, EP, EI, O, I>
+        I: IsolateTemplate<T, Group = GroupId>,
+    > DAGCore<'a, I::C, Subset<'a, T, GroupId>, I::R, NI, NP, NO, EP, EI, O, I>
 {
     /// Adds group of roots and returns their index.
-    fn add_group(&mut self, index: usize, group: impl IntoIterator<Item = Key<Ref<'a>, T>>) {
+    fn add_group(&mut self, index: GroupId, group: impl IntoIterator<Item = Key<Ref<'a>, T>>) {
         self.config
             .start
             .0
@@ -342,13 +339,23 @@ impl<
     }
 
     /// Group must exist
-    pub fn add_to_group(&mut self, group: usize, root: Key<Ref<'a>, T>) {
+    pub fn add_root_to_group(&mut self, group: GroupId, root: Key<Ref<'a>, T>) {
         self.config.start.0.push_back((group, root));
+    }
+
+    pub fn add_input_to_group(
+        &mut self,
+        group: GroupId,
+        order: O::Key,
+        input: NI,
+        to: Key<Ref<'a>, T>,
+    ) {
+        self.queue.push((order, group), (input, to));
     }
 
     /// Removes group.
     /// It's index may be reused.
-    fn purge(&mut self, group: usize) {
+    fn purge(&mut self, group: GroupId) {
         self.config.start.0.retain(|(g, _)| g != &group);
         self.buffer.retain(|(g, _, _)| g != &group);
         for (key, value) in std::mem::replace(&mut self.queue, O::Queue::default()).into_iter() {
@@ -365,11 +372,10 @@ impl<
         NI,
         NP: FnMut((Option<O::Key>, I::Group), &[NI], &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<I::R, S::T>) -> EI,
-        EI: Iterator<Item = (NI, Key<Ref<'a>, S::T>)>,
+        EP: FnMut(&NO, &mut Slot<I::R, S::T>, &mut dyn FnMut(NI, Key<Ref<'_>, S::T>)),
         O: Order<NI, I::C, I::R, S::T, S::K>,
         I: IsolateTemplate<S::T, Group = S::K>,
-    > DAGCore<'a, I::C, S, I::R, NI, NP, NO, EP, EI, O, I>
+    > DAGCore<'a, I::C, S, I::R, NI, NP, NO, EP, (), O, I>
 {
     /// Sets order for further processing.
     pub fn set_order(&mut self, order: O) {
@@ -428,9 +434,8 @@ impl<
         {
             if let Some(output) = (self.config.node_processor)((order, group), &input, &mut slot) {
                 let mut slot = access.take_key(node).expect("Should be accessable").fetch();
-                let expansion = (self.config.edge_processor)(&output, &mut slot);
-
-                for (input, key) in expansion {
+                (self.config.edge_processor)(&output, &mut slot, &mut |input, key| {
+                    let key = key.promise().fulfill(node);
                     if let Some(access) = access.borrow_key(key) {
                         if let Some(order) =
                             self.config
@@ -442,14 +447,14 @@ impl<
                     } else {
                         self.buffer.push_back((group, input, key));
                     }
-                }
+                });
 
-                IterNode::Expanded(slot, output)
+                IterNode::Expanded(input, slot, output)
             } else {
-                IterNode::Idle(node)
+                IterNode::NotExpanded(input, node)
             }
         } else {
-            IterNode::OutOfOrder(input, node)
+            IterNode::AlreadyExpanded(input, node)
         }
     }
 
@@ -470,7 +475,7 @@ impl<
 
         // Process buffered
         if let Some((_, input, key)) = self.buffer.pop_front() {
-            return Some(Ok(IterNode::OutOfOrder(vec![input], key)));
+            return Some(Ok(IterNode::AlreadyExpanded(vec![input], key)));
         }
 
         // Process starting nodes
@@ -501,13 +506,12 @@ impl<
 
 pub enum IterNode<'a: 'b, 'b, P: Permit, T: DynItem + ?Sized, IN, OUT> {
     /// Was not expanded.
-    Idle(Key<Ref<'a>, T>),
+    NotExpanded(Vec<IN>, Key<Ref<'a>, T>),
 
-    Expanded(Slot<'b, P, T>, OUT),
+    Expanded(Vec<IN>, Slot<'b, P, T>, OUT),
 
-    /// This node was called out of order.
-    OutOfOrder(Vec<IN>, Key<Ref<'a>, T>),
-    // OutOfCollection
+    /// This node was called already expanded.
+    AlreadyExpanded(Vec<IN>, Key<Ref<'a>, T>),
 }
 
 #[allow(dead_code)]
@@ -517,8 +521,8 @@ fn example<T>(mut access: Access<impl Container<()>, permit::Mut, All, All>) {
         Key::<_, ()>::new_ref(Index::new(1).unwrap())
     }]])
     .topological(|_, _, _| Some(3))
-    .node_map(|_, _, _| Some(2))
-    .edges_map(|_, _| Vec::<(bool, _)>::new().into_iter())
+    .reach::<(), _, _>(|_, _, _| Some(2))
+    .expand(|_, _, _sink| ())
     .into_iter(access.as_ref().ty());
     let paused_work = iter.pause();
 
@@ -526,9 +530,9 @@ fn example<T>(mut access: Access<impl Container<()>, permit::Mut, All, All>) {
     for _work_slot in VisitDAG::rooted(unsafe { Key::<_, ()>::new_ref(Index::new(1).unwrap()) })
         .mutate()
         .shared_space()
-        .topological(|_, _, _| Some(3))
-        .node_map(|_, _, _| Some(2))
-        .edges_map(|_, _| Vec::<(bool, _)>::new().into_iter())
+        .topological(|_, _, _| NotNan::new(3.0f64).ok())
+        .reach::<(), _, _>(|_, _, _| Some(2))
+        .expand(|_, _, _| ())
         .into_iter(access.borrow_mut().ty())
     {}
 
@@ -536,8 +540,8 @@ fn example<T>(mut access: Access<impl Container<()>, permit::Mut, All, All>) {
         Key::<_, ()>::new_ref(Index::new(1).unwrap())
     }]])
     .depth()
-    .node_map(|_, _, _| Some(2))
-    .edges_map(|_, _| Vec::<(bool, _)>::new().into_iter())
+    .reach::<(), _, _>(|_, _, _| Some(2))
+    .expand(|_, _, _| ())
     .into_process();
 
     for _work_slot in paused_work.resume(access.as_ref().ty()) {}

@@ -19,6 +19,7 @@
 #![feature(type_changing_struct_update)]
 #![feature(trait_alias)]
 #![feature(associated_type_defaults)]
+#![feature(unboxed_closures)]
 
 //! # Goal
 //! The main goal of this library is to provide foundation for programs
