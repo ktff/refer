@@ -14,9 +14,9 @@ pub struct DAGIterator<
     O: Order<NI, C, P, S::T, S::K>,
     I: IsolateTemplate<S::T>,
     A,
-    TP: 'b,
+    TP: 'a,
 > {
-    core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I>,
+    core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I, TP>,
     access: A,
     _access: PhantomData<&'b TP>,
 }
@@ -35,10 +35,10 @@ impl<
         O: Order<NI, C, P, S::T, S::K>,
         I: IsolateTemplate<S::T>,
         A,
-        TP: 'b,
+        TP: 'a,
     > DAGIterator<'a, 'b, C, S, P, NI, NP, NO, EP, EI, O, I, A, TP>
 {
-    pub(super) fn new(access: A, core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I>) -> Self {
+    pub(super) fn new(access: A, core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I, TP>) -> Self {
         Self {
             core,
             access,
@@ -58,7 +58,7 @@ impl<
         EI,
         O: Order<NI, I::C, I::R, T, I::Group>,
         I: IsolateTemplate<T, Group = ()>,
-        TP: 'b + TypePermit + Permits<T>,
+        TP: 'a + TypePermit + Permits<T>,
     >
     DAGIterator<'a, 'b, I::C, Subset<'a, T, ()>, I::R, NI, NP, NO, EP, EI, O, I, I::B<'b, TP>, TP>
 {
@@ -79,7 +79,7 @@ impl<
         EI,
         O: Order<NI, I::C, I::R, T, I::Group>,
         I: IsolateTemplate<T, Group = GroupId>,
-        TP: 'b + TypePermit + Permits<T>,
+        TP: 'a + TypePermit + Permits<T>,
     >
     DAGIterator<
         'a,
@@ -128,9 +128,10 @@ impl<
         EI,
         O: Order<NI, I::C, I::R, S::T, S::K>,
         I: IsolateTemplate<S::T, Group = S::K>,
-    > DAGIterator<'a, 'a, I::C, S, I::R, NI, NP, NO, EP, EI, O, I, I::Paused, ()>
+        TP: 'a + TypePermit + Permits<S::T>,
+    > DAGIterator<'a, 'a, I::C, S, I::R, NI, NP, NO, EP, EI, O, I, I::Paused, TP>
 {
-    pub fn resume<'b, TP: 'b + TypePermit + Permits<S::T>>(
+    pub fn resume<'b>(
         self,
         access: Access<'b, I::C, I::R, TP, All>,
     ) -> DAGIterator<'a, 'b, I::C, S, I::R, NI, NP, NO, EP, EI, O, I, I::B<'b, TP>, TP>
@@ -150,17 +151,22 @@ impl<
         'b,
         S: Start<'a>,
         NI,
-        NP: FnMut((Option<O::Key>, I::Group), &[NI], &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
+        NP: FnMut((Option<O::Key>, I::Group), Vec<NI>, &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<I::R, S::T>, &mut dyn FnMut(NI, Key<Ref<'_>, S::T>)),
+        EP: FnMut(
+            &NO,
+            &mut Slot<I::R, S::T>,
+            &mut dyn FnMut(NI, Key<Ref<'_>, S::T>),
+            &Access<'_, I::C, I::R, TP, I::Keys>,
+        ),
         O: Order<NI, I::C, I::R, S::T, S::K>,
         I: IsolateTemplate<S::T, Group = S::K>,
-        TP: 'b + TypePermit + Permits<S::T>,
+        TP: 'a + TypePermit + Permits<S::T>,
     > DAGIterator<'a, 'b, I::C, S, I::R, NI, NP, NO, EP, (), O, I, I::B<'b, TP>, TP>
 {
     pub fn pause(
         self,
-    ) -> DAGIterator<'a, 'a, I::C, S, I::R, NI, NP, NO, EP, (), O, I, I::Paused, ()> {
+    ) -> DAGIterator<'a, 'a, I::C, S, I::R, NI, NP, NO, EP, (), O, I, I::Paused, TP> {
         DAGIterator {
             core: self.core,
             access: self.access.pause(),
@@ -184,12 +190,17 @@ impl<
         'b,
         S: Start<'a>,
         NI,
-        NP: FnMut((Option<O::Key>, I::Group), &[NI], &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
+        NP: FnMut((Option<O::Key>, I::Group), Vec<NI>, &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<I::R, S::T>, &mut dyn FnMut(NI, Key<Ref<'_>, S::T>)),
+        EP: FnMut(
+            &NO,
+            &mut Slot<I::R, S::T>,
+            &mut dyn FnMut(NI, Key<Ref<'_>, S::T>),
+            &Access<'_, I::C, I::R, TP, I::Keys>,
+        ),
         O: Order<NI, I::C, I::R, S::T, S::K>,
         I: IsolateTemplate<S::T, Group = S::K>,
-        TP: 'b + TypePermit + Permits<S::T>,
+        TP: 'a + TypePermit + Permits<S::T>,
     > Iterator for DAGIterator<'a, 'b, I::C, S, I::R, NI, NP, NO, EP, (), O, I, I::B<'b, TP>, TP>
 {
     type Item = IterNode<'a, 'b, I::R, S::T, NI, NO>;

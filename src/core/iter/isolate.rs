@@ -29,7 +29,9 @@ pub trait IsolateTemplate<T: DynItem + ?Sized> {
 
     fn paused<'a, 's: 'a>(start: &impl Start<'s, T = T, K = Self::Group>) -> Self::Paused;
 
-    fn access_paused(paused: &mut Self::Paused, group: Self::Group) -> &mut Self::Keys;
+    fn access_paused(paused: &mut Self::Paused, group: Self::Group) -> Self::Keys;
+
+    fn return_paused(paused: &mut Self::Paused, group: Self::Group, keys: Self::Keys);
 
     fn add_group_paused(paused: &mut Self::Paused) -> Self::Group;
 
@@ -59,7 +61,7 @@ impl<
     type C = C;
     type R = R;
     type Keys = KEYS;
-    type Paused = KEYS;
+    type Paused = Option<KEYS>;
     type B<'a, TP: 'a + TypePermit + Permits<T>> = Access<'a, C, R, TP, KEYS>;
 
     fn new<'a, 's: 'a, TP: 'a + TypePermit + Permits<T>>(
@@ -70,11 +72,16 @@ impl<
     }
 
     fn paused<'a, 's: 'a>(_: &impl Start<'s, T = T, K = Self::Group>) -> Self::Paused {
-        KEYS::default()
+        None
     }
 
-    fn access_paused(paused: &mut Self::Paused, _: Self::Group) -> &mut Self::Keys {
-        paused
+    fn access_paused(paused: &mut Self::Paused, _: Self::Group) -> Self::Keys {
+        paused.take().unwrap_or_default()
+    }
+
+    fn return_paused(paused: &mut Self::Paused, _: Self::Group, keys: Self::Keys) {
+        assert!(paused.is_none());
+        *paused = Some(keys);
     }
 
     fn add_group_paused(_: &mut Self::Paused) -> Self::Group {
@@ -87,7 +94,7 @@ impl<
         access: Access<'a, Self::C, Self::R, TP, All>,
         state: <Self::B<'a, TP> as Isolate<'a, T>>::Paused,
     ) -> Self::B<'a, TP> {
-        access.keys_split_with(state)
+        access.keys_split_with(state.unwrap_or_default())
     }
 }
 
@@ -104,7 +111,7 @@ impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + D
     type C = C;
     type R = permit::Ref;
     type Keys = Keys;
-    type Paused = (Vec<Keys>, Vec<GroupId>);
+    type Paused = (Vec<Option<Keys>>, Vec<GroupId>);
     type B<'a, TP: 'a + TypePermit + Permits<T>> = RefIsolate<'a, C, TP, Keys>;
 
     fn new<'a, 's: 'a, TP: 'a + TypePermit + Permits<T>>(
@@ -128,13 +135,17 @@ impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + D
     fn paused<'a, 's: 'a>(start: &impl Start<'s, T = T, K = Self::Group>) -> Self::Paused {
         let mut isolates = Vec::new();
         if let Some(n) = start.iter().map(|(g, _)| *g).max() {
-            isolates.resize_with(n as usize + 1, Keys::default);
+            isolates.resize_with(n as usize + 1, || None);
         }
         (isolates, Vec::new())
     }
 
-    fn access_paused(paused: &mut Self::Paused, group: Self::Group) -> &mut Self::Keys {
-        &mut paused.0[group as usize]
+    fn access_paused(paused: &mut Self::Paused, group: Self::Group) -> Self::Keys {
+        paused.0[group as usize].take().unwrap_or_default()
+    }
+
+    fn return_paused(paused: &mut Self::Paused, group: Self::Group, keys: Self::Keys) {
+        paused.0[group as usize] = Some(keys);
     }
 
     fn add_group_paused(paused: &mut Self::Paused) -> Self::Group {
@@ -142,13 +153,13 @@ impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + D
             return free;
         }
         let group = paused.0.len();
-        paused.0.push(Keys::default());
+        paused.0.push(None);
         group as u32
     }
 
     fn remove_group_paused(paused: &mut Self::Paused, group: Self::Group) {
         paused.1.push(group);
-        paused.0[group as usize] = Keys::default();
+        paused.0[group as usize] = None;
     }
 
     fn resume<'a, TP: 'a + TypePermit + Permits<T>>(
@@ -158,7 +169,7 @@ impl<T: DynItem + ?Sized, C: AnyContainer + ?Sized, Keys: KeyPermit + KeySet + D
         RefIsolate {
             isolates: state
                 .into_iter()
-                .map(|keys| access.clone().keys_split_with(keys))
+                .map(|keys| access.clone().keys_split_with(keys.unwrap_or_default()))
                 .collect(),
             access,
             free_slots,
@@ -212,10 +223,10 @@ impl<
     type R = R;
     type TP = TP;
     type Keys = KEYS;
-    type Paused = KEYS;
+    type Paused = Option<KEYS>;
 
     fn pause(self) -> Self::Paused {
-        self.into_keys()
+        Some(self.into_keys())
     }
 
     fn add_group(&mut self) -> Self::Group {
@@ -272,13 +283,13 @@ impl<
     type R = permit::Ref;
     type TP = TP;
     type Keys = KEYS;
-    type Paused = (Vec<KEYS>, Vec<GroupId>);
+    type Paused = (Vec<Option<KEYS>>, Vec<GroupId>);
 
     fn pause(self) -> Self::Paused {
         (
             self.isolates
                 .into_iter()
-                .map(|access| access.into_keys())
+                .map(|access| Some(access.into_keys()))
                 .collect(),
             self.free_slots,
         )

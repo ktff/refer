@@ -1,6 +1,8 @@
-use super::{Index, Path, RegionPath, INDEX_BASE_BITS};
+use super::{Index, IndexBase, Path, RegionPath, INDEX_BASE_BITS};
 use std::{
-    any, fmt,
+    any::{self, TypeId},
+    borrow::Borrow,
+    fmt,
     hash::{Hash, Hasher},
     marker::{PhantomData, Unsize},
 };
@@ -93,7 +95,16 @@ impl<'a, T: DynItem + ?Sized> Key<Promise<'a>, T> {
 
 impl<T: Item> Key<Ptr, T> {
     /// Constructors of Key should strive to guarantee that T is indeed at Index.
-    pub fn new_ptr(index: Index) -> Self {
+    pub const fn new_ptr(index: Index) -> Self {
+        Key(index, PhantomData)
+    }
+
+    /// Constructors of Key should strive to guarantee that T is indeed at Index.
+    /// Panics if index is 0
+    pub const fn new_const(index: IndexBase) -> Self {
+        let Some(index) = Index::new(index) else {
+            panic!("Index is 0");
+        };
         Key(index, PhantomData)
     }
 
@@ -153,7 +164,7 @@ impl<P, T: DynItem + ?Sized> Key<P, T> {
     }
 
     #[inline(always)]
-    pub fn index(&self) -> Index {
+    pub const fn index(&self) -> Index {
         self.0
     }
 
@@ -186,8 +197,21 @@ impl<T: DynItem + ?Sized> Key<Owned, T> {
 }
 
 impl<P, T: DynItem + ?Sized> LocalityPath for Key<P, T> {
-    fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
+    default fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
         Some(LocalityRegion::Index(region.index_of(self.ptr())))
+    }
+
+    default fn upcast(&self) -> &dyn LocalityPath {
+        self
+    }
+}
+
+impl<P, T: Item> LocalityPath for Key<P, T> {
+    fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
+        Some(LocalityRegion::Id((
+            TypeId::of::<T>(),
+            region.index_of(self.ptr()),
+        )))
     }
 
     fn upcast(&self) -> &dyn LocalityPath {
@@ -243,6 +267,13 @@ impl<P: KeySign, T: DynItem + ?Sized> fmt::Debug for Key<P, T> {
 impl<P: KeySign, T: DynItem + ?Sized> fmt::Display for Key<P, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "#{}:{}{}", self.0, P::sign(), any::type_name::<T>())
+    }
+}
+
+impl<'a, T: DynItem + ?Sized> Borrow<Key<Ptr, T>> for Key<Ref<'a>, T> {
+    fn borrow(&self) -> &Key<Ptr, T> {
+        // SAFETY: They both have same representation of Index
+        unsafe { &*(self as *const Self as *const u8 as *const Key<Ptr, T>) }
     }
 }
 

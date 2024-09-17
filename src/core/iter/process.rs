@@ -66,8 +66,9 @@ pub struct DAGProcess<
     EI,
     O: Order<NI, C, P, S::T, S::K>,
     I: IsolateTemplate<S::T>,
+    TP,
 > {
-    core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I>,
+    core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I, TP>,
     access: I::Paused,
 }
 
@@ -83,20 +84,24 @@ impl<
         EI,
         O: Order<NI, C, P, S::T, S::K>,
         I: IsolateTemplate<S::T>,
-    > DAGProcess<'a, C, S, P, NI, NP, NO, EP, EI, O, I>
+        TP: 'a + TypePermit + Permits<S::T>,
+    > DAGProcess<'a, C, S, P, NI, NP, NO, EP, EI, O, I, TP>
 {
     pub(super) fn new(
         access: I::Paused,
-        core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I>,
+        core: DAGCore<'a, C, S, P, NI, NP, NO, EP, EI, O, I, TP>,
     ) -> Self {
         Self { core, access }
     }
 
-    fn with_access<'b, TP: 'b + TypePermit + Permits<S::T>, R>(
+    fn with_access<'b, R>(
         &mut self,
         access: Access<'b, I::C, I::R, TP, All>,
         f: impl FnOnce(&mut Self, &mut I::B<'b, TP>) -> R,
-    ) -> R {
+    ) -> R
+    where
+        'a: 'b,
+    {
         let mut access = I::resume(access, std::mem::take(&mut self.access));
         let r = f(self, &mut access);
         self.access = access.pause();
@@ -108,14 +113,19 @@ impl<
         'a,
         S: Start<'a>,
         NI,
-        NP: FnMut((Option<O::Key>, I::Group), &[NI], &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
+        NP: FnMut((Option<O::Key>, I::Group), Vec<NI>, &mut Slot<I::R, S::T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<I::R, S::T>, &mut dyn FnMut(NI, Key<Ref<'_>, S::T>)),
+        EP: FnMut(
+            &NO,
+            &mut Slot<I::R, S::T>,
+            &mut dyn FnMut(NI, Key<Ref<'_>, S::T>),
+            &Access<'_, I::C, I::R, TP, I::Keys>,
+        ),
         O: Order<NI, I::C, I::R, S::T, S::K>,
         I: IsolateTemplate<S::T, Group = S::K>,
         TP: 'a + TypePermit + Permits<S::T>,
     > ProcessDAG<'a, I::C, I::R, TP, NI, S::T, NO>
-    for DAGProcess<'a, I::C, S, I::R, NI, NP, NO, EP, (), O, I>
+    for DAGProcess<'a, I::C, S, I::R, NI, NP, NO, EP, (), O, I, TP>
 {
     fn step<'b>(
         &mut self,
@@ -129,7 +139,9 @@ impl<
             Some(Err((key, group, inputs, next))) => {
                 let keys = I::access_paused(&mut self.access, group);
                 let mut access = access.keys_split_with(keys);
-                Some(self.core.process(key, group, inputs, next, &mut access))
+                let processed = self.core.process(key, group, inputs, next, &mut access);
+                I::return_paused(&mut self.access, group, access.into_keys());
+                Some(processed)
             }
             None => None,
         }
@@ -147,14 +159,19 @@ impl<
         'a,
         T: DynItem + ?Sized,
         NI,
-        NP: FnMut((Option<O::Key>, I::Group), &[NI], &mut Slot<I::R, T>) -> Option<NO> + 'a,
+        NP: FnMut((Option<O::Key>, I::Group), Vec<NI>, &mut Slot<I::R, T>) -> Option<NO> + 'a,
         NO,
-        EP: FnMut(&NO, &mut Slot<I::R, T>, &mut dyn FnMut(NI, Key<Ref<'_>, T>)),
+        EP: FnMut(
+            &NO,
+            &mut Slot<I::R, T>,
+            &mut dyn FnMut(NI, Key<Ref<'_>, T>),
+            &Access<'_, I::C, I::R, TP, I::Keys>,
+        ),
         O: Order<NI, I::C, I::R, T, GroupId>,
         I: IsolateTemplate<T, Group = GroupId>,
         TP: 'a + TypePermit + Permits<T>,
     > ProcessIsolatedDAG<'a, I::C, I::R, TP, NI, T, NO, O::Key>
-    for DAGProcess<'a, I::C, Subset<'a, T, GroupId>, I::R, NI, NP, NO, EP, (), O, I>
+    for DAGProcess<'a, I::C, Subset<'a, T, GroupId>, I::R, NI, NP, NO, EP, (), O, I, TP>
 {
     fn add_group(&mut self) -> GroupId {
         I::add_group_paused(&mut self.access)

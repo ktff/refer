@@ -7,6 +7,8 @@ pub struct Depth;
 
 pub struct Breadth;
 
+pub struct Forward;
+
 pub struct Topological<F, T>(pub F, pub PhantomData<T>);
 
 pub struct TopologicalKey;
@@ -16,7 +18,12 @@ pub trait Order<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK
     type Key: Ord;
     type Queue<T>: Queue<(Self::Key, SK), T> + Default;
 
-    fn ordering(&mut self, group: SK, input: &NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key>;
+    fn ordering(
+        &mut self,
+        group: SK,
+        input: &mut NI,
+        slot: SlotAccess<C, P, I>,
+    ) -> Option<Self::Key>;
 }
 
 impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK> Order<NI, C, P, I, SK>
@@ -26,7 +33,7 @@ impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK> Order<NI,
     type Key = ();
     type Queue<T> = LifoQueue<(Self::Key, SK), T>;
 
-    fn ordering(&mut self, _: SK, _: &NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
+    fn ordering(&mut self, _: SK, _: &mut NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
         Some(())
     }
 }
@@ -38,13 +45,13 @@ impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK> Order<NI,
     type Key = ();
     type Queue<T> = FifoQueue<(Self::Key, SK), T>;
 
-    fn ordering(&mut self, _: SK, _: &NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
+    fn ordering(&mut self, _: SK, _: &mut NI, _: SlotAccess<C, P, I>) -> Option<Self::Key> {
         Some(())
     }
 }
 
 impl<
-        F: FnMut(SK, &NI, SlotAccess<C, P, I>) -> Option<K>,
+        F: FnMut(SK, &mut NI, SlotAccess<C, P, I>) -> Option<K>,
         K: Radix + Ord + Copy,
         NI,
         C: AnyContainer + ?Sized,
@@ -58,7 +65,7 @@ impl<
     /// Min queue
     type Queue<T> = RadixHeapMap<Reverse<(K, SK)>, T>;
 
-    fn ordering(&mut self, group: SK, input: &NI, slot: SlotAccess<C, P, I>) -> Option<K> {
+    fn ordering(&mut self, group: SK, input: &mut NI, slot: SlotAccess<C, P, I>) -> Option<K> {
         (self.0)(group, input, slot)
     }
 }
@@ -71,7 +78,20 @@ impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK: Radix + O
     /// Min queue
     type Queue<T> = RadixHeapMap<Reverse<(IndexBase, SK)>, T>;
 
-    fn ordering(&mut self, _: SK, _: &NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key> {
+    fn ordering(&mut self, _: SK, _: &mut NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key> {
+        Some(slot.key().index().get())
+    }
+}
+
+impl<NI, C: AnyContainer + ?Sized, P: Permit, I: DynItem + ?Sized, SK: Radix + Ord + Copy>
+    Order<NI, C, P, I, SK> for Forward
+{
+    type Keys = Keys;
+    type Key = IndexBase;
+    /// Min queue
+    type Queue<T> = ForwardQueue<Reverse<(IndexBase, SK)>, T>;
+
+    fn ordering(&mut self, _: SK, _: &mut NI, slot: SlotAccess<C, P, I>) -> Option<Self::Key> {
         Some(slot.key().index().get())
     }
 }
@@ -172,5 +192,60 @@ impl<K: Radix + Ord + Copy, T> Queue<K, T> for RadixHeapMap<Reverse<K>, T> {
 
     fn into_iter(self) -> impl Iterator<Item = (K, T)> {
         IntoIterator::into_iter(self).map(|(key, data)| (key.0, data))
+    }
+}
+
+/// Max queue
+pub struct ForwardQueue<K, T> {
+    current: Vec<(K, T)>,
+    next: Vec<(K, T)>,
+}
+
+impl<K: Ord + Copy, T> ForwardQueue<K, T> {
+    fn advance(&mut self) {
+        std::mem::swap(&mut self.current, &mut self.next);
+        self.current.append(&mut self.next);
+        self.current.sort_by_key(|(key, _)| *key);
+    }
+}
+
+impl<K: Ord + Copy, T> Queue<K, T> for ForwardQueue<Reverse<K>, T> {
+    fn push(&mut self, key: K, item: T) -> bool {
+        self.next.push((Reverse(key), item));
+        true
+    }
+
+    fn peek(&mut self) -> Option<(&K, &T)> {
+        if self.current.is_empty() {
+            self.advance();
+        }
+
+        self.current.last().map(|(key, item)| (&key.0, item))
+    }
+
+    fn pop(&mut self) -> Option<(K, T)> {
+        if let Some((Reverse(key), item)) = self.current.pop() {
+            Some((key, item))
+        } else {
+            self.advance();
+            self.current.pop().map(|(Reverse(key), item)| (key, item))
+        }
+    }
+
+    fn into_iter(self) -> impl Iterator<Item = (K, T)> {
+        self.current
+            .into_iter()
+            .rev()
+            .chain(self.next.into_iter().rev())
+            .map(|(Reverse(key), item)| (key, item))
+    }
+}
+
+impl<K, T> Default for ForwardQueue<K, T> {
+    fn default() -> Self {
+        Self {
+            current: Vec::new(),
+            next: Vec::new(),
+        }
     }
 }

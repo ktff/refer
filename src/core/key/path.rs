@@ -1,5 +1,6 @@
 use super::*;
 use crate::core::{AnyItem, DynItem, Item, LocalityPath, LocalityRegion};
+use core::panic;
 use std::{
     cmp::Ordering,
     num::{NonZeroU16, NonZeroU32, NonZeroUsize},
@@ -15,7 +16,7 @@ pub struct Path(Index);
 impl Path {
     /// Constructs from level top bits.
     /// Will increase the level of the path if it's key.
-    pub fn new_top(path: IndexBase, level: u32) -> Self {
+    pub const fn new_top(path: IndexBase, level: u32) -> Self {
         let offset = (INDEX_BASE_BITS.get() - 1).saturating_sub(level);
         let path = ((path >> offset) | 1) << offset;
         Path(Index::new(path).expect("Shouldn't be zero"))
@@ -23,15 +24,15 @@ impl Path {
 
     /// Constructs from level bottom bits.
     /// Will increase the level of the path if it's key.
-    pub fn new_bottom(path: IndexBase, level: u32) -> Self {
+    pub const fn new_bottom(path: IndexBase, level: u32) -> Self {
         Self::new_top(path.rotate_right(level), level)
     }
 
-    pub fn level(self) -> u32 {
+    pub const fn level(self) -> u32 {
         (INDEX_BASE_BITS.get() - 1) - self.0.trailing_zeros()
     }
 
-    pub fn top(self) -> IndexBase {
+    pub const fn top(self) -> IndexBase {
         self.0.get() ^ self.bit()
     }
 
@@ -58,7 +59,7 @@ impl Path {
         self.top().rotate_left(self.level())
     }
 
-    fn bit(self) -> IndexBase {
+    const fn bit(self) -> IndexBase {
         1 << self.0.trailing_zeros()
     }
 
@@ -293,19 +294,29 @@ pub struct RegionPath {
 
 impl RegionPath {
     /// None if len is too large
-    pub fn new(path: Path, len: NonZeroU32) -> Option<Self> {
+    pub const fn new(path: Path, len: NonZeroU32) -> Option<Self> {
         if len.get() > std::mem::size_of::<usize>() as u32 * 8 {
             return None;
         }
 
         let level = path.level();
+        let Some(num) = INDEX_BASE_BITS.get().checked_sub(level + len.get()) else {
+            return None;
+        };
+
+        let Some(remaining_len) = NonZeroU16::new(num as u16) else {
+            return None;
+        };
+
+        let Some(len) = NonZeroU16::new(len.get() as u16) else {
+            return None;
+        };
+
         Some(RegionPath {
             path: path.top(),
             level: level as u16,
-            len: NonZeroU16::new(len.get() as u16)?,
-            remaining_len: NonZeroU16::new(
-                INDEX_BASE_BITS.get().checked_sub(level + len.get())? as u16
-            )?,
+            len,
+            remaining_len,
         })
     }
 
@@ -321,15 +332,12 @@ impl RegionPath {
     }
 
     /// Panics if index is out of range.
-    pub fn path_of(&self, index: usize) -> Path {
+    pub const fn path_of(&self, index: usize) -> Path {
         // Constructed by adding index at the end of the path
-        assert!(
-            index
-                .checked_shr(self.len.get() as u32)
-                .map(|r| r == 0)
-                .unwrap_or(true),
-            "Index has too many bits"
-        );
+        match index.checked_shr(self.len.get() as u32) {
+            None | Some(0) => (),
+            _ => panic!("Index has too many bits"),
+        }
 
         Path::new_top(
             self.path | ((index as IndexBase) << self.remaining_len.get()),

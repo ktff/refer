@@ -80,7 +80,16 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
 
     /// Adds an item to the container & connects existing source edges from it.
     /// Assumes Grc was used for building those edges.
-    pub fn add<T: Item>(
+    pub fn add<T: Item>(&mut self, locality: &impl LocalityPath, item: T) -> Key<Ref<'a>, T>
+    where
+        C: Container<T>,
+    {
+        self.try_add(locality, item).ok().expect("No more space")
+    }
+
+    /// Adds an item to the container & connects existing source edges from it.
+    /// Assumes Grc was used for building those edges.
+    pub fn try_add<T: Item>(
         &mut self,
         locality: &impl LocalityPath,
         item: T,

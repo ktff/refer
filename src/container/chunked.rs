@@ -35,6 +35,37 @@ impl<C: AnyContainer> VecChunkedContainer<C> {
         }
     }
 
+    pub fn associate<T: Item>(&mut self, key: &impl LocalityPath) -> Option<()> {
+        let type_id = TypeId::of::<T>();
+        match key.map(self.region)? {
+            LocalityRegion::Id(id) => {
+                assert_eq!(type_id, id.0);
+                if let Some(&index) = self.map.get(&id) {
+                    Some(&mut self.chunks[index])
+                } else {
+                    self.add_chunk(id, key)
+                }
+            }
+            LocalityRegion::Index(index) => {
+                if let Some(chunk) = self.get_mut(index) {
+                    Some(chunk)
+                } else {
+                    self.add_chunk((type_id, index), key)
+                }
+            }
+            LocalityRegion::Any => self.get_mut(0),
+            LocalityRegion::Indices(range) if range.start() <= range.end() => {
+                if let Some(chunk) = self.get_mut(*range.start()) {
+                    Some(chunk)
+                } else {
+                    self.add_chunk((type_id, *range.start()), key)
+                }
+            }
+            LocalityRegion::Indices(_) => None,
+        }
+        .map(|_| ())
+    }
+
     fn iter_slice<'a>(&'a self, start: Bound<usize>, end: Bound<usize>) -> Option<Iter<'a, C>> {
         let range = self.normalize_bounds(start, end)?;
         Some(self.chunks[range].iter())
@@ -64,6 +95,18 @@ impl<C: AnyContainer> VecChunkedContainer<C> {
         } else {
             Some(start..end)
         }
+    }
+
+    fn add_chunk<P: LocalityPath + ?Sized>(
+        &mut self,
+        id: (TypeId, usize),
+        key: &P,
+    ) -> Option<&mut C> {
+        let index = self.chunks.len();
+        let container = (self.builder)(key.upcast(), self.region.path_of(index))?;
+        self.chunks.push(container);
+        self.map.insert(id, index);
+        self.chunks.last_mut()
     }
 }
 
@@ -118,11 +161,7 @@ unsafe impl<C: AnyContainer> RegionContainer for VecChunkedContainer<C> {
                 if let Some(&index) = self.map.get(&id) {
                     Some(&mut self.chunks[index])
                 } else {
-                    let index = self.chunks.len();
-                    let container = (self.builder)(key.upcast(), self.region.path_of(index))?;
-                    self.chunks.push(container);
-                    self.map.insert(id, index);
-                    self.chunks.last_mut()
+                    self.add_chunk(id, key)
                 }
             }
             LocalityRegion::Index(index) => self.get_mut(index),
@@ -189,7 +228,7 @@ mod tests {
         let mut access = container.as_add();
 
         let keys = (0..n)
-            .map(|i| access.add(&SpaceId(i), i).unwrap())
+            .map(|i| access.try_add(&SpaceId(i), i).unwrap())
             .collect::<Vec<_>>();
 
         for (i, key) in keys.iter().enumerate() {
@@ -204,7 +243,7 @@ mod tests {
         let mut access = container.as_add();
 
         let mut keys = (0..n)
-            .map(|i| (access.add(&SpaceId(i), i).unwrap(), i))
+            .map(|i| (access.try_add(&SpaceId(i), i).unwrap(), i))
             .collect::<Vec<_>>();
 
         keys.sort();
@@ -226,7 +265,7 @@ mod tests {
         let mut access = container.as_add();
 
         let item = 42;
-        let key = access.add(&SpaceId(item), item).unwrap();
+        let key = access.try_add(&SpaceId(item), item).unwrap();
 
         assert_eq!(
             (access.as_ref().key(key.any()).fetch().item() as &dyn Any).downcast_ref::<usize>(),
@@ -239,7 +278,11 @@ mod tests {
         let mut container = container();
 
         let item = 42;
-        let key = container.as_add().add(&SpaceId(item), item).unwrap().ptr();
+        let key = container
+            .as_add()
+            .try_add(&SpaceId(item), item)
+            .unwrap()
+            .ptr();
 
         container.localized_drop(key.any().ptr());
         assert!(container.get_slot(key.ptr()).is_none());

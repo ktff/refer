@@ -39,3 +39,13 @@ impl LocalityPath for () {
         self
     }
 }
+
+impl<L: LocalityPath> LocalityPath for [L; 2] {
+    fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
+        self[0].map(region).or_else(|| self[1].map(region))
+    }
+
+    fn upcast(&self) -> &dyn LocalityPath {
+        self
+    }
+}
