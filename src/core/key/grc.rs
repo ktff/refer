@@ -52,11 +52,11 @@ impl<T: StandaloneItem> Grc<T> {
     pub fn release<C: Container<T>>(self, access: MutTypeAccess<C, T>) {
         // SAFETY: Key is valid until we release Key<Owned> in self.
         let key = unsafe { Key::new_ref(self.index()) };
-        key.get(access).release(self);
+        key.from(access).release(self);
     }
 
     pub fn replace<C: Container<T>>(&mut self, with: Key<Ref, T>, mut access: MutTypeAccess<C, T>) {
-        std::mem::replace(self, with.get(access.borrow_mut()).own()).release(access);
+        std::mem::replace(self, with.from(access.borrow_mut()).own()).release(access);
     }
 }
 
