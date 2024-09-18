@@ -266,7 +266,7 @@ impl<P: KeySign, T: DynItem + ?Sized> fmt::Debug for Key<P, T> {
 
 impl<P: KeySign, T: DynItem + ?Sized> fmt::Display for Key<P, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "#{}:{}{}", self.0, P::sign(), any::type_name::<T>())
+        write!(f, "{}", self.0)
     }
 }
 
