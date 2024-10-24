@@ -79,14 +79,36 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
     /// Returns first key for given type
     fn first_key(&self, key: TypeId) -> Option<Key<Ref>>;
 
+    fn first_key_of<T: Any>(&self) -> Option<Key<Ref, T>>
+    where
+        Self: Sized,
+    {
+        self.first_key(TypeId::of::<T>()).map(Key::assume)
+    }
+
     /// Returns following key after given in ascending order
     /// for the type at the key.
     ///
     /// SAFETY: MUST have bijection over input_key and output_key and input_key != output_key.
     fn next_key(&self, ty: TypeId, key: Key) -> Option<Key<Ref>>;
 
+    fn next_key_of<P, T: Any>(&self, key: Key<P, T>) -> Option<Key<Ref, T>>
+    where
+        Self: Sized,
+    {
+        self.next_key(TypeId::of::<T>(), key.ptr().any())
+            .map(Key::assume)
+    }
+
     /// Returns last key for given type
     fn last_key(&self, key: TypeId) -> Option<Key<Ref>>;
+
+    fn last_key_of<T: Any>(&self) -> Option<Key<Ref, T>>
+    where
+        Self: Sized,
+    {
+        self.last_key(TypeId::of::<T>()).map(Key::assume)
+    }
 
     /// All types in the container.
     fn types(&self) -> HashMap<TypeId, ItemTraits>;

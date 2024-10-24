@@ -2,7 +2,6 @@
 // Currently this is not implemented safely for *dyn Trait.
 #![feature(trait_upcasting)]
 #![feature(type_alias_impl_trait)]
-#![feature(const_option)]
 #![feature(allocator_api)]
 #![feature(ptr_metadata)]
 #![feature(maybe_uninit_slice)]
@@ -20,7 +19,7 @@
 #![feature(trait_alias)]
 #![feature(associated_type_defaults)]
 #![feature(unboxed_closures)]
-#![feature(option_get_or_insert_default)]
+#![feature(arbitrary_self_types_pointers)]
 // #![feature(const_trait_impl)]
 
 //! # Goal

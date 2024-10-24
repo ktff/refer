@@ -14,8 +14,8 @@ pub use type_permit::*;
 use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
 
 use crate::core::{
-    permit, AnyContainer, Container, DynContainer, DynItem, Index, IndexBase, Item, Key, Path, Ref,
-    Slot,
+    permit, AnyContainer, Container, DynContainer, DynItem, Index, IndexBase, Item, Key, Path, Ptr,
+    Ref, Slot,
 };
 
 use super::{Mut, Permit};
@@ -142,6 +142,12 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
     pub fn extend<D: DynItem + ?Sized>(&self, key: Key<Ref<'_>, D>) -> Key<Ref<'a>, D> {
         // SAFETY: We have 'a lifetime guarantee no item will be removed so key is valid for 'a.
         unsafe { key.extend() }
+    }
+
+    pub fn validate<D: DynItem + ?Sized>(&self, key: Key<Ptr, D>) -> Option<Key<Ref<'a>, D>> {
+        self.container
+            .unified_get_slot(key)
+            .map(|slot| self.extend(slot.locality().path()))
     }
 
     // pub fn none(&self)-> AccessPermit<'a, C, R, T, K>
