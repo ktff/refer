@@ -15,6 +15,7 @@ mod slot;
 pub use container::{AnyContainer, Container, DynContainer};
 pub use edge::*;
 pub use item::*;
+#[cfg(feature = "dag")]
 pub use iter::{IterNode, VisitDAG};
 pub use key::*;
 pub use locality::*;
