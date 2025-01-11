@@ -97,7 +97,7 @@ macro_rules! region_container {
         }
 
         #[inline(always)]
-        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot> {
+        fn any_get_slot(&self, key: Key) -> Option<UnsafeSlot> {
             let index = self.region().index_of(key);
             self.get(index)?.any_get_slot(key)
         }
@@ -106,7 +106,7 @@ macro_rules! region_container {
             &self,
             path: &dyn LocalityPath,
             ty: std::any::TypeId,
-        ) -> Option<AnyContainerLocality> {
+        ) -> Option<LocalityRef> {
             self.locality(path)?.any_get_locality(path, ty)
         }
 

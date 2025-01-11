@@ -133,11 +133,11 @@ macro_rules! leaf_container {
         }
 
         #[inline(always)]
-        fn any_get_slot(&self, key: Key) -> Option<AnyUnsafeSlot>{
+        fn any_get_slot(&self, key: Key) -> Option<UnsafeSlot>{
             self.get_slot(key.assume()).map(|slot| slot.any())
         }
 
-        fn any_get_locality(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<AnyContainerLocality>{
+        fn any_get_locality(&self, _: &dyn LocalityPath,ty: TypeId) -> Option<LocalityRef>{
             if ty == TypeId::of::<$t>() {
                 Some(self.locality().container_locality().any())
             } else {

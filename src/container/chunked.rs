@@ -8,9 +8,9 @@ use std::{
     ops::{Bound, Range, RangeBounds},
 };
 
-pub type Iter<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a C> + Send + 'a;
+pub type Iter<'a, C> = std::slice::Iter<'a, C>; //impl DoubleEndedIterator<Item = &'a C> + Send + 'a;
 
-pub type IterMut<'a, C: AnyContainer> = impl DoubleEndedIterator<Item = &'a mut C> + Send + 'a;
+pub type IterMut<'a, C> = std::slice::IterMut<'a, C>; //impl DoubleEndedIterator<Item = &'a mut C> + Send + 'a;
 
 /// A container that chunks items into separate containers according to items locality key.
 pub struct VecChunkedContainer<C: AnyContainer> {
@@ -193,7 +193,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         for (i, key) in keys.iter().enumerate() {
-            assert_eq!(access.as_ref().key(*key).get().item(), &i);
+            assert_eq!(access.as_ref().key(*key).fetch().item(), &i);
         }
     }
 
@@ -229,7 +229,7 @@ mod tests {
         let key = access.add(&SpaceId(item), item).unwrap();
 
         assert_eq!(
-            (access.as_ref().key(key.any()).get_dyn().item() as &dyn Any).downcast_ref::<usize>(),
+            (access.as_ref().key(key.any()).fetch().item() as &dyn Any).downcast_ref::<usize>(),
             Some(&item)
         );
     }

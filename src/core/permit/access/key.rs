@@ -1,3 +1,5 @@
+use crate::core::AnyItem;
+
 use super::*;
 
 impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit, K: Clone, T: DynItem + ?Sized>
@@ -14,11 +16,10 @@ impl<'a, C: Container<T> + ?Sized, R: Permit, K: Clone, T: Item> Access<'a, C, R
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
-    Access<'a, C, R, All, Key<Ptr, T>>
+impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized, K: Clone>
+    Access<'a, C, R, TP, Key<K, T>>
 {
-    /// None if doesn't exist.
-    pub fn get_dyn_try(self) -> Option<DynSlot<'a, R, T>> {
+    pub fn fetch_try(self) -> Option<Slot<'a, R, T>> {
         let Self {
             container,
             key_state: key,
@@ -26,57 +27,81 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
             ..
         } = self;
         container
-            .any_get_slot(key.any())
-            // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
-            .and_then(|slot| unsafe { DynSlot::new(slot, permit) })
-    }
-
-    pub fn get_try(self) -> Option<Slot<'a, R, T>>
-    where
-        T: Item,
-        C: Container<T>,
-    {
-        self.ty().get_try()
-    }
-}
-
-impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, Key<Ptr, T>> {
-    pub fn get_try(self) -> Option<Slot<'a, R, T>> {
-        let Self {
-            container,
-            key_state: key,
-            permit,
-            ..
-        } = self;
-        container
-            .get_slot(key)
+            .unified_get_slot(key.ptr())
             // SAFETY: Type level logic of permit ensures that it has sufficient access for 'a to this slot.
             .map(|slot| unsafe { Slot::new(slot, permit) })
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, R: Permit, T: DynItem + ?Sized>
-    Access<'a, C, R, All, Key<Ref<'a>, T>>
+impl<'a: 'b, 'b, C: AnyContainer + ?Sized, R: Permit, TP: Permits<T>, T: DynItem + ?Sized>
+    Access<'a, C, R, TP, Key<Ref<'b>, T>>
 {
-    pub fn get_dyn(self) -> DynSlot<'a, R, T> {
+    pub fn fetch(self) -> Slot<'a, R, T> {
         self.key_transition(|key| key.ptr())
-            .get_dyn_try()
+            .fetch_try()
             .expect("Reference is invalid for given container.")
     }
 
-    pub fn get(self) -> Slot<'a, R, T>
-    where
-        T: Item,
-        C: Container<T>,
-    {
-        self.ty().get()
+    pub fn slot_access(self) -> SlotAccess<'a, C, R, T> {
+        let key = self.extend(self.key_state);
+        let Self {
+            container, permit, ..
+        } = self;
+        SlotAccess {
+            container,
+            permit,
+            key,
+        }
     }
 }
 
-impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, Key<Ref<'a>, T>> {
-    pub fn get(self) -> Slot<'a, R, T> {
-        self.key_transition(|key| key.ptr())
-            .get_try()
+/// Provides access to one slot.
+pub struct SlotAccess<
+    'a,
+    C: AnyContainer + ?Sized,
+    P: Permit = permit::Ref,
+    T: DynItem + ?Sized = dyn AnyItem,
+> {
+    container: &'a C,
+    permit: P,
+    key: Key<Ref<'a>, T>,
+}
+
+impl<'a, C: AnyContainer + ?Sized, P: Permit, T: DynItem + ?Sized> SlotAccess<'a, C, P, T> {
+    pub fn get(self) -> Slot<'a, P, T> {
+        self.container
+            .unified_get_slot(self.key.ptr())
+            .map(|slot| unsafe { Slot::new(slot, self.permit) })
             .expect("Reference is invalid for given container.")
+    }
+
+    pub fn borrow_mut<'b>(&'b mut self) -> SlotAccess<'b, C, P, T> {
+        SlotAccess {
+            container: self.container,
+            // SAFETY: We are mutably borrowing original permit and this won't overlive that lifetime.
+            permit: unsafe { self.permit.copy() },
+            key: self.key,
+        }
+    }
+
+    pub fn key(&self) -> Key<Ref<'a>, T> {
+        self.key.clone()
+    }
+}
+
+impl<'a, C: AnyContainer + ?Sized, P: Permit + Copy, T: DynItem + ?Sized> Copy
+    for SlotAccess<'a, C, P, T>
+{
+}
+
+impl<'a, C: AnyContainer + ?Sized, P: Permit + Clone, T: DynItem + ?Sized> Clone
+    for SlotAccess<'a, C, P, T>
+{
+    fn clone(&self) -> Self {
+        Self {
+            container: self.container,
+            permit: self.permit.clone(),
+            key: self.key,
+        }
     }
 }

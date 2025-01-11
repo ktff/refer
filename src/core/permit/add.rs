@@ -19,6 +19,11 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
         }
     }
 
+    pub fn extend<D: DynItem + ?Sized>(&self, key: Key<Ref<'_>, D>) -> Key<Ref<'a>, D> {
+        // SAFETY: We have 'a lifetime guarantee no item will be removed so key is valid for 'a.
+        unsafe { key.extend() }
+    }
+
     pub fn borrow_mut(&mut self) -> AddAccess<'_, C> {
         AddAccess {
             // SAFETY: We are borrowing exclusive access to self.
@@ -103,7 +108,7 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
         C: Container<T>,
     {
         let (subject, mut others) = self.as_mut().key_split(subject);
-        let subject = subject.get();
+        let subject = subject.fetch();
         for edge in subject.iter_edges(Some(Side::Source)) {
             if let Some(drain) = others.borrow_mut().key_try(edge.object) {
                 // SAFETY: Subject,source,this exists at least for the duration of this function.
@@ -111,7 +116,7 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
                 //         this subject needs to be notified. This ensures that edge in subject is
                 //         valid for it's lifetime.
                 let source = unsafe { Key::<_, T>::new_owned(subject.key().index()) };
-                let mut drain = drain.get_dyn();
+                let mut drain = drain.fetch();
                 let excess_key = match drain.any_localized(|item, locality| {
                     item.any_add_drain_edge(locality, source.any())
                 }){
@@ -122,7 +127,7 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
                         subject.key(), drain.key(),
                     )
                 };
-                drain.release(excess_key);
+                drain.release_dyn(excess_key);
             } else if edge.object == subject.key() {
                 // We skip self references
             } else {

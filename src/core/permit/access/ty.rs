@@ -8,29 +8,6 @@ impl<'a, C: Container<T> + ?Sized, R: Permit, T: Item> Access<'a, C, R, T, All> 
             type_state
         })
     }
-
-    pub fn key<K: Clone>(self, key: Key<K, T>) -> Access<'a, C, R, T, Key<K, T>>
-    where
-        C: AnyContainer,
-    {
-        self.key_transition(|()| key)
-    }
-
-    pub fn keys_split(self) -> Access<'a, C, R, T, Keys> {
-        self.key_transition(|()| Keys::default())
-    }
-
-    pub fn key_split<K: Copy>(
-        self,
-        key: Key<K, T>,
-    ) -> (
-        Access<'a, C, R, T, Key<K, T>>,
-        Access<'a, C, R, T, Not<Key>>,
-    ) {
-        // SAFETY: Key and Not<Key> are disjoint.
-        let key_split = unsafe { self.unsafe_split(|this| this.key_transition(|()| key)) };
-        (key_split, self.key_transition(|()| key.ptr().any()))
-    }
 }
 
 impl<'a, C: AnyContainer + ?Sized, R: Permit, T: Item> Access<'a, C, R, Not<T>, All> {

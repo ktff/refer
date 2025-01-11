@@ -1,15 +1,13 @@
 mod any;
+mod dym;
 mod traits;
 
 pub use any::*;
+pub use dym::*;
 pub use traits::*;
 
 use super::{Grc, ItemLocality, Key, MultiOwned, Owned, PartialEdge, Ptr, Ref, Side};
-use std::{alloc::Allocator, any::Any, ptr::Pointee};
-
-/// Marker trait for dyn compliant traits of items.
-pub trait DynItem: Any + Pointee {}
-impl<T: Any + Pointee + ?Sized> DynItem for T {}
+use std::{alloc::Allocator, any::Any, ptr::Thin};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Found {
@@ -28,17 +26,17 @@ impl Found {
 }
 
 /// Structure whose lifetime and edges can be managed by a container/model.
-pub trait Item: Sized + Any + Sync + Send {
+pub trait Item: Sized + Any + Sync + Send + Thin {
     /// Allocator used by item.
-    type Alloc: Allocator + Any + Clone + 'static + Send + Sync;
+    type Alloc: Allocator + Any + Clone + 'static + Send + Sync = std::alloc::Global;
 
     /// Data shared by local items.
-    type LocalityData: Any + Send + Sync;
+    type LocalityData: Any + Send + Sync = ();
 
     type Edges<'a>: Iterator<Item = PartialEdge<Key<Ref<'a>>>>;
 
     /// Traits implemented by Self that others can use to view it as.
-    const TRAITS: &'static [ItemTrait<Self>];
+    const TRAITS: &'static [ItemTrait<Self>] = &[];
 
     /// Edges where self is side.
     ///
@@ -75,21 +73,17 @@ pub trait Item: Sized + Any + Sync + Send {
 pub unsafe trait DrainItem: Item {
     /// SAFETY: add_drain_edge MUST ensure to add PartialEdge{object: source,side: Side::Drain} to edges of self.
     /// Callers should create the resulting Key<Owned,Self>.
-    fn add_drain_edge<T: DynItem + ?Sized>(
-        &mut self,
-        locality: ItemLocality<'_, Self>,
-        source: Key<Owned, T>,
-    );
+    fn add_drain_edge(&mut self, locality: ItemLocality<'_, Self>, source: Key<Owned>);
 
     /// Removes drain edge and returns object ref.
     /// Ok success.
     /// Err if doesn't exist.
     #[must_use]
-    fn try_remove_drain_edge<T: DynItem + ?Sized>(
+    fn try_remove_drain_edge(
         &mut self,
         locality: ItemLocality<'_, Self>,
-        source: Key<Ptr, T>,
-    ) -> Option<Key<Owned, T>>;
+        source: Key,
+    ) -> Option<Key<Owned>>;
 }
 
 /// Item which can be have bi edges.

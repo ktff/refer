@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn fill() {
-        let n = 20;
+        let n = 20usize;
         let mut container = VecContainer::default();
 
         let indices = (0..n)
@@ -264,10 +264,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         for (i, index) in indices.iter().enumerate() {
-            assert_eq!(
-                unsafe { *container.get(index.get()).unwrap().item().get() },
-                i
-            );
+            assert_eq!(unsafe { *container.get(index.get()).unwrap().item() }, i);
         }
     }
 
@@ -278,10 +275,7 @@ mod tests {
         let item = 42;
         let index = container.fill(item).unwrap();
 
-        assert_eq!(
-            unsafe { *container.get(index.get()).unwrap().item().get() },
-            item
-        );
+        assert_eq!(unsafe { *container.get(index.get()).unwrap().item() }, item);
         assert_eq!(container.unfill(index.get()).unwrap(), item);
         assert!(container.get(index.get()).is_none());
     }
@@ -302,7 +296,7 @@ mod tests {
             container
                 .iter(..)
                 .map(|slot| (slot.locality().path().index().get(), unsafe {
-                    *slot.item().get()
+                    *slot.item()
                 }))
                 .collect::<Vec<_>>()
         );

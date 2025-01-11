@@ -75,3 +75,21 @@ impl<T: TypePermit> TypePermit for Not<T> {
         !T::allowed::<D>(state)
     }
 }
+
+pub trait RequiredTypePermit {
+    type Permit;
+}
+
+impl<T: DynItem + ?Sized> RequiredTypePermit for T {
+    default type Permit = All;
+}
+
+impl<T: Item> RequiredTypePermit for T {
+    type Permit = T;
+}
+
+pub trait Permits<T: ?Sized>: TypePermit {}
+
+impl<T: DynItem + ?Sized> Permits<T> for All {}
+
+impl<T: Item> Permits<T> for T {}

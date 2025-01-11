@@ -7,19 +7,23 @@ mod ty;
 mod type_permit;
 mod types;
 
+pub use key::SlotAccess;
 pub use key_permit::*;
 pub use type_permit::*;
 
 use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
 
 use crate::core::{
-    permit, AnyContainer, Container, DynItem, DynSlot, Item, Key, Path, Ptr, Ref, Slot,
+    permit, AnyContainer, Container, DynContainer, DynItem, Index, IndexBase, Item, Key, Path, Ref,
+    Slot,
 };
 
 use super::{Mut, Permit};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct All;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Not<T>(T);
 
 /// 'a - Lifetime
@@ -27,11 +31,11 @@ pub struct Not<T>(T);
 /// R - Ref/Mut restriction
 /// T - Type restriction
 /// K - Key restriction
-pub struct Access<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> {
+pub struct Access<'a, C: AnyContainer + ?Sized, P: Permit, T: TypePermit, K: KeyPermit> {
     container: &'a C,
-    permit: R,
+    permit: P,
     type_state: T::State,
-    key_state: K::State,
+    key_state: K,
     _marker: PhantomData<Key<Ref<'a>>>,
 }
 
@@ -76,24 +80,27 @@ impl<'a, C: AnyContainer + ?Sized> Access<'a, C, permit::Ref, All, All> {
 }
 
 impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Access<'a, C, R, T, K> {
-    /// UNSAFE: Caller must ensure some kind of division between jurisdictions of the two permits.
-    #[inline(always)]
-    unsafe fn unsafe_split<P>(&self, map: impl FnOnce(Self) -> P) -> P {
-        map(Self {
-            container: self.container,
-            permit: self.permit.copy(),
-            type_state: self.type_state.clone(),
-            key_state: self.key_state.clone(),
-            _marker: PhantomData,
-        })
-    }
+    // /// UNSAFE: Caller must ensure some kind of division between jurisdictions of the two permits.
+    // #[inline(always)]
+    // unsafe fn unsafe_split<P>(&self, map: impl FnOnce(Self) -> P) -> P {
+    //     map(Self {
+    //         container: self.container,
+    //         permit: self.permit.copy(),
+    //         type_state: self.type_state.clone(),
+    //         key_state: self.key_state.clone(),
+    //         _marker: PhantomData,
+    //     })
+    // }
 
     /// UNSAFE: Caller must ensure type division between jurisdictions of the two permits.
     #[inline(always)]
     unsafe fn unsafe_type_split<P: TypePermit>(
         &self,
         type_state: P::State,
-    ) -> Access<'a, C, R, P, K> {
+    ) -> Access<'a, C, R, P, K>
+    where
+        K: Clone,
+    {
         Access {
             container: self.container,
             permit: self.permit.copy(),
@@ -105,7 +112,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
 
     /// UNSAFE: Caller must ensure key division between jurisdictions of the two permits.
     #[inline(always)]
-    unsafe fn unsafe_key_split<P: KeyPermit>(&self, key_state: P::State) -> Access<'a, C, R, T, P> {
+    unsafe fn unsafe_key_split<P: KeyPermit>(&self, key_state: P) -> Access<'a, C, R, T, P> {
         Access {
             container: self.container,
             permit: self.permit.copy(),
@@ -120,24 +127,15 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
         map: impl FnOnce(T::State) -> P::State,
     ) -> Access<'a, C, R, P, K> {
         Access {
-            container: self.container,
-            permit: self.permit,
             type_state: map(self.type_state),
-            key_state: self.key_state,
-            _marker: self._marker,
+            ..self
         }
     }
 
-    fn key_transition<P: KeyPermit>(
-        self,
-        map: impl FnOnce(K::State) -> P::State,
-    ) -> Access<'a, C, R, T, P> {
+    fn key_transition<P: KeyPermit>(self, map: impl FnOnce(K) -> P) -> Access<'a, C, R, T, P> {
         Access {
-            container: self.container,
-            permit: self.permit,
-            type_state: self.type_state,
             key_state: map(self.key_state),
-            _marker: self._marker,
+            ..self
         }
     }
 
@@ -309,13 +307,15 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Acces
 //     }
 // }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Access<'a, C, permit::Ref, T, K> {
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Clone>
+    Access<'a, C, permit::Ref, T, K>
+{
     pub fn borrow(&self) -> Access<'a, C, permit::Ref, T, K> {
         self.clone()
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Access<'a, C, Mut, T, K> {
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Clone> Access<'a, C, Mut, T, K> {
     pub fn borrow_mut(&mut self) -> Access<'_, C, Mut, T, K> {
         Access {
             container: self.container,
@@ -348,15 +348,14 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit, T: TypePermit, K: KeyPermit> Deref
     }
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Copy
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Copy> Copy
     for Access<'a, C, permit::Ref, T, K>
 where
     T::State: Copy,
-    K::State: Copy,
 {
 }
 
-impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit> Clone
+impl<'a, C: AnyContainer + ?Sized, T: TypePermit, K: KeyPermit + Clone> Clone
     for Access<'a, C, permit::Ref, T, K>
 {
     fn clone(&self) -> Self {

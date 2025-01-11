@@ -21,31 +21,44 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, All> {
     pub fn types_split(self) -> Access<'a, C, R, Not<Types>, All> {
         self.type_transition(|()| Types::default())
     }
+}
 
+impl<'a, C: AnyContainer + ?Sized, R: Permit, TP: TypePermit> Access<'a, C, R, TP, All> {
     pub fn key<K: Clone, T: DynItem + ?Sized>(
         self,
         key: Key<K, T>,
-    ) -> Access<'a, C, R, All, Key<K, T>>
+    ) -> Access<'a, C, R, TP, Key<K, T>>
     where
-        C: AnyContainer,
+        TP: Permits<T>,
     {
-        self.key_transition(|()| key)
+        self.key_transition(|All| key)
     }
 
     pub fn key_split<K: Copy, T: DynItem + ?Sized>(
         self,
         key: Key<K, T>,
     ) -> (
-        Access<'a, C, R, All, Key<K, T>>,
-        Access<'a, C, R, All, Not<Key>>,
-    ) {
+        Access<'a, C, R, TP, Key<K, T>>,
+        Access<'a, C, R, TP, Not<Key>>,
+    )
+    where
+        TP: Permits<T>,
+    {
         // SAFETY: Key and Not<Key> are disjoint.
-        let key_split = unsafe { self.unsafe_split(|this| this.key_transition(|()| key)) };
-        (key_split, self.key_transition(|()| key.ptr().any()))
+        let key_split = unsafe { self.unsafe_key_split(key) };
+        (key_split, self.key_transition(|_| Not(key.ptr().any())))
     }
 
-    pub fn keys_split(self) -> Access<'a, C, R, All, Keys> {
-        self.key_transition(|()| Keys::default())
+    pub fn keys_split(self) -> Access<'a, C, R, TP, Keys> {
+        self.key_transition(|All| Keys::default())
+    }
+
+    pub fn top_key_split(self) -> Access<'a, C, R, TP, TopKey> {
+        self.key_transition(|All| TopKey::default())
+    }
+
+    pub fn keys_split_with<K: KeyPermit>(self, keys: K) -> Access<'a, C, R, TP, K> {
+        self.key_transition(|All| keys)
     }
 
     // /// Iterates over valid slot permit of type in ascending order.
@@ -71,7 +84,7 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, Not<Key>> {
     where
         C: AnyContainer,
     {
-        if self.key_state == key.any().ptr() {
+        if self.key_state.0 == key.any().ptr() {
             None
         } else {
             // SAFETY: We just checked that the key is not splitted.
@@ -80,6 +93,12 @@ impl<'a, C: AnyContainer + ?Sized, R: Permit> Access<'a, C, R, All, Not<Key>> {
     }
 
     pub fn keys_split(self) -> Access<'a, C, R, All, Keys> {
-        self.key_transition(|key| Keys::new([key]))
+        self.key_transition(|key| Keys::new([key.0]))
+    }
+}
+
+impl Default for All {
+    fn default() -> Self {
+        Self
     }
 }

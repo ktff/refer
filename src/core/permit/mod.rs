@@ -2,7 +2,7 @@ pub mod access;
 pub mod add;
 pub mod remove;
 
-pub use access::{All, Keys, Not, Types};
+pub use access::{All, Keys, Not, SlotAccess, Types};
 pub use remove::ContainerExt;
 
 use std::marker::PhantomData;
@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 
 // Extension TODO: Like ExclusivePermit, SharedPermit could be constructed from ExclusivePermit for concurrent mutation.
 
-pub trait Permit: Into<Ref> {
+pub trait Permit: Into<Ref> + 'static {
     /// UNSAFE: Caller must ensure one of:
     /// - permits represent disjoint set of keys
     /// - self is exclusively borrowed by the other
