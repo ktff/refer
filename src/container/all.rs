@@ -101,6 +101,10 @@ unsafe impl<F: Send + Sync + 'static> MultiTypeContainer for AllContainer<F> {
 
 unsafe impl<F: ContainerFamily<T>, T: Item> Container<T> for AllContainer<F> {
     multi_type_container!(impl Container<T> prefer index);
+
+    fn slot_count(&self) -> usize {
+        self.step_down().map_or(0, |x| x.slot_count())
+    }
 }
 
 unsafe impl<F: Send + Sync + 'static> AnyContainer for AllContainer<F> {

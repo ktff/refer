@@ -73,6 +73,8 @@ pub unsafe trait LeafContainer<T: Item> {
             }
         }
     }
+
+    fn count(&self) -> usize;
 }
 
 #[macro_export]
@@ -125,6 +127,10 @@ macro_rules! leaf_container {
         fn contains_slot(&self, key: Key<Ptr, T>) -> bool{
             let index = self.locality().locality_key().index_of(key);
             self.contains(index)
+        }
+
+        fn slot_count(&self) -> usize{
+            self.count()
         }
     };
     (impl AnyContainer<$t:ty>) => {

@@ -75,6 +75,10 @@ macro_rules! single_type_container {
         fn contains_slot(&self, key: Key<Ptr, $t>) -> bool{
             $crate::core::container::TypeContainer::<$t>::step_down(self).filter(|sub|sub.contains_slot(key)).is_some()
         }
+
+        fn slot_count(&self) -> usize{
+            $crate::core::container::TypeContainer::<$t>::step_down(self).map(|sub|sub.slot_count()).unwrap_or(0)
+        }
     };
     (impl AnyContainer<$t:ty>) => {
         #[inline(always)]
@@ -179,6 +183,10 @@ macro_rules! multi_type_container {
         #[inline(always)]
         fn contains_slot(&self, key: Key<Ptr, $t>) -> bool{
             TypeContainer::<$t>::step_down(self).filter(|sub|sub.contains_slot(key)).is_some()
+        }
+
+        fn slot_count(&self) -> usize{
+            TypeContainer::<$t>::step_down(self).map(|sub|sub.slot_count()).unwrap_or(0)
         }
     };
     (impl Container<$t:ty> prefer index) => {

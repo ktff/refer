@@ -69,6 +69,8 @@ pub unsafe trait Container<T: Item>: AnyContainer {
     /// True if slot for this key exists.
     /// Valid to ask for any key.
     fn contains_slot(&self, key: Key<Ptr, T>) -> bool;
+
+    fn slot_count(&self) -> usize;
 }
 
 /// UNSAFE: Implementations MUST follow any_get_slot & next_key SAFETY contracts.

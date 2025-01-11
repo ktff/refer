@@ -41,9 +41,10 @@ impl<T: Item> ItemContainer<T> {
 }
 
 unsafe impl<T: Item> LeafContainer<T> for ItemContainer<T> {
-    type Iter<'a>= impl Iterator<Item = UnsafeSlot<'a, T>> + Send
-   where
-       Self: 'a;
+    type Iter<'a>
+        = impl Iterator<Item = UnsafeSlot<'a, T>> + Send
+    where
+        Self: 'a;
 
     #[inline(always)]
     fn locality(&self) -> &Locality<T> {
@@ -98,6 +99,9 @@ unsafe impl<T: Item> LeafContainer<T> for ItemContainer<T> {
         } else {
             None
         }
+    }
+    fn count(&self) -> usize {
+        self.slot.as_ref().map(|_| 1).unwrap_or(0)
     }
 }
 

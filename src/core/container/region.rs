@@ -41,9 +41,10 @@ pub unsafe trait RegionContainer {
 #[macro_export]
 macro_rules! region_container {
     (impl Container<$t:ty> ) => {
-        type SlotIter<'a> = impl Iterator<Item = UnsafeSlot<'a, T>> + Send
-                                                                                where
-                                                                                    Self: 'a;
+        type SlotIter<'a>
+            = impl Iterator<Item = UnsafeSlot<'a, T>> + Send
+        where
+            Self: 'a;
 
         fn get_locality(&self, key: &impl LocalityPath) -> Option<ContainerLocality<$t>> {
             self.locality(key)?.get_locality(key)
@@ -62,7 +63,7 @@ macro_rules! region_container {
             &mut self,
             key: &impl LocalityPath,
             item: $t,
-        ) -> std::result::Result<Key<Ref,$t>, $t> {
+        ) -> std::result::Result<Key<Ref, $t>, $t> {
             if let Some(container) = self.fill(key) {
                 container.fill_slot(key, item)
             } else {
@@ -75,20 +76,30 @@ macro_rules! region_container {
         }
 
         #[inline(always)]
-        fn get_slot(&self, key: Key<Ptr,$t>) -> Option<UnsafeSlot<$t>> {
+        fn get_slot(&self, key: Key<Ptr, $t>) -> Option<UnsafeSlot<$t>> {
             let index = self.region().index_of(key);
             self.get(index)?.get_slot(key)
         }
 
-        fn unfill_slot(&mut self, key: Key<Ptr,$t>) -> Option<($t, ItemLocality<$t>)> {
+        fn unfill_slot(&mut self, key: Key<Ptr, $t>) -> Option<($t, ItemLocality<$t>)> {
             let index = self.region().index_of(key);
             self.get_mut(index)?.unfill_slot(key)
         }
 
         #[inline(always)]
-        fn contains_slot(&self, key: Key<Ptr, T>) -> bool{
+        fn contains_slot(&self, key: Key<Ptr, T>) -> bool {
             let index = self.region().index_of(key);
-            self.get(index).filter(|sub|sub.contains_slot(key)).is_some()
+            self.get(index)
+                .filter(|sub| sub.contains_slot(key))
+                .is_some()
+        }
+
+        fn slot_count(&self) -> usize {
+            self.iter(..)
+                .into_iter()
+                .flatten()
+                .map(|sub| sub.slot_count())
+                .sum()
         }
     };
     (impl AnyContainer) => {
@@ -141,10 +152,7 @@ macro_rules! region_container {
             if let Some(sub) = self.fill(path) {
                 sub.any_fill_slot(path, item)
             } else {
-                Err(format!(
-                    "Context not allocated {:?}",
-                    path
-                ))
+                Err(format!("Context not allocated {:?}", path))
             }
         }
 
@@ -156,7 +164,7 @@ macro_rules! region_container {
             self.fill(path)?.any_fill_locality(path, ty)
         }
 
-        fn localized_drop(&mut self, key: Key)-> Option<Vec<PartialEdge<Key<Owned>>>>{
+        fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>> {
             let index = self.region().index_of(key);
             self.get_mut(index)?.localized_drop(key)
         }

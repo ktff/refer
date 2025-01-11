@@ -119,7 +119,8 @@ impl<T: Item> VecContainer<T> {
 }
 
 unsafe impl<T: Item> LeafContainer<T> for VecContainer<T> {
-    type Iter<'a>= impl Iterator<Item = UnsafeSlot<'a, T>> + Send
+    type Iter<'a>
+        = impl Iterator<Item = UnsafeSlot<'a, T>> + Send
     where
         Self: 'a;
 
@@ -218,6 +219,10 @@ unsafe impl<T: Item> LeafContainer<T> for VecContainer<T> {
                 }
             }
         })
+    }
+
+    fn count(&self) -> usize {
+        self.count
     }
 }
 
