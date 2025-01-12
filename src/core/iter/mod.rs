@@ -162,6 +162,7 @@ impl<'a, C: ?Sized, S: Start<'a>, P: Permit, I: IsolateTemplate<S::T, C = C, R =
     }
 
     /// Breath first but they are topologically sorted by key.
+    /// [NI] will be grouped.
     pub fn forward(self) -> VisitDAG<'a, C, S, P, I, (), (), (), (), (), order::Forward> {
         VisitDAG {
             order: order::Forward,

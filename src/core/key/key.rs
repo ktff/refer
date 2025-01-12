@@ -112,6 +112,14 @@ impl<T: Item> Key<Ptr, T> {
     pub unsafe fn extend<'a>(self) -> Key<Ref<'a>, T> {
         Key(self.0, PhantomData)
     }
+
+    /// Checked ref to T
+    pub fn ref_from<'a>(self, container: &'a impl Container<T>) -> Option<Key<Ref<'a>, T>> {
+        Some(self)
+            .filter(|key| container.contains_slot(*key))
+            // SAFETY: container contains slot and it will do so for at least 'a.
+            .map(|key| unsafe { key.extend() })
+    }
 }
 
 impl Key {
