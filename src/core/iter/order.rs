@@ -204,7 +204,6 @@ pub struct ForwardQueue<K, T> {
 impl<K: Ord + Copy, T> ForwardQueue<K, T> {
     fn advance(&mut self) {
         std::mem::swap(&mut self.current, &mut self.next);
-        self.current.append(&mut self.next);
         self.current.sort_by_key(|(key, _)| *key);
     }
 }
@@ -216,9 +215,10 @@ impl<K: Ord + Copy, T> Queue<K, T> for ForwardQueue<Reverse<K>, T> {
     }
 
     fn peek(&mut self) -> Option<(&K, &T)> {
-        if self.current.is_empty() {
-            self.advance();
-        }
+        // NOTE: If we enable this we risk merging inputs across layers/groups.
+        // if self.current.is_empty() {
+        //     self.advance();
+        // }
 
         self.current.last().map(|(key, item)| (&key.0, item))
     }
