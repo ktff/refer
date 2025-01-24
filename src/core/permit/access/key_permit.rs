@@ -1,7 +1,8 @@
 use super::*;
+use ahash::AHashSet;
 
 #[derive(Clone)]
-pub struct Keys(HashSet<Key>);
+pub struct Keys(AHashSet<Key>);
 
 impl Keys {
     pub fn new(iter: impl IntoIterator<Item = Key>) -> Self {
@@ -27,7 +28,7 @@ impl Keys {
 
 impl Default for Keys {
     fn default() -> Self {
-        Self(HashSet::new())
+        Self(AHashSet::new())
     }
 }
 
