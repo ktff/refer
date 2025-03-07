@@ -106,6 +106,8 @@ pub trait Queue<K, T> {
 
     fn into_iter(self) -> impl Iterator<Item = (K, T)>;
 
+    fn is_empty(&self) -> bool;
+
     // fn retain
 }
 
@@ -129,6 +131,10 @@ impl<K, T> Queue<K, T> for LifoQueue<K, T> {
 
     fn into_iter(self) -> impl Iterator<Item = (K, T)> {
         self.queue.into_iter()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 }
 
@@ -161,6 +167,10 @@ impl<K, T> Queue<K, T> for FifoQueue<K, T> {
     fn into_iter(self) -> impl Iterator<Item = (K, T)> {
         self.queue.into_iter()
     }
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
 }
 
 impl<K, T> Default for FifoQueue<K, T> {
@@ -192,6 +202,10 @@ impl<K: Radix + Ord + Copy, T> Queue<K, T> for RadixHeapMap<Reverse<K>, T> {
 
     fn into_iter(self) -> impl Iterator<Item = (K, T)> {
         IntoIterator::into_iter(self).map(|(key, data)| (key.0, data))
+    }
+
+    fn is_empty(&self) -> bool {
+        RadixHeapMap::is_empty(&self)
     }
 }
 
@@ -238,6 +252,10 @@ impl<K: Ord + Copy, T> Queue<K, T> for ForwardQueue<Reverse<K>, T> {
             .rev()
             .chain(self.next.into_iter().rev())
             .map(|(Reverse(key), item)| (key, item))
+    }
+
+    fn is_empty(&self) -> bool {
+        self.current.is_empty() && self.next.is_empty()
     }
 }
 

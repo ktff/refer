@@ -111,7 +111,7 @@ impl<'a> VisitDAG<'a> {
     /// Start from a single root node
     pub fn rooted<C: AnyContainer + ?Sized, T: DynItem + ?Sized>(
         start: Key<Ref<'a>, T>,
-    ) -> VisitDAG<'a, C, start::Root<T>, permit::Ref> {
+    ) -> VisitDAG<'a, C, start::Root<'a, T>, permit::Ref> {
         VisitDAG {
             start: start::Root(Some(start)),
             permit: PhantomData,
@@ -300,6 +300,7 @@ impl<
                 config: self,
                 queue: O::Queue::default(),
                 buffer: VecDeque::new(),
+                internal: None,
             },
         )
     }
@@ -311,6 +312,7 @@ impl<
                 config: self,
                 queue: O::Queue::default(),
                 buffer: VecDeque::new(),
+                internal: None,
             },
         )
     }
@@ -333,6 +335,7 @@ pub struct DAGCore<
     config: VisitDAG<'a, C, S, P, I, NI, NP, NO, EP, EI, O, TP>,
     queue: O::Queue<(NI, Key<Ref<'a>, S::T>)>,
     buffer: VecDeque<(S::K, NI, Key<Ref<'a>, S::T>)>,
+    internal: Option<InternalEvent>,
 }
 
 impl<
@@ -516,6 +519,11 @@ impl<
         // - Only ever use get_try for getting slots to cover cases when a sub container is passed here or constrictive KeyPermit
         // - More generally this should be robust against malformed user input
 
+        // Internal
+        if let Some(internal) = self.internal.take() {
+            return Some(Ok(IterNode::Internal(internal)));
+        }
+
         // Process buffered
         if let Some((_, input, key)) = self.buffer.pop_front() {
             return Some(Ok(IterNode::AlreadyExpanded(vec![input], key)));
@@ -523,6 +531,9 @@ impl<
 
         // Process starting nodes
         if let Some((group, start)) = self.config.start.pop() {
+            if self.config.start.is_empty() {
+                self.internal = Some(InternalEvent::StartProcessed);
+            }
             return Some(Err((None, group, Vec::new(), start)));
         }
 
@@ -530,13 +541,18 @@ impl<
         if let Some((key, (input, next))) = self.queue.pop() {
             // Collect inputs
             let mut inputs = vec![input];
-            while let Some((peek_key, peek)) = self.queue.peek() {
-                if peek_key == &key && peek.1 == next {
-                    let (_, (input, _)) = self.queue.pop().expect("Should be present");
-                    inputs.push(input);
+
+            loop {
+                if let Some((peek_key, peek)) = self.queue.peek() {
+                    if peek_key == &key && peek.1 == next {
+                        let (_, (input, _)) = self.queue.pop().expect("Should be present");
+                        inputs.push(input);
+                        continue;
+                    }
                 } else {
-                    break;
+                    self.internal = Some(InternalEvent::LevelProcessed);
                 }
+                break;
             }
 
             return Some(Err((Some(key.0), key.1, inputs, next)));
@@ -555,6 +571,23 @@ pub enum IterNode<'a: 'b, 'b, P: Permit, T: DynItem + ?Sized, IN, OUT> {
 
     /// This node was called already expanded.
     AlreadyExpanded(Vec<IN>, Key<Ref<'a>, T>),
+
+    /// A notification of some internal event.
+    /// Can be safely ignored.
+    Internal(InternalEvent),
+}
+
+/// Event that happened in internals
+pub enum InternalEvent {
+    /// All starts have been processed and next call will start processing
+    /// expanded, if any.
+    StartProcessed,
+    /// A level has been processed.
+    /// For breath ordering, level corresponds to depth and next call will
+    /// start processing expanded from previous level.
+    /// For other orderings, level corresponds to end of processing and next call
+    /// will finish.
+    LevelProcessed,
 }
 
 #[allow(dead_code)]

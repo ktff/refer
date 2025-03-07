@@ -9,6 +9,8 @@ pub trait Start<'a>: 'a {
     type T: DynItem + ?Sized;
     type K: Ord + Copy;
 
+    fn is_empty(&self) -> bool;
+
     fn pop(&mut self) -> Option<(Self::K, Key<Ref<'a>, Self::T>)>;
 
     fn iter<'b>(&'b self) -> impl Iterator<Item = (&'b Self::K, &'b Key<Ref<'a>, Self::T>)> + 'b
@@ -19,6 +21,10 @@ pub trait Start<'a>: 'a {
 impl<'a, T: DynItem + ?Sized, K: Ord + Copy + 'static> Start<'a> for Subset<'a, T, K> {
     type T = T;
     type K = K;
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 
     fn pop(&mut self) -> Option<(Self::K, Key<Ref<'a>, T>)> {
         self.0.pop_front()
@@ -35,6 +41,10 @@ impl<'a, T: DynItem + ?Sized, K: Ord + Copy + 'static> Start<'a> for Subset<'a, 
 impl<'a, T: DynItem + ?Sized> Start<'a> for Root<'a, T> {
     type T = T;
     type K = ();
+
+    fn is_empty(&self) -> bool {
+        self.0.is_none()
+    }
 
     fn pop(&mut self) -> Option<(Self::K, Key<Ref<'a>, T>)> {
         self.0.take().map(|v| ((), v))
