@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Grc, Item, ItemLocality, Key, MultiOwned,
-    Owned, Ptr, Ref, StandaloneItem, UnsafeSlot,
+    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Grc, Item, ItemLocality, Key, Owned, Ptr, Ref,
+    Removed, StandaloneItem, UnsafeSlot,
 };
 use std::{
     any::Any,
@@ -149,7 +149,7 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
         other.localized(|item, locality| item.add_bi_edge(locality, other_data, this_key));
     }
 
-    pub fn try_remove_bi_edge<D, R, F: BiItem<R, T>>(
+    pub fn remove_bi_edge<D, R, F: BiItem<R, T>>(
         &mut self,
         data: D,
         other_data: R,
@@ -158,12 +158,12 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
     where
         T: BiItem<D, F>,
     {
-        let owned = self
-            .localized(|item, locality| item.try_remove_bi_edge(locality, data, other.key().ptr()));
+        let owned =
+            self.localized(|item, locality| item.remove_bi_edge(locality, data, other.key().ptr()));
         if owned.is_some() {
             std::mem::forget(owned);
             let owned = other.localized(|item, locality| {
-                item.try_remove_bi_edge(locality, other_data, self.key().ptr())
+                item.remove_bi_edge(locality, other_data, self.key().ptr())
             });
             assert!(owned.is_some(), "BI edge should be present in both items");
             std::mem::forget(owned);
@@ -186,13 +186,13 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
 }
 
 impl<'a, T: DrainItem> Slot<'a, permit::Mut, T> {
-    pub fn try_remove_drain_edge<F: DynItem + ?Sized>(
+    pub fn remove_drain_edge<F: DynItem + ?Sized>(
         &mut self,
         this: Key<Owned, T>,
         other: Key<Ptr, F>,
     ) -> Result<(), Key<Owned, T>> {
         if let Some(other) =
-            self.localized(|item, locality| item.try_remove_drain_edge(locality, other.any()))
+            self.localized(|item, locality| item.remove_drain_edge(locality, other.any()))
         {
             std::mem::forget(other);
             std::mem::forget(this);
@@ -275,23 +275,19 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Mut> + Into<permit::Ref>> Slot<'a,
         func(self.item_mut(), locality)
     }
 
-    /// Ok success.
-    /// Err if it doesn't exist or it can't be removed.
+    /// Some with result if the target exists.
     #[must_use]
     pub fn remove_edges<F: DynItem + ?Sized>(
         &mut self,
         this: Key<Owned, T>,
         target: Key<Ptr, F>,
-    ) -> Result<MultiOwned<F>, Key<Owned, T>> {
-        match self
-            .any_localized(|item, locality| item.any_remove_edges(locality, target.any()))
-            .map(MultiOwned::assume)
-        {
-            Some(owned) => {
+    ) -> Option<Removed<F, Key<Owned, T>>> {
+        match self.any_localized(|item, locality| item.any_remove_edges(locality, target.any()))? {
+            Removed::Yes(multi) => {
                 std::mem::forget(this);
-                Ok(owned)
+                Some(Removed::Yes(multi.assume()))
             }
-            None => Err(this),
+            Removed::No(()) => Some(Removed::No(this)),
         }
     }
 }

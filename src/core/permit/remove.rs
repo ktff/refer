@@ -1,3 +1,5 @@
+use log::warn;
+
 use crate::core::*;
 
 // ! No Key<Ref> can live across possible calls to remove.
@@ -129,9 +131,9 @@ fn remove_edges(
     remove: &mut Vec<Key>,
 ) {
     let mut extra = Vec::<(_, MultiOwned)>::new();
-    for edge in edges {
+    for object_key in edges {
         // Remove from extra
-        if let Ok(i) = extra.binary_search_by_key(&edge.ptr(), |(edge, _)| *edge) {
+        if let Ok(i) = extra.binary_search_by_key(&object_key.ptr(), |(edge, _)| *edge) {
             if let Some(key) = extra[i].1.take() {
                 std::mem::forget(key);
             } else {
@@ -140,10 +142,10 @@ fn remove_edges(
             }
         }
         // Remove from object
-        else if let Some(mut object) = con.as_mut().key(edge.ptr()).fetch_try() {
-            let edge_ptr = edge.ptr();
-            match object.remove_edges(edge, subject) {
-                Ok(subject) => {
+        else if let Some(mut object) = con.as_mut().key(object_key.ptr()).fetch_try() {
+            let edge_ptr = object_key.ptr();
+            match object.remove_edges(object_key, subject) {
+                Some(Removed::Yes(subject)) => {
                     let (subject, rem) = subject.sub();
                     // Add extra removed to extra
                     rem.map(
@@ -154,13 +156,14 @@ fn remove_edges(
                     );
                     std::mem::forget(subject);
                 }
-                Err(object_key) => {
+                Some(Removed::No(object_key)) => {
                     remove.push(object_key.ptr());
                     std::mem::forget(object_key);
                 }
+                None => warn!("Dangling key {subject}->{}", object.key()),
             }
         } else {
-            std::mem::forget(edge);
+            std::mem::forget(object_key);
         }
     }
 }

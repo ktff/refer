@@ -9,6 +9,12 @@ pub use traits::*;
 use super::{Grc, ItemLocality, Key, MultiOwned, Owned, Ptr, Ref};
 use std::{alloc::Allocator, any::Any, ptr::Thin};
 
+/// Result of removing an edge.
+pub enum Removed<T: DynItem + ?Sized = dyn AnyItem, D = ()> {
+    Yes(MultiOwned<T>),
+    No(D),
+}
+
 /// Structure whose lifetime and edges can be managed by a container/model.
 pub trait Item: Sized + Any + Sync + Send + Thin {
     /// Allocator used by item.
@@ -27,15 +33,14 @@ pub trait Item: Sized + Any + Sync + Send + Thin {
     fn iter_edges(&self, locality: ItemLocality<'_, Self>) -> Self::Edges<'_>;
 
     /// Should remove edges to target and return object refs.
-    /// Some success.
-    /// None can mean that there is no such edge here or
-    /// it exists but can't be removed.
+    /// Some with removed result.
+    /// None if it doesn't exist.
     #[must_use]
-    fn try_remove_edges<T: DynItem + ?Sized>(
+    fn remove_edges<T: DynItem + ?Sized>(
         &mut self,
         locality: ItemLocality<'_, Self>,
         target: Key<Ptr, T>,
-    ) -> Option<MultiOwned<T>>;
+    ) -> Option<Removed<T>>;
 
     /// Caller should properly dispose of the edges.
     fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<Key<Owned>>;
@@ -44,15 +49,15 @@ pub trait Item: Sized + Any + Sync + Send + Thin {
 /// Item which can be drain.
 /// UNSAFE: Implementations MUST follow add_drain_edge SAFETY contract.
 pub unsafe trait DrainItem: Item {
-    /// SAFETY: add_drain_edge MUST ensure to add PartialEdge{object: source,side: Side::Drain} to edges of self.
+    /// SAFETY: add_drain_edge MUST ensure source is returned by `iter_edges` and `localized_drop`.
     /// Callers should create the resulting Key<Owned,Self>.
     fn add_drain_edge(&mut self, locality: ItemLocality<'_, Self>, source: Key<Owned>);
 
     /// Removes drain edge and returns object ref.
-    /// Ok success.
-    /// Err if doesn't exist.
+    /// Some success.
+    /// None if it doesn't exist.
     #[must_use]
-    fn try_remove_drain_edge(
+    fn remove_drain_edge(
         &mut self,
         locality: ItemLocality<'_, Self>,
         source: Key,
@@ -62,15 +67,15 @@ pub unsafe trait DrainItem: Item {
 /// Item which can be have bi edges.
 /// UNSAFE: Implementations MUST follow add_bi_edge SAFETY contract.
 pub unsafe trait BiItem<D, T: DynItem + ?Sized>: Item {
-    /// SAFETY: add_bi_edge MUST ensure to add PartialEdge{object: other,side: Side::Bi} to edges of self.
+    /// SAFETY: add_bi_edge MUST ensure other is returned by `iter_edges` and `localized_drop`.
     /// Callers should create the resulting Key<Owned,Self>.
     fn add_bi_edge(&mut self, locality: ItemLocality<'_, Self>, data: D, other: Key<Owned, T>);
 
     /// Removes bi edge and returns object ref.
-    /// Ok success.
-    /// Err if doesn't exist.
+    /// Some success.
+    /// None if it doesn't exist.
     #[must_use]
-    fn try_remove_bi_edge(
+    fn remove_bi_edge(
         &mut self,
         locality: ItemLocality<'_, Self>,
         data: D,

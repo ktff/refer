@@ -1,5 +1,5 @@
-use super::{DrainItem, Item, ItemTrait, StandaloneItem};
-use crate::core::{Grc, ItemLocality, Key, MultiOwned, Owned, Ref};
+use super::{DrainItem, Item, ItemTrait, Removed, StandaloneItem};
+use crate::core::{Grc, ItemLocality, Key, Owned, Ref};
 use std::{
     any::{Any, TypeId},
     fmt::Display,
@@ -51,7 +51,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
-    fn any_remove_edges(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<MultiOwned>;
+    fn any_remove_edges(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<Removed>;
 
     #[must_use]
     fn any_inc_owners(&mut self, locality: ItemLocality<'_>) -> Option<Grc>;
@@ -97,8 +97,8 @@ impl<T: Item> AnyItem for T {
         Err(source)
     }
 
-    fn any_remove_edges(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<MultiOwned> {
-        self.try_remove_edges(locality.downcast().expect("Unexpected item type"), target)
+    fn any_remove_edges(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<Removed> {
+        self.remove_edges(locality.downcast().expect("Unexpected item type"), target)
     }
 
     default fn any_inc_owners(&mut self, _: ItemLocality<'_>) -> Option<Grc> {

@@ -84,11 +84,11 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
     }
 
     /// Err if can't remove it, which may cause for this item to be removed.
-    fn try_remove_edges<D: DynItem + ?Sized>(
+    fn remove_edges<D: DynItem + ?Sized>(
         &mut self,
         _: ItemLocality<'_, Self>,
         object: Key<Ptr, D>,
-    ) -> Option<MultiOwned<D>> {
+    ) -> Option<Removed<D>> {
         self.sources
             .extract_if(.., |source| *source == object)
             .chain(
@@ -105,6 +105,7 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
                 }
             })
             .map(|owned| owned.assume())
+            .map(Removed::Yes)
     }
 
     fn localized_drop(self, _: ItemLocality<'_, Self>) -> Vec<Key<Owned>> {
@@ -126,7 +127,7 @@ unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Ve
     /// Removes drain edge and returns object ref.
     /// Ok success.
     /// Err if doesn't exist.
-    fn try_remove_drain_edge(
+    fn remove_drain_edge(
         &mut self,
         _: ItemLocality<'_, Self>,
         source: Key<Ptr>,

@@ -20,20 +20,17 @@ pub use vertice::Vertice;
 macro_rules! impl_edgeless_item {
     ($ty:ty) => {
         impl $crate::core::Item for $ty {
-            type Alloc = std::alloc::Global;
-            type LocalityData = ();
             type Edges<'a> = std::iter::Empty<$crate::core::Key<$crate::core::Ref<'a>>>;
-            const TRAITS: $crate::core::ItemTraits<$ty> = &[];
 
             fn iter_edges(&self, _: $crate::core::ItemLocality<'_, Self>) -> Self::Edges<'_> {
                 std::iter::empty()
             }
 
-            fn try_remove_edges<T: $crate::core::DynItem + ?Sized>(
+            fn remove_edges<T: $crate::core::DynItem + ?Sized>(
                 &mut self,
                 _: $crate::core::ItemLocality<'_, Self>,
                 _: $crate::core::Key<$crate::core::Ptr, T>,
-            ) -> Option<$crate::core::MultiOwned<T>> {
+            ) -> Option<$crate::core::Removed<T>> {
                 None
             }
 

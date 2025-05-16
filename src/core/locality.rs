@@ -145,7 +145,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
         drain_key: Key<Owned, D>,
     ) {
         drain
-            .try_remove_drain_edge(drain_key, self.path().ptr())
+            .remove_drain_edge(drain_key, self.path().ptr())
             .expect("Method invariant broken");
     }
 
@@ -159,7 +159,7 @@ impl<'a, T: Item> ItemLocality<'a, T> {
     ) {
         std::mem::forget(other_key);
         let owned = other
-            .localized(|item, locality| item.try_remove_bi_edge(locality, data, self.path().ptr()));
+            .localized(|item, locality| item.remove_bi_edge(locality, data, self.path().ptr()));
         assert!(owned.is_some(), "BI edge should be present in both items");
         std::mem::forget(owned);
     }
