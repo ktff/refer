@@ -1,3 +1,4 @@
+use super::{drain::Drain, itemize::Itemize};
 use crate::core::*;
 use std::ops::{Deref, DerefMut};
 
@@ -5,19 +6,15 @@ use std::ops::{Deref, DerefMut};
 /// Item          --> Item
 #[derive(Debug)]
 pub struct Vertice<T: Sync + Send + 'static, E: Sync + Send + 'static = ()> {
-    inner: T,
+    inner: Drain<Itemize<T>>,
     drains: Vec<(E, Key<Owned, Self>)>,
-    sources: Vec<Key<Owned>>,
-    owners: usize,
 }
 
 impl<T: Sync + Send + 'static, E: Eq + Sync + Send + 'static> Vertice<T, E> {
     pub fn new(inner: T) -> Self {
         Self {
-            inner,
+            inner: Drain::new(Itemize::new(inner)),
             drains: Vec::new(),
-            sources: Vec::new(),
-            owners: 0,
         }
     }
 
@@ -29,10 +26,6 @@ impl<T: Sync + Send + 'static, E: Eq + Sync + Send + 'static> Vertice<T, E> {
     /// Panics if index is out of bounds.
     pub fn disconnect(source: &mut MutSlot<Self>, data: E, drain: &mut MutSlot<Self>) {
         source.unlink_any(data, drain);
-    }
-
-    pub fn sources(&self) -> &[Key<Owned>] {
-        &self.sources
     }
 
     pub fn drains(&self) -> &[(E, Key<Owned, Self>)] {
@@ -52,71 +45,76 @@ impl<T: Sync + Send + 'static, E: Eq + Sync + Send + 'static> Vertice<T, E> {
     }
 }
 
+impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Deref for Vertice<T, E> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DerefMut for Vertice<T, E> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> {
-    type Alloc = std::alloc::Global;
-
-    type LocalityData = ();
-
     type Edges<'a> = impl Iterator<Item = Key<Ref<'a>>>;
 
-    const TRAITS: ItemTraits<Self> = &[];
-
-    fn iter_edges(&self, _: ItemLocality<'_, Self>) -> Self::Edges<'_> {
+    fn iter_edges(&self, locality: ItemLocality<'_, Self>) -> Self::Edges<'_> {
         self.drains
             .iter()
             .map(|(_, drain)| drain.borrow().any())
-            .chain(self.sources.iter().map(|source| source.borrow().any()))
+            .chain(self.inner.iter_edges(locality.map_type()))
     }
 
     /// Err if can't remove it, which may cause for this item to be removed.
     fn remove_edges<D: DynItem + ?Sized>(
         &mut self,
-        _: ItemLocality<'_, Self>,
-        object: Key<Ptr, D>,
+        locality: ItemLocality<'_, Self>,
+        target: Key<Ptr, D>,
     ) -> Option<Removed<D>> {
-        self.sources
-            .extract_if(.., |source| *source == object)
-            .chain(
-                self.drains
-                    .extract_if(.., |(_, drain)| *drain == object)
-                    .map(|(_, drain)| drain.any()),
-            )
-            .fold(None, |owned: Option<MultiOwned>, key| {
+        let multi_key = match self.inner.remove_edges(locality.map_type(), target) {
+            Some(Removed::No(key)) => return Some(Removed::No(key)),
+            Some(Removed::Yes(multi_key)) => Some(multi_key),
+            None => None,
+        };
+
+        self.drains
+            .extract_if(.., |(_, drain)| *drain == target)
+            .map(|(_, drain)| drain.any())
+            .fold(multi_key, |owned: Option<MultiOwned<D>>, key| {
                 if let Some(mut owned) = owned {
-                    owned.add(key);
+                    owned.add(key.assume());
                     Some(owned)
                 } else {
-                    Some(key.into())
+                    Some(key.assume().into())
                 }
             })
-            .map(|owned| owned.assume())
             .map(Removed::Yes)
     }
 
-    fn localized_drop(self, _: ItemLocality<'_, Self>) -> Vec<Key<Owned>> {
-        self.sources
-            .into_iter()
-            .chain(self.drains.into_iter().map(|(_, drain)| drain.any()))
-            .collect()
+    fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<Key<Owned>> {
+        let mut keys = self.inner.localized_drop(locality.map_type());
+        keys.extend(self.drains.into_iter().map(|(_, drain)| drain.any()));
+        keys
     }
 
     // item_traits_method!(Vertice<T, E>: dyn std::fmt::Debug);
 }
 
 impl<T: Sync + Send + 'static, E: Sync + Send + 'static> EdgeContainer for Vertice<T, E> {
-    fn add_edge(&mut self, _: ItemLocality<'_, Self>, _: (), source: Key<Owned>) {
-        self.sources.push(source);
+    fn add_edge(&mut self, locality: ItemLocality<'_, Self>, data: (), other: Key<Owned>) {
+        self.inner.add_edge(locality.map_type(), data, other);
     }
 
     fn remove_edge(
         &mut self,
-        _: ItemLocality<'_, Self>,
-        _: (),
-        source: Key<Ptr>,
+        locality: ItemLocality<'_, Self>,
+        data: (),
+        other: Key<Ptr>,
     ) -> Option<Key<Owned>> {
-        // Find first occurrence of source in sources and remove it
-        let index = self.sources.iter().position(|s| *s == source)?;
-        Some(self.sources.remove(index))
+        self.inner.remove_edge(locality.map_type(), data, other)
     }
 }
 
@@ -139,38 +137,5 @@ impl<T: Sync + Send + 'static, E: Eq + Sync + Send + 'static> EdgeContainer<E, S
             .iter()
             .position(|(d, s)| *d == data && *s == source)?;
         Some(self.drains.remove(index).1)
-    }
-}
-
-/// Item that doesn't depend on any edge so it can have Key<Owned> without edges.
-impl<T: Sync + Send + 'static, E: Sync + Send + 'static> StandaloneItem for Vertice<T, E> {
-    fn inc_owners(&mut self, locality: ItemLocality<'_, Self>) -> Grc<Self> {
-        self.owners = self.owners.checked_add(1).expect("Grc overflow");
-        // SAFETY: We've just incremented counter.
-        unsafe { Grc::new(locality.owned_key()) }
-    }
-
-    fn dec_owners(&mut self, locality: ItemLocality<'_, Self>, this: Grc<Self>) {
-        assert_eq!(locality.path(), *this);
-        self.owners = self.owners.checked_sub(1).expect("Grc underflow");
-        std::mem::forget(this.into_owned_key());
-    }
-
-    /// True if there is counted Owned somewhere.
-    fn has_owner(&self, _: ItemLocality<'_, Self>) -> bool {
-        self.owners > 0
-    }
-}
-
-impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Deref for Vertice<T, E> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DerefMut for Vertice<T, E> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
     }
 }

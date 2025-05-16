@@ -149,7 +149,7 @@ impl<'a, T: AnyDynItem + ?Sized> LocalityRef<'a, Path, T> {
 
 impl<'a, T: Item> ItemLocality<'a, T> {
     /// Casting for a sub struct of this item.
-    pub fn sub_cast<D: Item<Alloc = T::Alloc, LocalityData = T::LocalityData>>(
+    pub fn map_type<D: Item<Alloc = T::Alloc, LocalityData = T::LocalityData>>(
         self,
     ) -> ItemLocality<'a, D> {
         ItemLocality {

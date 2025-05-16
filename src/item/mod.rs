@@ -1,5 +1,9 @@
 // pub mod addon;
-// pub mod data;
+pub mod data;
+pub mod drain;
+pub mod itemize;
+pub mod own;
+pub mod vec_edges;
 pub mod vertice;
 
 // TODO: Wrappers for items
