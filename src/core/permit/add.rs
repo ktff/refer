@@ -129,7 +129,7 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
                 let source = unsafe { Key::<_, T>::new_owned(subject.key().index()) };
                 let mut drain = drain.fetch();
                 let excess_key = match drain.any_localized(|item, locality| {
-                    item.any_add_drain_edge(locality, source.any())
+                    item.any_add_edge(locality, source.any())
                 }){
                     // SAFETY: This is the other part of edge we just added.
                     Ok (()) => unsafe{Grc::new(drain.locality().owned_key())},

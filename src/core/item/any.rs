@@ -1,4 +1,4 @@
-use super::{DrainItem, Item, ItemTrait, Removed, StandaloneItem};
+use super::{EdgeContainer, Item, ItemTrait, Removed, StandaloneItem};
 use crate::core::{Grc, ItemLocality, Key, Owned, Ref};
 use std::{
     any::{Any, TypeId},
@@ -39,14 +39,19 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     ) -> Option<Box<dyn Iterator<Item = Key<Ref<'_>>> + '_>>;
 
     /// Ok with key to self.
-    /// Err with provided source.
-    /// Err if self isn't drain item so it wasn't added.
-    #[must_use]
-    fn any_add_drain_edge(
+    /// Err with provided target.
+    /// Err if self can't add.
+    fn any_add_edge(
         &mut self,
         locality: ItemLocality<'_>,
-        source: Key<Owned>,
+        target: Key<Owned>,
     ) -> Result<(), Key<Owned>>;
+
+    /// Removes self -()-> other edge that was added with `add_edge``.
+    /// Some success.
+    /// None if it doesn't exist.
+    #[must_use]
+    fn any_remove_edge(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<Key<Owned>>;
 
     /// Ok success.
     /// Err if can't remove it.
@@ -89,12 +94,16 @@ impl<T: Item> AnyItem for T {
         }
     }
 
-    default fn any_add_drain_edge(
+    default fn any_add_edge(
         &mut self,
         _: ItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<(), Key<Owned>> {
         Err(source)
+    }
+
+    default fn any_remove_edge(&mut self, _: ItemLocality<'_>, _: Key) -> Option<Key<Owned>> {
+        None
     }
 
     fn any_remove_edges(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<Removed> {
@@ -117,13 +126,25 @@ impl<T: Item> AnyItem for T {
     }
 }
 
-default impl<T: DrainItem> AnyItem for T {
-    fn any_add_drain_edge(
+default impl<T: EdgeContainer> AnyItem for T {
+    fn any_add_edge(
         &mut self,
         locality: ItemLocality<'_>,
         source: Key<Owned>,
     ) -> Result<(), Key<Owned>> {
-        Ok(self.add_drain_edge(locality.downcast().expect("Unexpected item type"), source))
+        Ok(self.add_edge(
+            locality.downcast().expect("Unexpected item type"),
+            (),
+            source,
+        ))
+    }
+
+    fn any_remove_edge(&mut self, locality: ItemLocality<'_>, other: Key) -> Option<Key<Owned>> {
+        self.remove_edge(
+            locality.downcast().expect("Unexpected item type"),
+            (),
+            other,
+        )
     }
 }
 

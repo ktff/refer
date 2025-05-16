@@ -2,7 +2,7 @@ use crate::core::*;
 use std::ops::{Deref, DerefMut};
 
 /// Vertice<T>: *E--> Vertice<T>
-/// Item          --> Vertice<T>
+/// Item          --> Item
 #[derive(Debug)]
 pub struct Vertice<T: Sync + Send + 'static, E: Sync + Send + 'static = ()> {
     inner: T,
@@ -11,7 +11,7 @@ pub struct Vertice<T: Sync + Send + 'static, E: Sync + Send + 'static = ()> {
     owners: usize,
 }
 
-impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Vertice<T, E> {
+impl<T: Sync + Send + 'static, E: Eq + Sync + Send + 'static> Vertice<T, E> {
     pub fn new(inner: T) -> Self {
         Self {
             inner,
@@ -22,28 +22,13 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Vertice<T, E> {
     }
 
     pub fn connect(source: &mut MutSlot<Self>, data: E, drain: &mut MutSlot<Self>) {
-        // SAFETY: Drain key is added to drains which is exposed as Item::edges
-        let drain_key = unsafe { source.locality().add_drain(drain) };
-        source.drains.push((data, drain_key));
+        source.link_any::<E, Self>(data, drain);
     }
 
-    /// Disconnects edge at index.
+    /// Disconnects edge with data to drain.
     /// Panics if index is out of bounds.
-    pub fn disconnect(
-        source: &mut MutSlot<Self>,
-        edge: usize,
-        drains: ObjectAccess<impl Container<Self>, Self>,
-    ) -> E {
-        let (data, drain) = source.drains.remove(edge);
-        source.locality().remove_from_drain(
-            &mut drains
-                .key_try(drain.borrow())
-                .expect("Should have access to everything but source")
-                .fetch(),
-            drain,
-        );
-
-        data
+    pub fn disconnect(source: &mut MutSlot<Self>, data: E, drain: &mut MutSlot<Self>) {
+        source.unlink_any(data, drain);
     }
 
     pub fn sources(&self) -> &[Key<Owned>] {
@@ -118,23 +103,42 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
     // item_traits_method!(Vertice<T, E>: dyn std::fmt::Debug);
 }
 
-unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Vertice<T, E> {
-    /// SAFETY: add_drain_edge MUST ensure to add PartialEdge{object: source,side: Side::Drain} to edges of self.
-    fn add_drain_edge(&mut self, _: ItemLocality<'_, Self>, source: Key<Owned>) {
+impl<T: Sync + Send + 'static, E: Sync + Send + 'static> EdgeContainer for Vertice<T, E> {
+    fn add_edge(&mut self, _: ItemLocality<'_, Self>, _: (), source: Key<Owned>) {
         self.sources.push(source);
     }
 
-    /// Removes drain edge and returns object ref.
-    /// Ok success.
-    /// Err if doesn't exist.
-    fn remove_drain_edge(
+    fn remove_edge(
         &mut self,
         _: ItemLocality<'_, Self>,
+        _: (),
         source: Key<Ptr>,
     ) -> Option<Key<Owned>> {
         // Find first occurrence of source in sources and remove it
         let index = self.sources.iter().position(|s| *s == source)?;
         Some(self.sources.remove(index))
+    }
+}
+
+impl<T: Sync + Send + 'static, E: Eq + Sync + Send + 'static> EdgeContainer<E, Self>
+    for Vertice<T, E>
+{
+    fn add_edge(&mut self, _: ItemLocality<'_, Self>, data: E, source: Key<Owned, Self>) {
+        self.drains.push((data, source));
+    }
+
+    fn remove_edge(
+        &mut self,
+        _: ItemLocality<'_, Self>,
+        data: E,
+        source: Key<Ptr, Self>,
+    ) -> Option<Key<Owned, Self>> {
+        // Find first occurrence of source in sources and remove it
+        let index = self
+            .drains
+            .iter()
+            .position(|(d, s)| *d == data && *s == source)?;
+        Some(self.drains.remove(index).1)
     }
 }
 

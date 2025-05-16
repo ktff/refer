@@ -1,6 +1,6 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Grc, Item, ItemLocality, Key, Owned, Ptr, Ref,
+    AnyDynItem, AnyItem, DynItem, EdgeContainer, Grc, Item, ItemLocality, Key, Owned, Ptr, Ref,
     Removed, StandaloneItem, UnsafeSlot,
 };
 use std::{
@@ -134,72 +134,122 @@ impl<'a, T: Item> Slot<'a, permit::Mut, T> {
         unsafe { Slot::new(self.slot, self.access.borrow()) }
     }
 
-    pub fn add_bi_edge<D, R, F: BiItem<R, T>>(
+    /// Add edge.
+    pub fn add_edge<D, F: DynItem + ?Sized>(&mut self, data: D, other: Key<Owned, F>)
+    where
+        T: EdgeContainer<D, F>,
+    {
+        self.localized(|item, locality| item.add_edge(locality, data, other));
+    }
+
+    /// Adds two edges:
+    /// self -D1-> other
+    /// other -D2-> self
+    pub fn link<'b, D1, D2, F: EdgeContainer<D2, T>>(
         &mut self,
-        data: D,
-        other_data: R,
-        other: &mut Slot<permit::Mut, F>,
+        data_self: D1,
+        data_other: D2,
+        other: &mut Slot<'b, permit::Mut, F>,
     ) where
-        T: BiItem<D, F>,
+        T: EdgeContainer<D1, F>,
     {
         // SAFETY: We are creating these keys in pair and adding them to their respective items.
-        let (this_key, other_key) =
+        let (self_key, other_key) =
             unsafe { (self.locality().owned_key(), other.locality().owned_key()) };
-        self.localized(|item, locality| item.add_bi_edge(locality, data, other_key));
-        other.localized(|item, locality| item.add_bi_edge(locality, other_data, this_key));
+        self.add_edge(data_self, other_key);
+        other.add_edge(data_other, self_key);
     }
 
-    pub fn remove_bi_edge<D, R, F: BiItem<R, T>>(
+    /// Adds two edges:
+    /// self -D-> other
+    /// other -()-> self
+    pub fn link_any<'b, D, F: AnyItem + ?Sized>(
+        &mut self,
+        data_self: D,
+        other: &mut Slot<'b, permit::Mut, F>,
+    ) where
+        T: EdgeContainer<D, F>,
+    {
+        // SAFETY: We are creating these keys in pair and adding them to their respective items.
+        let (self_key, other_key) =
+            unsafe { (self.locality().owned_key(), other.locality().owned_key()) };
+        self.add_edge(data_self, other_key);
+        assert!(other.add_any_edge(self_key).is_ok());
+    }
+
+    /// Removes two edges:
+    /// self -D1-> other
+    /// other -D2-> self
+    pub fn unlink<'b, D1, D2, F: EdgeContainer<D2, T>>(
+        &mut self,
+        data_self: D1,
+        data_other: D2,
+        other: &mut Slot<'b, permit::Mut, F>,
+    ) where
+        T: EdgeContainer<D1, F>,
+    {
+        match (
+            self.remove_edge(data_self, other.key().ptr()),
+            other.remove_edge(data_other, self.key().ptr()),
+        ) {
+            (Some(key_a), Some(key_b)) => std::mem::forget((key_a, key_b)),
+            _ => (),
+        }
+    }
+
+    /// Removes two edges:
+    /// self -D-> other
+    /// other -()-> self
+    pub fn unlink_any<'b, D, F: AnyItem + ?Sized>(
+        &mut self,
+        data_self: D,
+        other: &mut Slot<'b, permit::Mut, F>,
+    ) where
+        T: EdgeContainer<D, F>,
+    {
+        match (
+            self.remove_edge(data_self, other.key().ptr()),
+            other.remove_any_edge(self.key().ptr()),
+        ) {
+            (Some(key_a), Some(key_b)) => std::mem::forget((key_a, key_b)),
+            _ => (),
+        }
+    }
+
+    /// Removes edge if it exists
+    #[must_use]
+    pub fn remove_edge<D, F: DynItem + ?Sized>(
         &mut self,
         data: D,
-        other_data: R,
-        other: &mut Slot<permit::Mut, F>,
-    ) -> bool
+        other: Key<Ptr, F>,
+    ) -> Option<Key<Owned, F>>
     where
-        T: BiItem<D, F>,
+        T: EdgeContainer<D, F>,
     {
-        let owned =
-            self.localized(|item, locality| item.remove_bi_edge(locality, data, other.key().ptr()));
-        if owned.is_some() {
-            std::mem::forget(owned);
-            let owned = other.localized(|item, locality| {
-                item.remove_bi_edge(locality, other_data, self.key().ptr())
-            });
-            assert!(owned.is_some(), "BI edge should be present in both items");
-            std::mem::forget(owned);
-            true
-        } else {
-            false
-        }
+        self.localized(|item, locality| item.remove_edge(locality, data, other))
     }
-
-    // /// Ok success.
-    // /// Err if can't remove it.
-    // #[must_use]
-    // pub fn try_remove_edge<F: DynItem + ?Sized>(
-    //     &mut self,
-    //     this: Key<Owned, T>,
-    //     edge: PartialEdge<Key<Ptr, F>>,
-    // ) -> Result<Key<Owned, F>, (Found, Key<Owned, T>)> {
-    //     self.localized(|item, locality| item.try_remove_edge(locality, this, edge))
-    // }
 }
 
-impl<'a, T: DrainItem> Slot<'a, permit::Mut, T> {
-    pub fn remove_drain_edge<F: DynItem + ?Sized>(
+impl<'a, T: AnyItem + ?Sized> Slot<'a, permit::Mut, T> {
+    /// Add self -()-> other edge.
+    /// Err if self doesn't support that.
+    #[must_use]
+    pub fn add_any_edge<F: DynItem + ?Sized>(
         &mut self,
-        this: Key<Owned, T>,
+        other: Key<Owned, F>,
+    ) -> Result<(), Key<Owned, F>> {
+        self.any_localized(|item, locality| item.any_add_edge(locality, other.any()))
+            .map_err(Key::assume)
+    }
+
+    /// Removes self-()-> other edge if it exists
+    #[must_use]
+    pub fn remove_any_edge<F: DynItem + ?Sized>(
+        &mut self,
         other: Key<Ptr, F>,
-    ) -> Result<(), Key<Owned, T>> {
-        if let Some(other) =
-            self.localized(|item, locality| item.remove_drain_edge(locality, other.any()))
-        {
-            std::mem::forget(other);
-            std::mem::forget(this);
-            Ok(())
-        } else {
-            Err(this)
-        }
+    ) -> Option<Key<Owned, T>> {
+        self.any_localized(|item, locality| item.any_remove_edge(locality, other.any()))
+            .map(|key| key.assume())
     }
 }
 
@@ -215,15 +265,6 @@ impl<'a, T: StandaloneItem> Slot<'a, permit::Mut, T> {
     pub fn release(&mut self, grc: Grc<T>) {
         self.localized(|item, locality| item.dec_owners(locality, grc))
     }
-
-    // #[must_use]
-    // pub fn remove_edge<F: DynItem + ?Sized>(
-    //     &mut self,
-    //     this: Key<Owned, T>,
-    //     edge: PartialEdge<Key<Ptr, F>>,
-    // ) -> Key<Owned, F> {
-    //     self.localized(|item, locality| item.remove_edge(locality, this, edge))
-    // }
 }
 
 impl<'a, R, T: Item> Eq for Slot<'a, R, T> {}

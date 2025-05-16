@@ -87,6 +87,7 @@ pub trait ContainerExt: AnyContainer {
             // Propagate change
             while let Some(other) = remove.pop() {
                 // Standalone items can always remove edges so remove doesn't contain such items.
+                // TODO: Verify above
                 if let Some(edges) = self.localized_drop(other) {
                     remove_edges(self, other, edges, &mut remove);
                 }

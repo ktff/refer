@@ -46,36 +46,16 @@ pub trait Item: Sized + Any + Sync + Send + Thin {
     fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<Key<Owned>>;
 }
 
-/// Item which can be drain.
-/// UNSAFE: Implementations MUST follow add_drain_edge SAFETY contract.
-pub unsafe trait DrainItem: Item {
-    /// SAFETY: add_drain_edge MUST ensure source is returned by `iter_edges` and `localized_drop`.
-    /// Callers should create the resulting Key<Owned,Self>.
-    fn add_drain_edge(&mut self, locality: ItemLocality<'_, Self>, source: Key<Owned>);
+/// Item which can contain self -D-> other edges.
+pub trait EdgeContainer<D = (), T: DynItem + ?Sized = dyn AnyItem>: Item {
+    /// SAFETY: Implementations MUST ensure other is returned by `iter_edges` and `localized_drop`.
+    fn add_edge(&mut self, locality: ItemLocality<'_, Self>, data: D, other: Key<Owned, T>);
 
-    /// Removes drain edge and returns object ref.
+    /// Removes edge that was added with `add_edge``.
     /// Some success.
     /// None if it doesn't exist.
     #[must_use]
-    fn remove_drain_edge(
-        &mut self,
-        locality: ItemLocality<'_, Self>,
-        source: Key,
-    ) -> Option<Key<Owned>>;
-}
-
-/// Item which can be have bi edges.
-/// UNSAFE: Implementations MUST follow add_bi_edge SAFETY contract.
-pub unsafe trait BiItem<D, T: DynItem + ?Sized>: Item {
-    /// SAFETY: add_bi_edge MUST ensure other is returned by `iter_edges` and `localized_drop`.
-    /// Callers should create the resulting Key<Owned,Self>.
-    fn add_bi_edge(&mut self, locality: ItemLocality<'_, Self>, data: D, other: Key<Owned, T>);
-
-    /// Removes bi edge and returns object ref.
-    /// Some success.
-    /// None if it doesn't exist.
-    #[must_use]
-    fn remove_bi_edge(
+    fn remove_edge(
         &mut self,
         locality: ItemLocality<'_, Self>,
         data: D,
@@ -84,7 +64,7 @@ pub unsafe trait BiItem<D, T: DynItem + ?Sized>: Item {
 }
 
 /// Item that doesn't depend on any edge so it can have Key<Owned> without edges.
-pub trait StandaloneItem: DrainItem {
+pub trait StandaloneItem: EdgeContainer {
     #[must_use]
     fn inc_owners(&mut self, locality: ItemLocality<'_, Self>) -> Grc<Self>;
 
