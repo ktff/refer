@@ -99,7 +99,6 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
     /// Should remove applicable (source,drain,bi) edges and return object refs.
     /// Ok success.
     /// Err if can't remove it, which may cause for this item to be removed.
-    #[must_use]
     fn try_remove_edges<D: DynItem + ?Sized>(
         &mut self,
         _: ItemLocality<'_, Self>,
@@ -155,7 +154,6 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
 
 unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Vertice<T, E> {
     /// SAFETY: add_drain_edge MUST ensure to add PartialEdge{object: source,side: Side::Drain} to edges of self.
-    #[must_use]
     fn add_drain_edge(&mut self, _: ItemLocality<'_, Self>, source: Key<Owned>) {
         self.sources.push(source);
     }
@@ -163,7 +161,6 @@ unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Ve
     /// Removes drain edge and returns object ref.
     /// Ok success.
     /// Err if doesn't exist.
-    #[must_use]
     fn try_remove_drain_edge(
         &mut self,
         _: ItemLocality<'_, Self>,
@@ -177,7 +174,6 @@ unsafe impl<T: Sync + Send + 'static, E: Sync + Send + 'static> DrainItem for Ve
 
 /// Item that doesn't depend on any edge so it can have Key<Owned> without edges.
 impl<T: Sync + Send + 'static, E: Sync + Send + 'static> StandaloneItem for Vertice<T, E> {
-    #[must_use]
     fn inc_owners(&mut self, locality: ItemLocality<'_, Self>) -> Grc<Self> {
         self.owners = self.owners.checked_add(1).expect("Grc overflow");
         // SAFETY: We've just incremented counter.

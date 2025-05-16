@@ -2,7 +2,7 @@ use super::*;
 use crate::core::{
     AnyContainer, AnyItem, Container, DynItem, KeyAccess, MutAccess, MutTypeAccess, StandaloneItem,
 };
-use std::{borrow::Borrow, marker::Unsize, ops::Deref};
+use std::{marker::Unsize, ops::Deref};
 
 /// Edgeless reference.
 /// Dropping this will cause item leak, release instead.

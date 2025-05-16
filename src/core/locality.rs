@@ -1,5 +1,5 @@
 use super::{
-    permit::{self, All},
+    permit::{self},
     AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Item, Key, KeyPath, LeafPath, LocalityKey,
     LocalityPath, Owned, Path, Ref, Slot,
 };

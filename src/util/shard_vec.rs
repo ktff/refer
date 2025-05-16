@@ -183,13 +183,13 @@ impl<T: Copy, const N: usize> ShardVec<T, N> {
 
     pub fn as_slice(&self) -> &[T] {
         // This is safe if self.len of first elements are indeed initialized.
-        unsafe { MaybeUninit::slice_assume_init_ref(&self.get()[..self.len()]) }
+        unsafe { self.get()[..self.len()].assume_init_ref() }
     }
 
     pub fn as_slice_mut(&mut self) -> &mut [T] {
         let len = self.len();
         // This is safe if self.len of first elements are indeed initialized.
-        unsafe { MaybeUninit::slice_assume_init_mut(&mut self.get_mut()[..len]) }
+        unsafe { self.get_mut()[..len].assume_init_mut() }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {

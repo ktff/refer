@@ -35,7 +35,6 @@ macro_rules! impl_edgeless_item {
                 std::iter::empty()
             }
 
-            #[must_use]
             fn try_remove_edges<T: $crate::core::DynItem + ?Sized>(
                 &mut self,
                 _: $crate::core::ItemLocality<'_, Self>,

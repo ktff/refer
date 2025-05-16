@@ -1,6 +1,5 @@
 #![allow(incomplete_features)]
 // Currently this is not implemented safely for *dyn Trait.
-#![feature(trait_upcasting)]
 #![feature(type_alias_impl_trait)]
 #![feature(allocator_api)]
 #![feature(ptr_metadata)]
@@ -14,7 +13,6 @@
 #![feature(unsize)]
 #![feature(const_type_id)]
 #![feature(specialization)]
-#![feature(extract_if)]
 #![feature(type_changing_struct_update)]
 #![feature(trait_alias)]
 #![feature(associated_type_defaults)]

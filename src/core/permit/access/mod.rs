@@ -11,7 +11,7 @@ pub use key::SlotAccess;
 pub use key_permit::*;
 pub use type_permit::*;
 
-use std::{any::TypeId, collections::HashSet, marker::PhantomData, ops::Deref};
+use std::{any::TypeId, marker::PhantomData, ops::Deref};
 
 use crate::core::{
     permit, AnyContainer, Container, DynContainer, DynItem, Index, IndexBase, Item, Key, Path, Ptr,
