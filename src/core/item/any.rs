@@ -1,5 +1,5 @@
-use super::{DrainItem, Found, Item, ItemTrait, StandaloneItem};
-use crate::core::{Grc, ItemLocality, Key, MultiOwned, Owned, PartialEdge, Ref, Side};
+use super::{DrainItem, Item, ItemTrait, StandaloneItem};
+use crate::core::{Grc, ItemLocality, Key, MultiOwned, Owned, Ref};
 use std::{
     any::{Any, TypeId},
     fmt::Display,
@@ -36,8 +36,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     fn any_iter_edges(
         &self,
         locality: ItemLocality<'_>,
-        filter: Option<Side>,
-    ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>>;
+    ) -> Option<Box<dyn Iterator<Item = Key<Ref<'_>>> + '_>>;
 
     /// Ok with key to self.
     /// Err with provided source.
@@ -52,11 +51,7 @@ pub trait AnyItem: Any + Unsize<dyn Any> + Sync {
     /// Ok success.
     /// Err if can't remove it.
     #[must_use]
-    fn any_remove_edges(
-        &mut self,
-        locality: ItemLocality<'_>,
-        edge: PartialEdge<Key>,
-    ) -> Result<MultiOwned, Found>;
+    fn any_remove_edges(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<MultiOwned>;
 
     #[must_use]
     fn any_inc_owners(&mut self, locality: ItemLocality<'_>) -> Option<Grc>;
@@ -85,9 +80,8 @@ impl<T: Item> AnyItem for T {
     fn any_iter_edges(
         &self,
         locality: ItemLocality<'_>,
-        filter: Option<Side>,
-    ) -> Option<Box<dyn Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_>> {
-        let edges = self.iter_edges(locality.downcast().expect("Unexpected item type"), filter);
+    ) -> Option<Box<dyn Iterator<Item = Key<Ref<'_>>> + '_>> {
+        let edges = self.iter_edges(locality.downcast().expect("Unexpected item type"));
         if let (0, Some(0)) = edges.size_hint() {
             None
         } else {
@@ -103,12 +97,8 @@ impl<T: Item> AnyItem for T {
         Err(source)
     }
 
-    fn any_remove_edges(
-        &mut self,
-        locality: ItemLocality<'_>,
-        edge: PartialEdge<Key>,
-    ) -> Result<MultiOwned, Found> {
-        self.try_remove_edges(locality.downcast().expect("Unexpected item type"), edge)
+    fn any_remove_edges(&mut self, locality: ItemLocality<'_>, target: Key) -> Option<MultiOwned> {
+        self.try_remove_edges(locality.downcast().expect("Unexpected item type"), target)
     }
 
     default fn any_inc_owners(&mut self, _: ItemLocality<'_>) -> Option<Grc> {

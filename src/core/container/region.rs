@@ -164,7 +164,7 @@ macro_rules! region_container {
             self.fill(path)?.any_fill_locality(path, ty)
         }
 
-        fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>> {
+        fn localized_drop(&mut self, key: Key) -> Option<Vec<Key<Owned>>> {
             let index = self.region().index_of(key);
             self.get_mut(index)?.localized_drop(key)
         }

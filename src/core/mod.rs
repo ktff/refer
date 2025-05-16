@@ -2,7 +2,6 @@
 
 #[macro_use]
 pub mod container;
-mod edge;
 mod locality;
 #[macro_use]
 mod item;
@@ -13,7 +12,6 @@ pub mod permit;
 mod slot;
 
 pub use container::{AnyContainer, Container, DynContainer};
-pub use edge::*;
 pub use item::*;
 #[cfg(feature = "dag")]
 pub use iter::{IterNode, VisitDAG};

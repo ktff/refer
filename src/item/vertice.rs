@@ -1,5 +1,4 @@
 use crate::core::*;
-use auto_enums::auto_enum;
 use std::ops::{Deref, DerefMut};
 
 /// Vertice<T>: *E--> Vertice<T>
@@ -73,79 +72,45 @@ impl<T: Sync + Send + 'static, E: Sync + Send + 'static> Item for Vertice<T, E> 
 
     type LocalityData = ();
 
-    type Edges<'a> = impl Iterator<Item = PartialEdge<Key<Ref<'a>>>>;
+    type Edges<'a> = impl Iterator<Item = Key<Ref<'a>>>;
 
     const TRAITS: ItemTraits<Self> = &[];
 
-    #[auto_enum(Iterator)]
-    fn iter_edges(&self, _: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_> {
-        let drains = self
-            .drains
+    fn iter_edges(&self, _: ItemLocality<'_, Self>) -> Self::Edges<'_> {
+        self.drains
             .iter()
-            .map(|(_, drain)| Side::Source.object(drain.borrow().any()));
-        let sources = self
-            .sources
-            .iter()
-            .map(|source| Side::Drain.object(source.borrow().any()));
-
-        match side {
-            Some(Side::Source) => sources,
-            Some(Side::Drain) => drains,
-            Some(Side::Bi) => std::iter::empty(),
-            None => drains.chain(sources),
-        }
+            .map(|(_, drain)| drain.borrow().any())
+            .chain(self.sources.iter().map(|source| source.borrow().any()))
     }
 
-    /// Should remove applicable (source,drain,bi) edges and return object refs.
-    /// Ok success.
     /// Err if can't remove it, which may cause for this item to be removed.
     fn try_remove_edges<D: DynItem + ?Sized>(
         &mut self,
         _: ItemLocality<'_, Self>,
-        PartialEdge { subject, object }: PartialEdge<Key<Ptr, D>>,
-    ) -> Result<MultiOwned<D>, Found> {
-        match subject {
-            // Find all occurrence of object in sources and remove them
-            Side::Drain => self
-                .sources
-                .extract_if(.., |source| *source == object)
-                .fold(None, |owned: Option<MultiOwned>, key| {
-                    if let Some(mut owned) = owned {
-                        owned.add(key);
-                        Some(owned)
-                    } else {
-                        Some(key.into())
-                    }
-                })
-                .map(|owned| owned.assume())
-                .ok_or(Found::No),
-            // Find all occurrence of object in drains and remove them
-            Side::Source => self
-                .drains
-                .extract_if(.., |(_, drain)| *drain == object)
-                .fold(None, |owned: Option<MultiOwned>, key| {
-                    if let Some(mut owned) = owned {
-                        owned.add(key.1.any());
-                        Some(owned)
-                    } else {
-                        Some(key.1.any().into())
-                    }
-                })
-                .map(|owned| owned.assume())
-                .ok_or(Found::No),
-            Side::Bi => Err(Found::No),
-        }
-    }
-
-    fn localized_drop(self, _: ItemLocality<'_, Self>) -> Vec<PartialEdge<Key<Owned>>> {
+        object: Key<Ptr, D>,
+    ) -> Option<MultiOwned<D>> {
         self.sources
-            .into_iter()
-            .map(|source| Side::Drain.object(source))
+            .extract_if(.., |source| *source == object)
             .chain(
                 self.drains
-                    .into_iter()
-                    .map(|(_, drain)| Side::Source.object(drain.any())),
+                    .extract_if(.., |(_, drain)| *drain == object)
+                    .map(|(_, drain)| drain.any()),
             )
+            .fold(None, |owned: Option<MultiOwned>, key| {
+                if let Some(mut owned) = owned {
+                    owned.add(key);
+                    Some(owned)
+                } else {
+                    Some(key.into())
+                }
+            })
+            .map(|owned| owned.assume())
+    }
+
+    fn localized_drop(self, _: ItemLocality<'_, Self>) -> Vec<Key<Owned>> {
+        self.sources
+            .into_iter()
+            .chain(self.drains.into_iter().map(|(_, drain)| drain.any()))
             .collect()
     }
 

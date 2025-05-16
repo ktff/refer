@@ -135,7 +135,7 @@ macro_rules! single_type_container {
             $crate::core::container::TypeContainer::<$t>::fill(self).any_fill_locality(path, ty)
         }
 
-        fn localized_drop(&mut self, key: $crate::core::Key)-> Option<Vec<PartialEdge<Key<Owned>>>> {
+        fn localized_drop(&mut self, key: $crate::core::Key)-> Option<Vec<Key<Owned>>> {
             $crate::core::container::TypeContainer::<$t>::step_down_mut(self)?.localized_drop(key)
         }
     };
@@ -273,7 +273,7 @@ macro_rules! multi_type_container {
             }
         }
 
-        fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>{
+        fn localized_drop(&mut self, key: Key) -> Option<Vec<Key<Owned>>>{
             self.get_mut_any(key)?.localized_drop(key)
         }
     };

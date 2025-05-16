@@ -11,7 +11,7 @@ pub use ty::*;
 
 use super::{
     DynItem, Item, ItemLocality, ItemTraits, Key, KeyPath, LocalityKey, LocalityPath, LocalityRef,
-    Owned, PartialEdge, Path, Ptr, Ref, RegionPath, UnsafeSlot,
+    Owned, Path, Ptr, Ref, RegionPath, UnsafeSlot,
 };
 use log::warn;
 use std::{
@@ -139,7 +139,7 @@ pub unsafe trait AnyContainer: Any + Sync + Send {
 
     /// Panics if item is edgeless referenced.
     /// Caller should properly dispose of the edges.
-    fn localized_drop(&mut self, key: Key) -> Option<Vec<PartialEdge<Key<Owned>>>>;
+    fn localized_drop(&mut self, key: Key) -> Option<Vec<Key<Owned>>>;
 }
 
 /// Abstracts over getting slots from Container and AnyContainer for all DynItem.

@@ -217,7 +217,7 @@ macro_rules! leaf_container {
         }
 
         /// Panics if item is edgeless referenced.
-        fn localized_drop(&mut self, key: Key)-> Option<Vec<PartialEdge<Key<Owned>>>>{
+        fn localized_drop(&mut self, key: Key)-> Option<Vec<Key<Owned>>>{
             let (item,locality)=self.unfill_slot(key.assume())?;
             Some(item.localized_drop(locality))
         }

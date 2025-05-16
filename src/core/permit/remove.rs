@@ -98,7 +98,7 @@ pub trait ContainerExt: AnyContainer {
                 // There are owned keys
                 return Some(false);
             }
-            if item.iter_edges(None).next().is_none() {
+            if item.iter_edges().next().is_none() {
                 // There are no owned keys no any other edges, we can remove it
 
                 // Drop
@@ -125,7 +125,7 @@ impl<C: AnyContainer + ?Sized> ContainerExt for C {}
 fn remove_edges(
     con: &mut (impl AnyContainer + ?Sized),
     subject: Key,
-    edges: Vec<PartialEdge<Key<Owned>>>,
+    edges: Vec<Key<Owned>>,
     remove: &mut Vec<Key>,
 ) {
     let mut extra = Vec::<(_, MultiOwned)>::new();
@@ -140,10 +140,9 @@ fn remove_edges(
             }
         }
         // Remove from object
-        else if let Some(mut object) = con.as_mut().key(edge.object.ptr()).fetch_try() {
+        else if let Some(mut object) = con.as_mut().key(edge.ptr()).fetch_try() {
             let edge_ptr = edge.ptr();
-            let (object_key, rev_edge) = edge.reverse(subject);
-            match object.remove_edges(object_key, rev_edge) {
+            match object.remove_edges(edge, subject) {
                 Ok(subject) => {
                     let (subject, rem) = subject.sub();
                     // Add extra removed to extra
@@ -155,14 +154,13 @@ fn remove_edges(
                     );
                     std::mem::forget(subject);
                 }
-                Err((present, object_key)) => {
-                    assert_eq!(present, Found::Yes);
+                Err(object_key) => {
                     remove.push(object_key.ptr());
                     std::mem::forget(object_key);
                 }
             }
         } else {
-            std::mem::forget(edge.object);
+            std::mem::forget(edge);
         }
     }
 }

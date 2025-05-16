@@ -1,7 +1,7 @@
 use crate::core::{
     permit::{self, Permit},
-    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Found, Grc, Item, ItemLocality, Key,
-    MultiOwned, Owned, PartialEdge, Ptr, Ref, Side, StandaloneItem, UnsafeSlot,
+    AnyDynItem, AnyItem, BiItem, DrainItem, DynItem, Grc, Item, ItemLocality, Key, MultiOwned,
+    Owned, Ptr, Ref, StandaloneItem, UnsafeSlot,
 };
 use std::{
     any::Any,
@@ -119,19 +119,8 @@ impl<'a, T: DynItem + ?Sized> Slot<'a, permit::Ref, T> {
 }
 
 impl<'a, T: Item, R: Into<permit::Ref>> Slot<'a, R, T> {
-    pub fn iter_drains(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.iter_edges(Some(crate::core::Side::Source))
-            .map(|edge| edge.object)
-    }
-
-    pub fn iter_sources(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.iter_edges(Some(crate::core::Side::Drain))
-            .map(|edge| edge.object)
-    }
-
-    /// Edges where self is side.
-    pub fn iter_edges(&self, side: Option<Side>) -> T::Edges<'_> {
-        self.item().iter_edges(self.locality(), side)
+    pub fn iter_edges(&self) -> T::Edges<'_> {
+        self.item().iter_edges(self.locality())
     }
 
     pub fn has_owners(&self) -> bool {
@@ -287,24 +276,22 @@ impl<'a, T: DynItem + ?Sized, R: Into<permit::Mut> + Into<permit::Ref>> Slot<'a,
     }
 
     /// Ok success.
-    /// Err if can't remove it.
+    /// Err if it doesn't exist or it can't be removed.
     #[must_use]
     pub fn remove_edges<F: DynItem + ?Sized>(
         &mut self,
         this: Key<Owned, T>,
-        edge: PartialEdge<Key<Ptr, F>>,
-    ) -> Result<MultiOwned<F>, (Found, Key<Owned, T>)> {
+        target: Key<Ptr, F>,
+    ) -> Result<MultiOwned<F>, Key<Owned, T>> {
         match self
-            .any_localized(|item, locality| {
-                item.any_remove_edges(locality, edge.map(|key| key.any()))
-            })
+            .any_localized(|item, locality| item.any_remove_edges(locality, target.any()))
             .map(MultiOwned::assume)
         {
-            Ok(owned) => {
+            Some(owned) => {
                 std::mem::forget(this);
                 Ok(owned)
             }
-            Err(present) => Err((present, this)),
+            None => Err(this),
         }
     }
 }
@@ -319,22 +306,11 @@ impl<'a, R: Into<permit::Ref>, T: AnyDynItem + ?Sized> Slot<'a, R, T> {
         (self.any_item() as &dyn Any).downcast_ref::<D>()
     }
 
-    pub fn edges_dyn(
-        &self,
-        side: Option<Side>,
-    ) -> impl Iterator<Item = PartialEdge<Key<Ref<'_>>>> + '_ {
+    pub fn edges_dyn(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
         self.any_item()
-            .any_iter_edges(self.locality().any(), side)
+            .any_iter_edges(self.locality().any())
             .into_iter()
             .flatten()
-    }
-
-    pub fn drains_dyn(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.edges_dyn(Some(Side::Source)).map(|edge| edge.object)
-    }
-
-    pub fn sources_dyn(&self) -> impl Iterator<Item = Key<Ref<'_>>> + '_ {
-        self.edges_dyn(Some(Side::Drain)).map(|edge| edge.object)
     }
 }
 

@@ -6,24 +6,8 @@ pub use any::*;
 pub use dym::*;
 pub use traits::*;
 
-use super::{Grc, ItemLocality, Key, MultiOwned, Owned, PartialEdge, Ptr, Ref, Side};
+use super::{Grc, ItemLocality, Key, MultiOwned, Owned, Ptr, Ref};
 use std::{alloc::Allocator, any::Any, ptr::Thin};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Found {
-    Yes,
-    No,
-}
-
-impl Found {
-    pub fn found(found: bool) -> Self {
-        if found {
-            Self::Yes
-        } else {
-            Self::No
-        }
-    }
-}
 
 /// Structure whose lifetime and edges can be managed by a container/model.
 pub trait Item: Sized + Any + Sync + Send + Thin {
@@ -33,39 +17,28 @@ pub trait Item: Sized + Any + Sync + Send + Thin {
     /// Data shared by local items.
     type LocalityData: Any + Send + Sync = ();
 
-    type Edges<'a>: Iterator<Item = PartialEdge<Key<Ref<'a>>>>;
+    type Edges<'a>: Iterator<Item = Key<Ref<'a>>>;
 
     /// Traits implemented by Self that others can use to view it as.
     const TRAITS: &'static [ItemTrait<Self>] = &[];
 
-    /// Edges where self is side.
-    ///
+    /// Edges of this item.
     /// Must have stable iteration order.
-    fn iter_edges(&self, locality: ItemLocality<'_, Self>, side: Option<Side>) -> Self::Edges<'_>;
+    fn iter_edges(&self, locality: ItemLocality<'_, Self>) -> Self::Edges<'_>;
 
-    // /// Should remove edge and return object ref.
-    // /// Ok success.
-    // /// Err if can't remove it, which may cause for this item to be removed.
-    // #[must_use]
-    // fn try_remove_edge<T: DynItem + ?Sized>(
-    //     &mut self,
-    //     locality: ItemLocality<'_, Self>,
-    //     this: Key<Owned, Self>,
-    //     edge: PartialEdge<Key<Ptr, T>>,
-    // ) -> Result<Key<Owned, T>, (Found, Key<Owned, Self>)>;
-
-    /// Should remove applicable (source,drain,bi) edges and return object refs.
-    /// Ok success.
-    /// Err if can't remove it, which may cause for this item to be removed.
+    /// Should remove edges to target and return object refs.
+    /// Some success.
+    /// None can mean that there is no such edge here or
+    /// it exists but can't be removed.
     #[must_use]
     fn try_remove_edges<T: DynItem + ?Sized>(
         &mut self,
         locality: ItemLocality<'_, Self>,
-        edge: PartialEdge<Key<Ptr, T>>,
-    ) -> Result<MultiOwned<T>, Found>;
+        target: Key<Ptr, T>,
+    ) -> Option<MultiOwned<T>>;
 
     /// Caller should properly dispose of the edges.
-    fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<PartialEdge<Key<Owned>>>;
+    fn localized_drop(self, locality: ItemLocality<'_, Self>) -> Vec<Key<Owned>>;
 }
 
 /// Item which can be drain.

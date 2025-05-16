@@ -22,31 +22,25 @@ macro_rules! impl_edgeless_item {
         impl $crate::core::Item for $ty {
             type Alloc = std::alloc::Global;
             type LocalityData = ();
-            type Edges<'a> = std::iter::Empty<
-                $crate::core::PartialEdge<$crate::core::Key<$crate::core::Ref<'a>>>,
-            >;
+            type Edges<'a> = std::iter::Empty<$crate::core::Key<$crate::core::Ref<'a>>>;
             const TRAITS: $crate::core::ItemTraits<$ty> = &[];
 
-            fn iter_edges(
-                &self,
-                _: $crate::core::ItemLocality<'_, Self>,
-                _: Option<$crate::core::Side>,
-            ) -> Self::Edges<'_> {
+            fn iter_edges(&self, _: $crate::core::ItemLocality<'_, Self>) -> Self::Edges<'_> {
                 std::iter::empty()
             }
 
             fn try_remove_edges<T: $crate::core::DynItem + ?Sized>(
                 &mut self,
                 _: $crate::core::ItemLocality<'_, Self>,
-                _: $crate::core::PartialEdge<$crate::core::Key<$crate::core::Ptr, T>>,
-            ) -> Result<$crate::core::MultiOwned<T>, $crate::core::Found> {
-                Err($crate::core::Found::No)
+                _: $crate::core::Key<$crate::core::Ptr, T>,
+            ) -> Option<$crate::core::MultiOwned<T>> {
+                None
             }
 
             fn localized_drop(
                 self,
                 _: $crate::core::ItemLocality<'_, Self>,
-            ) -> Vec<$crate::core::PartialEdge<$crate::core::Key<$crate::core::Owned>>> {
+            ) -> Vec<$crate::core::Key<$crate::core::Owned>> {
                 Vec::new()
             }
         }

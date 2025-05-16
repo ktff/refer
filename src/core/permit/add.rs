@@ -118,8 +118,10 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
     {
         let (subject, mut others) = self.as_mut().key_split(subject);
         let subject = subject.fetch();
-        for edge in subject.iter_edges(Some(Side::Source)) {
-            if let Some(drain) = others.borrow_mut().key_try(edge.object) {
+        // We should be only iterating over drains since there is no way for other items to add edges to
+        // this item before it was added to the container.
+        for object in subject.iter_edges() {
+            if let Some(drain) = others.borrow_mut().key_try(object) {
                 // SAFETY: Subject,source,this exists at least for the duration of this function.
                 //         By adding it(Key) to the drain, anyone dropping the drain will know that
                 //         this subject needs to be notified. This ensures that edge in subject is
@@ -137,13 +139,13 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
                     )
                 };
                 drain.release_dyn(excess_key);
-            } else if edge.object == subject.key() {
+            } else if object == subject.key() {
                 // We skip self references
             } else {
                 // We should have caught this earlier or handle it in some other way.
                 unimplemented!(
                     "Drain not found for edge object: {:?}. It's probably in some other container",
-                    edge.object
+                    object
                 );
             }
         }
