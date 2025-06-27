@@ -1,4 +1,8 @@
-use crate::core::{container::RegionContainer, container::TypeContainer, permit::Permit, *};
+use crate::core::{
+    container::{RegionContainer, TypeContainer},
+    permit::{Lifetime, Permit},
+    *,
+};
 use std::ops::{Deref, RangeBounds};
 
 //? NOTE: This Permit must not allow for remove operations to be called during it's lifetime,
@@ -30,6 +34,12 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
             permit: unsafe { self.permit.copy() },
             container: self.container,
         }
+    }
+
+    pub fn lifetime(&self) -> Lifetime<'a> {
+        // SAFETY: We borrow container for 'a so no item will be removed
+        // during that period.
+        unsafe { Lifetime::new() }
     }
 
     pub fn as_mut(&mut self) -> MutAccess<C> {

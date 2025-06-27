@@ -1,8 +1,10 @@
 pub mod access;
 pub mod add;
+mod lifetime;
 pub mod remove;
 
 pub use access::{All, Keys, Not, SlotAccess, Types};
+pub use lifetime::Lifetime;
 pub use remove::ContainerExt;
 
 use std::marker::PhantomData;
