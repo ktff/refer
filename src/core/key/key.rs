@@ -114,7 +114,10 @@ impl<T: Item> Key<Ptr, T> {
     }
 
     /// Checked ref to T
-    pub fn ref_from<'a>(self, container: &'a impl Container<T>) -> Option<Key<Ref<'a>, T>> {
+    pub fn ref_from<'a>(
+        self,
+        container: &'a (impl Container<T> + ?Sized),
+    ) -> Option<Key<Ref<'a>, T>> {
         Some(self)
             .filter(|key| container.contains_slot(*key))
             // SAFETY: container contains slot and it will do so for at least 'a.

@@ -31,7 +31,7 @@ pub struct Add(PhantomData<()>);
 
 impl Add {
     /// UNSAFE: So that it's constructed sparingly.
-    unsafe fn new() -> Self {
+    pub unsafe fn new() -> Self {
         Self(PhantomData)
     }
 }

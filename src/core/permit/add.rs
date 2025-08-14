@@ -23,6 +23,16 @@ impl<'a, C: AnyContainer + ?Sized> AddAccess<'a, C> {
         }
     }
 
+    pub fn try_extend<D: Item>(&self, key: Key<Ptr, D>) -> Option<Key<Ref<'a>, D>>
+    where
+        C: Container<D>,
+    {
+        Some(key)
+            .filter(|key| self.container.contains_slot(*key))
+            // SAFETY: container contains slot and it will do so for at least 'a.
+            .map(|key| unsafe { key.extend() })
+    }
+
     pub fn extend<D: DynItem + ?Sized>(&self, key: Key<Ref<'_>, D>) -> Key<Ref<'a>, D> {
         // SAFETY: We have 'a lifetime guarantee no item will be removed so key is valid for 'a.
         unsafe { key.extend() }

@@ -5,15 +5,15 @@ use crate::core::*;
 // ! No Key<Ref> can live across possible calls to remove.
 
 pub trait ContainerExt: AnyContainer {
-    fn as_add(&mut self) -> Add<Self> {
+    fn as_add(&'_ mut self) -> Add<'_, Self> {
         Add::new(self)
     }
 
-    fn as_mut(&mut self) -> MutAccess<Self> {
+    fn as_mut(&'_ mut self) -> MutAccess<'_, Self> {
         MutAccess::new(self)
     }
 
-    fn as_ref(&mut self) -> Access<Self> {
+    fn as_ref(&'_ mut self) -> Access<'_, Self> {
         Access::new_ref(self)
     }
 
@@ -109,7 +109,7 @@ pub trait ContainerExt: AnyContainer {
                 let edges = item.localized_drop(locality);
                 assert!(
                     edges.is_empty(),
-                    "Item has edges but didn't iterated over them."
+                    "Item has edges but didn't iterate over them."
                 );
 
                 Some(true)

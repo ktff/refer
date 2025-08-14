@@ -1,6 +1,7 @@
 use super::*;
 use crate::core::{AnyItem, DynItem, Item, LocalityPath, LocalityRegion};
 use core::panic;
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     num::{NonZeroU16, NonZeroU32, NonZeroUsize},
@@ -9,7 +10,7 @@ use std::{
 };
 
 /// Path in container
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Path(Index);
 
@@ -37,7 +38,7 @@ impl Path {
     }
 
     pub fn is_root(self) -> bool {
-        self.0.get() == 0
+        self.top() == 0
     }
 
     /// First included index
