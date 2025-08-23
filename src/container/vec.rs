@@ -177,28 +177,85 @@ unsafe impl<T: Item> LeafContainer<T> for VecContainer<T> {
         self.iter_slice(range.start_bound().cloned(), range.end_bound().cloned())
     }
 
-    fn fill(&mut self, item: T) -> std::result::Result<NonZeroUsize, T> {
-        if let Some(index) = self.free_head.take() {
-            match std::mem::replace(
-                &mut self.slots[index.get()],
-                Slot::Some(SyncUnsafeCell::new(item)),
-            ) {
-                Slot::None(next) => {
+    fn fill(&mut self, at: LocalityRegion, item: T) -> std::result::Result<NonZeroUsize, T> {
+        match at {
+            LocalityRegion::Any => {
+                if let Some(index) = self.free_head.take() {
+                    match std::mem::replace(
+                        &mut self.slots[index.get()],
+                        Slot::Some(SyncUnsafeCell::new(item)),
+                    ) {
+                        Slot::None(next) => {
+                            self.count += 1;
+                            self.free_head = next;
+                            Ok(index)
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    let index = NonZeroUsize::new(self.slots.len()).expect("Zero index");
+                    if self.locality.locality_key().contains(index) {
+                        self.slots.push(Slot::Some(SyncUnsafeCell::new(item)));
+                        self.count += 1;
+                        Ok(index)
+                    } else {
+                        // Out of keys
+                        Err(item)
+                    }
+                }
+            }
+            LocalityRegion::Id((_, index)) | LocalityRegion::Index(index) if index > 0 => {
+                let index = NonZeroUsize::new(index).expect("Should not be zero");
+                if let Some(slot) = self.slots.get_mut(index.get()) {
+                    if matches!(slot, Slot::Some(_)) {
+                        return Err(item);
+                    }
+
+                    match std::mem::replace(slot, Slot::Some(SyncUnsafeCell::new(item))) {
+                        Slot::None(next) => {
+                            self.count += 1;
+
+                            // Find who is pointing at it and re point
+
+                            let mut at = &mut self.free_head;
+                            while *at != Some(index) {
+                                let i = at.expect("Should be present").get();
+                                match &mut self.slots[i] {
+                                    Slot::None(next) => {
+                                        at = next;
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+                            *at = next;
+                            Ok(index)
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    while self.slots.len() < index.get() {
+                        self.slots.push(Slot::None(std::mem::replace(
+                            &mut self.free_head,
+                            Some(NonZeroUsize::new(self.slots.len()).expect("Should not be zero")),
+                        )));
+                    }
+                    self.slots.push(Slot::Some(SyncUnsafeCell::new(item)));
                     self.count += 1;
-                    self.free_head = next;
                     Ok(index)
                 }
-                _ => unreachable!(),
             }
-        } else {
-            let index = NonZeroUsize::new(self.slots.len()).expect("Zero index");
-            if self.locality.locality_key().contains(index) {
-                self.slots.push(Slot::Some(SyncUnsafeCell::new(item)));
-                self.count += 1;
-                Ok(index)
-            } else {
-                // Out of keys
-                Err(item)
+            LocalityRegion::Id(_) | LocalityRegion::Index(_) => Err(item),
+            LocalityRegion::Indices(range) => {
+                if self.slots.len() < *range.start() {
+                    self.fill(LocalityRegion::Index(*range.start()), item)
+                } else if range.contains(&self.slots.len()) {
+                    let index = NonZeroUsize::new(self.slots.len()).expect("Should not be zero");
+                    self.slots.push(Slot::Some(SyncUnsafeCell::new(item)));
+                    self.count += 1;
+                    Ok(index)
+                } else {
+                    unimplemented!()
+                }
             }
         }
     }

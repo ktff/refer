@@ -157,6 +157,10 @@ impl LocalityPath for Path {
         region.range_of(*self).map(LocalityRegion::Indices)
     }
 
+    fn map_leaf(&self, region: LeafPath) -> Option<LocalityRegion> {
+        region.range_of(*self).map(LocalityRegion::Indices)
+    }
+
     fn upcast(&self) -> &dyn LocalityPath {
         self
     }
@@ -264,7 +268,7 @@ impl LeafPath {
 
     /// May panic/return out of path index if key isn't of this path.
     #[inline(always)]
-    pub fn index_of<T: Pointee + AnyItem + ?Sized>(&self, key: Key<Ptr, T>) -> usize {
+    pub fn index_of<T: Pointee + DynItem + ?Sized>(&self, key: Key<Ptr, T>) -> usize {
         // Xor is intentional so to catch keys that don't correspond to this path
         (key.index().get() ^ self.path) as usize
     }

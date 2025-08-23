@@ -71,6 +71,10 @@ impl<T: DynItem + ?Sized> LocalityPath for KeyPath<T> {
         self.0.map(region)
     }
 
+    fn map_leaf(&self, region: LeafPath) -> Option<LocalityRegion> {
+        self.0.map_leaf(region)
+    }
+
     fn upcast(&self) -> &dyn LocalityPath {
         self
     }

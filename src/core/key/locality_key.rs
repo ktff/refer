@@ -16,6 +16,10 @@ impl LocalityPath for LocalityKey {
         self.path().map(region)
     }
 
+    fn map_leaf(&self, region: LeafPath) -> Option<LocalityRegion> {
+        self.path().map_leaf(region)
+    }
+
     fn upcast(&self) -> &dyn LocalityPath {
         self
     }

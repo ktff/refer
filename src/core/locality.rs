@@ -34,6 +34,10 @@ impl<T: Item> Locality<T> {
         }
     }
 
+    pub fn path(&self) -> LeafPath {
+        *self.locality_key
+    }
+
     pub fn item_locality<'a>(&'a self, key: Key<Ref<'a>, T>) -> ItemLocality<'a, T> {
         ItemLocality::new(key, &self.data, &self.allocator)
     }

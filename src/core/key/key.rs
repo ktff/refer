@@ -7,7 +7,7 @@ use std::{
     marker::{PhantomData, Unsize},
 };
 
-use crate::core::{AnyItem, Container, DynItem, Item, LocalityPath, LocalityRegion};
+use crate::core::{AnyItem, Container, DynItem, Item, LeafPath, LocalityPath, LocalityRegion};
 
 // NOTE: Key can't be ref since it's not possible for all but the basic library to statically guarantee that
 // the key is valid so some kind of dynamic check is needed, hence the library needs to be able to check any key
@@ -212,6 +212,10 @@ impl<P, T: DynItem + ?Sized> LocalityPath for Key<P, T> {
         Some(LocalityRegion::Index(region.index_of(self.ptr())))
     }
 
+    default fn map_leaf(&self, region: LeafPath) -> Option<LocalityRegion> {
+        Some(LocalityRegion::Index(region.index_of(self.ptr())))
+    }
+
     default fn upcast(&self) -> &dyn LocalityPath {
         self
     }
@@ -219,6 +223,13 @@ impl<P, T: DynItem + ?Sized> LocalityPath for Key<P, T> {
 
 impl<P, T: Item> LocalityPath for Key<P, T> {
     fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
+        Some(LocalityRegion::Id((
+            TypeId::of::<T>(),
+            region.index_of(self.ptr()),
+        )))
+    }
+
+    fn map_leaf(&self, region: LeafPath) -> Option<LocalityRegion> {
         Some(LocalityRegion::Id((
             TypeId::of::<T>(),
             region.index_of(self.ptr()),

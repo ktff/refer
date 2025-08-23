@@ -1,9 +1,13 @@
+use crate::core::LeafPath;
+
 use super::RegionPath;
 use std::{any::TypeId, fmt::Debug, ops::RangeInclusive};
 
 pub trait LocalityPath: Debug {
     /// Maps self to LocalityRegion for given region.
     fn map(&self, region: RegionPath) -> Option<LocalityRegion>;
+
+    fn map_leaf(&self, leaf: LeafPath) -> Option<LocalityRegion>;
 
     fn upcast(&self) -> &dyn LocalityPath;
 }
@@ -17,6 +21,12 @@ pub enum LocalityRegion {
     /// Exactly this index
     Index(usize),
     Any,
+}
+
+impl Default for LocalityRegion {
+    fn default() -> Self {
+        LocalityRegion::Any
+    }
 }
 
 // impl LocalityRegion {
@@ -35,6 +45,10 @@ impl LocalityPath for () {
         Some(LocalityRegion::Any)
     }
 
+    fn map_leaf(&self, _: LeafPath) -> Option<LocalityRegion> {
+        Some(LocalityRegion::Any)
+    }
+
     fn upcast(&self) -> &dyn LocalityPath {
         self
     }
@@ -43,6 +57,12 @@ impl LocalityPath for () {
 impl<L: LocalityPath> LocalityPath for [L; 2] {
     fn map(&self, region: RegionPath) -> Option<LocalityRegion> {
         self[0].map(region).or_else(|| self[1].map(region))
+    }
+
+    fn map_leaf(&self, region: LeafPath) -> Option<LocalityRegion> {
+        self[0]
+            .map_leaf(region)
+            .or_else(|| self[1].map_leaf(region))
     }
 
     fn upcast(&self) -> &dyn LocalityPath {

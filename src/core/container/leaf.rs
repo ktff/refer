@@ -1,5 +1,5 @@
 use super::*;
-use crate::core::Locality;
+use crate::core::{Locality, LocalityRegion};
 use log::*;
 use std::{num::NonZeroUsize, ops::RangeBounds};
 
@@ -38,7 +38,7 @@ pub unsafe trait LeafContainer<T: Item> {
     fn iter(&self, range: impl RangeBounds<usize>) -> Self::Iter<'_>;
 
     /// None if there is no more place in container.
-    fn fill(&mut self, item: T) -> std::result::Result<NonZeroUsize, T>;
+    fn fill(&mut self, at: LocalityRegion, item: T) -> std::result::Result<NonZeroUsize, T>;
 
     /// Removes from container.
     fn unfill(&mut self, index: usize) -> Option<T>;
@@ -107,9 +107,9 @@ macro_rules! leaf_container {
             Some(self.iter(range))
         }
 
-        fn fill_slot(&mut self, _: &impl LocalityPath, item: $t) -> std::result::Result<Key<Ref,$t>, $t> {
+        fn fill_slot(&mut self, at: &impl LocalityPath, item: $t) -> std::result::Result<Key<Ref,$t>, $t> {
             // SAFETY: Item was just added to container.
-            self.fill(item).map(|index|unsafe{self.locality().locality_key().key_of(index).extend()})
+            self.fill(at.map_leaf(self.locality().path()).unwrap_or_default(), item).map(|index|unsafe{self.locality().locality_key().key_of(index).extend()})
         }
 
         fn fill_locality(&mut self, _: &impl LocalityPath) -> Option<LocalityKey> {
@@ -190,10 +190,10 @@ macro_rules! leaf_container {
             set
         }
 
-        fn any_fill_slot(&mut self, _: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<Key<Ref>, String>{
+        fn any_fill_slot(&mut self, at: &dyn LocalityPath, item: Box<dyn std::any::Any>) -> std::result::Result<Key<Ref>, String>{
             match item.downcast::<$t>() {
                 Ok(item)=>{
-                    if let Ok(index)=self.fill(Box::into_inner(item)){
+                    if let Ok(index)=self.fill(at.map_leaf(self.locality().path()).unwrap_or_default(),Box::into_inner(item)){
                         let key=self.locality().locality_key().key_of::<$t>(index);
                         // SAFETY: Key is valid for self.
                         Ok(unsafe{key.extend()}.any())

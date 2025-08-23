@@ -84,10 +84,15 @@ unsafe impl<T: Item> LeafContainer<T> for ItemContainer<T> {
             .into_iter()
     }
 
-    fn fill(&mut self, item: T) -> std::result::Result<NonZeroUsize, T> {
+    fn fill(&mut self, at: LocalityRegion, item: T) -> std::result::Result<NonZeroUsize, T> {
         if self.slot.is_some() {
             Err(item)
         } else {
+            match at {
+                LocalityRegion::Any | LocalityRegion::Id((_, 1)) | LocalityRegion::Index(1) => (),
+                LocalityRegion::Indices(range) if range.contains(&1) => (),
+                _ => return Err(item),
+            }
             self.slot = Some(SyncUnsafeCell::new(item));
             Ok(ONE)
         }
